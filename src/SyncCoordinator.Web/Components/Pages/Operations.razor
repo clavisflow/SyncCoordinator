@@ -1,0 +1,114 @@
+@page "/operations"
+@using SyncCoordinator.Core
+@inject ICoordinatorAdminService AdminService
+
+<PageTitle>処理状況 | SyncCoordinator</PageTitle>
+
+<section class="page-heading">
+    <div>
+        <p class="kicker">OPERATIONS</p>
+        <h1>処理状況</h1>
+        <p>システムごとのCheckpoint、Inbox、設定変更履歴を確認します。</p>
+    </div>
+    <RadzenButton Text="@(loading ? "更新中…" : "再読み込み")" Icon="refresh" Click="@LoadAsync" Disabled="@loading" />
+</section>
+
+<div class="content-stack">
+    <RadzenCard>
+        <div class="panel-title"><h2>Queue Checkpoint</h2><span>@checkpoints.Count システム</span></div>
+        <RadzenDataGrid Data="@checkpoints" TItem="CheckpointListItem" AllowSorting="true" EmptyText="Checkpointはありません。" Density="Density.Compact">
+            <Columns>
+                <RadzenDataGridColumn TItem="CheckpointListItem" Property="SystemCode" Title="システム">
+                    <Template Context="checkpoint"><code>@checkpoint.SystemCode</code> @checkpoint.SystemName</Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="CheckpointListItem" Property="LastQueueId" Title="最終QueueId" />
+                <RadzenDataGridColumn TItem="CheckpointListItem" Property="UpdatedAtUtc" Title="更新日時">
+                    <Template Context="checkpoint">@FormatDate(checkpoint.UpdatedAtUtc)</Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    </RadzenCard>
+
+    <RadzenCard>
+        <div class="panel-title"><h2>最近のInbox</h2><span>@inbox.Count 件</span></div>
+        <RadzenDataGrid Data="@inbox" TItem="InboxListItem" AllowSorting="true" AllowFiltering="true" FilterMode="FilterMode.Simple" AllowPaging="true" PageSize="25" ShowPagingSummary="true" EmptyText="Inbox履歴はありません。" Density="Density.Compact">
+            <Columns>
+                <RadzenDataGridColumn TItem="InboxListItem" Property="UpdatedAtUtc" Title="更新日時">
+                    <Template Context="item">@FormatDate(item.UpdatedAtUtc)</Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="InboxListItem" Property="SourceMessageId" Title="MessageId">
+                    <Template Context="item"><code>@item.SourceMessageId</code></Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="InboxListItem" Property="RouteName" Title="ルート／宛先">
+                    <Template Context="item">@item.RouteName<br /><small>→ @item.DestinationSystem</small></Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="InboxListItem" Property="State" Title="状態" Width="110px">
+                    <Template Context="item"><span class="status-pill @StateClass(item.State)">@item.State</span></Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="InboxListItem" Property="AttemptCount" Title="試行" Width="80px" />
+                <RadzenDataGridColumn TItem="InboxListItem" Property="LastError" Title="エラー" Sortable="false">
+                    <Template Context="item">
+                        @if (!string.IsNullOrWhiteSpace(item.LastError))
+                        {
+                            <details><summary>表示</summary><pre class="error-text">@item.LastError</pre></details>
+                        }
+                        else
+                        {
+                            <span>—</span>
+                        }
+                    </Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    </RadzenCard>
+
+    <RadzenCard>
+        <div class="panel-title"><h2>設定変更履歴</h2><span>@audits.Count 件</span></div>
+        <RadzenDataGrid Data="@audits" TItem="ConfigurationAuditListItem" AllowSorting="true" AllowFiltering="true" FilterMode="FilterMode.Simple" AllowPaging="true" PageSize="25" ShowPagingSummary="true" EmptyText="設定変更履歴はありません。" Density="Density.Compact">
+            <Columns>
+                <RadzenDataGridColumn TItem="ConfigurationAuditListItem" Property="ChangedAtUtc" Title="変更日時">
+                    <Template Context="audit">@FormatDate(audit.ChangedAtUtc)</Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="ConfigurationAuditListItem" Property="ConfigurationType" Title="種類" />
+                <RadzenDataGridColumn TItem="ConfigurationAuditListItem" Property="ConfigurationName" Title="対象" />
+                <RadzenDataGridColumn TItem="ConfigurationAuditListItem" Property="Action" Title="操作" />
+                <RadzenDataGridColumn TItem="ConfigurationAuditListItem" Property="ChangedBy" Title="実行元" />
+            </Columns>
+        </RadzenDataGrid>
+    </RadzenCard>
+</div>
+
+@code {
+    private IReadOnlyList<CheckpointListItem> checkpoints = [];
+    private IReadOnlyList<InboxListItem> inbox = [];
+    private IReadOnlyList<ConfigurationAuditListItem> audits = [];
+    private bool loading;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            checkpoints = await AdminService.GetCheckpointsAsync(CancellationToken.None);
+            inbox = await AdminService.GetRecentInboxAsync(200, CancellationToken.None);
+            audits = await AdminService.GetRecentConfigurationAuditsAsync(100, CancellationToken.None);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private static string FormatDate(DateTimeOffset? value) => value?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "未処理";
+
+    private static string StateClass(InboxState state) => state switch
+    {
+        InboxState.Completed => "enabled",
+        InboxState.Processing => "processing",
+        InboxState.Held => "held",
+        InboxState.Failed => "failed",
+        _ => "disabled"
+    };
+}

@@ -1,0 +1,48 @@
+.header-content {
+    height: 100%;
+    padding: 0 1.25rem 0 .25rem;
+}
+
+.brand {
+    align-items: center;
+    color: var(--rz-header-color);
+    display: flex;
+    gap: .65rem;
+    text-decoration: none;
+}
+
+.brand ::deep .rzi { font-size: 1.65rem; }
+.brand span, .brand strong, .brand small { display: block; }
+.brand small { font-size: .58rem; letter-spacing: .16em; opacity: .72; }
+.brand strong { font-size: 1.05rem; letter-spacing: .01em; }
+.app-sidebar { border-right: 1px solid var(--rz-base-300); }
+.nav-caption {
+    color: var(--rz-text-secondary-color);
+    font-size: .7rem;
+    font-weight: 700;
+    letter-spacing: .12em;
+    padding: 1.5rem 1.25rem .5rem;
+}
+.app-menu { border: 0; padding: 0 .5rem; }
+.sidebar-note {
+    align-items: flex-start;
+    bottom: 1rem;
+    color: var(--rz-text-secondary-color);
+    display: flex;
+    font-size: .72rem;
+    gap: .5rem;
+    left: 0;
+    line-height: 1.5;
+    max-width: 100%;
+    padding: 1rem 1.25rem;
+    position: absolute;
+    right: 0;
+}
+.sidebar-note ::deep .rzi { color: var(--rz-success); flex: 0 0 auto; margin-top: .1rem; }
+.sidebar-note span { min-width: 0; overflow-wrap: anywhere; }
+.page-shell { margin: 0 auto; max-width: 1500px; padding: clamp(1.25rem, 3vw, 2.75rem); }
+
+@media (max-width: 768px) {
+    .brand small { display: none; }
+    .page-shell { padding: 1rem; }
+}

@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>dotnet-SyncCoordinator.Worker-cd9e1696-1374-466b-ae7c-1de41b30c4c3</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.9">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.9" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.9" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SyncCoordinator.Core\SyncCoordinator.Core.csproj" />
+    <ProjectReference Include="..\SyncCoordinator.Infrastructure\SyncCoordinator.Infrastructure.csproj" />
+    <ProjectReference Include="..\SyncCoordinator.Contracts\SyncCoordinator.Contracts.csproj" />
+    <ProjectReference Include="..\SyncCoordinator.ServiceDefaults\SyncCoordinator.ServiceDefaults.csproj" />
+  </ItemGroup>
+</Project>

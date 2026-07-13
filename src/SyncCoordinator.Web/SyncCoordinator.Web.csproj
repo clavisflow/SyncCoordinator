@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <PackageReference Include="Radzen.Blazor" Version="11.1.0" />
+    <ProjectReference Include="..\SyncCoordinator.Core\SyncCoordinator.Core.csproj" />
+    <ProjectReference Include="..\SyncCoordinator.Infrastructure\SyncCoordinator.Infrastructure.csproj" />
+    <ProjectReference Include="..\SyncCoordinator.Contracts\SyncCoordinator.Contracts.csproj" />
+    <ProjectReference Include="..\SyncCoordinator.ServiceDefaults\SyncCoordinator.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+  </PropertyGroup>
+
+</Project>

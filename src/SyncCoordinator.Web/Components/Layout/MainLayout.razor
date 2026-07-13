@@ -1,0 +1,54 @@
+@inherits LayoutComponentBase
+
+<RadzenLayout>
+    <RadzenHeader>
+        <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween" class="header-content">
+            <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.75rem">
+                <RadzenSidebarToggle Click="@ToggleSidebar" />
+                <a class="brand" href="/" aria-label="SyncCoordinator 概要へ">
+                    <RadzenIcon Icon="sync_alt" />
+                    <span><small>OPERATIONS</small><strong>SyncCoordinator</strong></span>
+                </a>
+            </RadzenStack>
+            <RadzenBadge Text="@Environment.EnvironmentName" BadgeStyle="BadgeStyle.Light" />
+        </RadzenStack>
+    </RadzenHeader>
+
+    <RadzenSidebar @bind-Expanded="sidebarExpanded" class="app-sidebar">
+        <div class="nav-caption">管理メニュー</div>
+        <RadzenPanelMenu Multiple="false" class="app-menu">
+            <RadzenPanelMenuItem Text="概要" Icon="dashboard" Path="/" />
+            <RadzenPanelMenuItem Text="システム" Icon="dns" Path="/systems" />
+            <RadzenPanelMenuItem Text="同期ルート" Icon="account_tree" Path="/routes" />
+            <RadzenPanelMenuItem Text="テーブルマッピング" Icon="schema" Path="/mappings" />
+            <RadzenPanelMenuItem Text="競合履歴" Icon="rule" Path="/conflicts" />
+            <RadzenPanelMenuItem Text="処理状況" Icon="monitor_heart" Path="/operations" />
+        </RadzenPanelMenu>
+        <div class="sidebar-note">
+            <RadzenIcon Icon="verified_user" />
+            <span>管理DBの設定のみを変更します。同期処理はWorkerが実行します。</span>
+        </div>
+    </RadzenSidebar>
+
+    <RadzenBody>
+        <main class="page-shell">
+            @Body
+        </main>
+    </RadzenBody>
+</RadzenLayout>
+
+<RadzenComponents />
+
+<div id="blazor-error-ui" data-nosnippet>
+    予期しないエラーが発生しました。
+    <a href="." class="reload">再読み込み</a>
+    <span class="dismiss">🗙</span>
+</div>
+
+@code {
+    [Inject] private IWebHostEnvironment Environment { get; set; } = null!;
+
+    private bool sidebarExpanded = true;
+
+    private void ToggleSidebar() => sidebarExpanded = !sidebarExpanded;
+}

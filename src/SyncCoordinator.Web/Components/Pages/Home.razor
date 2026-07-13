@@ -1,0 +1,105 @@
+@page "/"
+@using SyncCoordinator.Core
+@inject ICoordinatorReadService ReadService
+
+<PageTitle>同期状況 | SyncCoordinator</PageTitle>
+
+<section class="page-heading">
+    <div>
+        <p class="kicker">SYNC OVERVIEW</p>
+        <h1>同期状況</h1>
+        <p>A・BとCの作業依頼／結果ルートを監視します。業務データの同期処理はWorkerが担当します。</p>
+    </div>
+    <RadzenButton Text="@(loading ? "更新中…" : "再読み込み")" Icon="refresh" Click="@LoadAsync" Disabled="@loading" />
+</section>
+
+@if (summary is null)
+{
+    <div class="loading-state"><RadzenProgressBar Mode="ProgressBarMode.Indeterminate" ShowValue="false" Style="width: 8rem" /><span>管理DBから読み込んでいます…</span></div>
+}
+else
+{
+    <section class="metric-grid" aria-label="同期メトリクス">
+        <RadzenCard class="metric-card"><span>有効システム</span><strong>@summary.EnabledSystems</strong></RadzenCard>
+        <RadzenCard class="metric-card"><span>有効ルート</span><strong>@summary.EnabledRoutes</strong></RadzenCard>
+        <RadzenCard class="metric-card"><span>処理中</span><strong>@summary.ProcessingMessages</strong></RadzenCard>
+        <RadzenCard class="metric-card warn"><span>保留</span><strong>@summary.HeldMessages</strong></RadzenCard>
+        <RadzenCard class="metric-card danger"><span>失敗</span><strong>@summary.FailedMessages</strong></RadzenCard>
+        <RadzenCard class="metric-card warn"><span>未解決競合</span><strong>@summary.UnresolvedConflicts</strong></RadzenCard>
+    </section>
+
+    <div class="content-stack">
+        <RadzenCard>
+            <div class="panel-title"><h2>同期ルート</h2><RadzenButton Text="管理画面を開く" Icon="arrow_forward" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Click="@OpenRoutes" /></div>
+            <RadzenDataGrid Data="@routes" TItem="RouteListItem" AllowSorting="true" AllowFiltering="true" FilterMode="FilterMode.Simple" AllowPaging="true" PageSize="10" EmptyText="登録されたルートはありません。" Density="Density.Compact">
+                <Columns>
+                    <RadzenDataGridColumn TItem="RouteListItem" Property="Name" Title="ルート">
+                        <Template Context="route"><a href="/routes/@route.Id">@route.Name</a></Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="RouteListItem" Title="方向" Sortable="false" Filterable="false">
+                        <Template Context="route"><code class="direction">@route.SourceSystem → @route.Destination</code></Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="RouteListItem" Property="EntityType" Title="Entity" />
+                    <RadzenDataGridColumn TItem="RouteListItem" Title="競合" Sortable="false" Filterable="false">
+                        <Template Context="route">@route.ConflictScope / @route.ConflictPolicy</Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="RouteListItem" Property="Enabled" Title="状態" Width="100px">
+                        <Template Context="route"><span class="status-pill @(route.Enabled ? "enabled" : "disabled")">@(route.Enabled ? "有効" : "無効")</span></Template>
+                    </RadzenDataGridColumn>
+                </Columns>
+            </RadzenDataGrid>
+        </RadzenCard>
+
+        <RadzenCard>
+            <div class="panel-title"><h2>最近の競合</h2><RadzenButton Text="履歴を開く" Icon="arrow_forward" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Click="@OpenConflicts" /></div>
+            <RadzenDataGrid Data="@conflicts" TItem="ConflictListItem" AllowSorting="true" AllowPaging="true" PageSize="10" EmptyText="競合履歴はありません。" Density="Density.Compact">
+                <Columns>
+                    <RadzenDataGridColumn TItem="ConflictListItem" Property="DetectedAtUtc" Title="検知日時">
+                        <Template Context="conflict">@conflict.DetectedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="ConflictListItem" Property="RouteName" Title="ルート">
+                        <Template Context="conflict"><a href="/conflicts/@conflict.Id">@conflict.RouteName</a></Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="ConflictListItem" Title="方向" Sortable="false">
+                        <Template Context="conflict"><code class="direction">@conflict.SourceSystem → @conflict.DestinationSystem</code></Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="ConflictListItem" Title="対象" Sortable="false">
+                        <Template Context="conflict">@conflict.EntityType / @conflict.EntityId</Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="ConflictListItem" Property="Resolved" Title="状態" Width="100px">
+                        <Template Context="conflict"><span class="status-pill @(conflict.Resolved ? "enabled" : "held")">@(conflict.Resolved ? "解決済み" : "未解決")</span></Template>
+                    </RadzenDataGridColumn>
+                </Columns>
+            </RadzenDataGrid>
+        </RadzenCard>
+    </div>
+}
+
+@code {
+    [Inject] private NavigationManager Navigation { get; set; } = null!;
+
+    private DashboardSummary? summary;
+    private IReadOnlyList<RouteListItem> routes = [];
+    private IReadOnlyList<ConflictListItem> conflicts = [];
+    private bool loading;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private void OpenRoutes() => Navigation.NavigateTo("/routes");
+    private void OpenConflicts() => Navigation.NavigateTo("/conflicts");
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            summary = await ReadService.GetSummaryAsync(CancellationToken.None);
+            routes = await ReadService.GetRoutesAsync(CancellationToken.None);
+            conflicts = await ReadService.GetRecentConflictsAsync(20, CancellationToken.None);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

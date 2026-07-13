@@ -1,0 +1,5 @@
+root = true
+
+[src/SyncCoordinator.Infrastructure/Persistence/Migrations/*.cs]
+# EF Core が生成する複合 index column 配列。
+dotnet_diagnostic.CA1861.severity = none

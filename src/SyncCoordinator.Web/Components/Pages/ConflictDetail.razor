@@ -1,0 +1,64 @@
+@page "/conflicts/{Id:guid}"
+@using System.Text.Json.Nodes
+@using SyncCoordinator.Core
+@inject ICoordinatorAdminService AdminService
+@inject NavigationManager Navigation
+
+<PageTitle>競合詳細 | SyncCoordinator</PageTitle>
+
+@if (details is null)
+{
+    <div class="loading-state"><RadzenProgressBar Mode="ProgressBarMode.Indeterminate" ShowValue="false" Style="width: 8rem" /><span>競合情報を読み込んでいます…</span></div>
+}
+else
+{
+    <section class="page-heading compact">
+        <div>
+            <p class="kicker">CONFLICT DETAIL</p>
+            <h1>@details.EntityType / @details.EntityId</h1>
+            <p>@details.RouteName</p>
+        </div>
+        <RadzenButton Text="一覧へ戻る" Icon="arrow_back" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Click="@BackToList" />
+    </section>
+
+    <div class="content-stack">
+        <section class="detail-grid">
+            <RadzenCard class="detail-card"><span>方向</span><strong>@details.SourceSystem → @details.DestinationSystem</strong></RadzenCard>
+            <RadzenCard class="detail-card"><span>スコープ</span><strong>@details.Scope</strong></RadzenCard>
+            <RadzenCard class="detail-card"><span>検知日時</span><strong>@details.DetectedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</strong></RadzenCard>
+            <RadzenCard class="detail-card"><span>状態</span><strong><span class="status-pill @(details.ResolvedAtUtc is null ? "held" : "enabled")">@(details.ResolvedAtUtc is null ? "未解決" : "解決済み")</span></strong></RadzenCard>
+        </section>
+
+        <RadzenCard>
+            <dl class="metadata-list">
+                <dt>Source MessageId</dt><dd><code>@details.SourceMessageId</code></dd>
+                <dt>Delivery MessageId</dt><dd><code>@details.DeliveryMessageId</code></dd>
+            </dl>
+        </RadzenCard>
+
+        <RadzenCard>
+            <div class="panel-title"><h2>競合項目と採用値</h2><span>@details.Fields.Count 項目</span></div>
+            <RadzenDataGrid Data="@details.Fields" TItem="FieldConflict" AllowSorting="true" EmptyText="競合項目はありません。" Density="Density.Compact">
+                <Columns>
+                    <RadzenDataGridColumn TItem="FieldConflict" Property="FieldName" Title="項目" Frozen="true" />
+                    <RadzenDataGridColumn TItem="FieldConflict" Title="前回値" Sortable="false"><Template Context="field"><pre class="json-value">@Format(field.BaseValue)</pre></Template></RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="FieldConflict" Title="Incoming" Sortable="false"><Template Context="field"><pre class="json-value">@Format(field.IncomingValue)</pre></Template></RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="FieldConflict" Title="Current" Sortable="false"><Template Context="field"><pre class="json-value">@Format(field.CurrentValue)</pre></Template></RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="FieldConflict" Title="採用値" Sortable="false"><Template Context="field"><pre class="json-value adopted">@Format(field.AdoptedValue)</pre></Template></RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="FieldConflict" Property="Policy" Title="ポリシー" />
+                    <RadzenDataGridColumn TItem="FieldConflict" Property="Resolution" Title="結果" />
+                </Columns>
+            </RadzenDataGrid>
+        </RadzenCard>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    private ConflictDetails? details;
+
+    protected override async Task OnParametersSetAsync() => details = await AdminService.GetConflictAsync(Id, CancellationToken.None);
+
+    private void BackToList() => Navigation.NavigateTo("/conflicts");
+    private static string Format(JsonNode? value) => value?.ToJsonString() ?? "null";
+}

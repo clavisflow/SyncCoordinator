@@ -1,0 +1,287 @@
+@page "/mappings"
+@using SyncCoordinator.Core
+@inject ICoordinatorAdminService AdminService
+@inject ICoordinatorReadService ReadService
+@inject IDatabaseMetadataService MetadataService
+
+<PageTitle>テーブルマッピング | SyncCoordinator</PageTitle>
+
+<section class="page-heading">
+    <div>
+        <p class="kicker">SCHEMA MAPPING</p>
+        <h1>テーブルマッピング</h1>
+        <p>登録済みDBへ接続し、同期元と同期先のテーブル・列を対応付けます。業務項目はCoordinator側で推測しません。</p>
+    </div>
+</section>
+
+<div class="content-stack">
+    <RadzenCard>
+        <div class="panel-title"><h2>登録済みマッピング</h2><span>@savedMappings.Count 件</span></div>
+        <RadzenDataGrid Data="@savedMappings" TItem="TableMappingListItem" AllowSorting="true" AllowFiltering="true" FilterMode="FilterMode.Simple" EmptyText="登録済みのマッピングはありません。" Density="Density.Compact">
+            <Columns>
+                <RadzenDataGridColumn TItem="TableMappingListItem" Property="RouteName" Title="ルート" />
+                <RadzenDataGridColumn TItem="TableMappingListItem" Title="システム" Sortable="false" Filterable="false">
+                    <Template Context="item"><code>@item.SourceSystem → @item.DestinationSystem</code></Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="TableMappingListItem" Property="SourceTable" Title="同期元テーブル" />
+                <RadzenDataGridColumn TItem="TableMappingListItem" Property="DestinationTable" Title="同期先テーブル" />
+                <RadzenDataGridColumn TItem="TableMappingListItem" Property="ColumnCount" Title="列数" Width="80px" />
+                <RadzenDataGridColumn TItem="TableMappingListItem" Title="" Sortable="false" Filterable="false" Width="72px" TextAlign="TextAlign.Right">
+                    <Template Context="item"><RadzenButton Icon="edit" title="編集" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => EditMappingAsync(item))" /></Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    </RadzenCard>
+
+    <RadzenCard>
+        <div class="panel-title"><h2>マッピング編集</h2><span>接続設定済みシステムのみ参照可能</span></div>
+        @if (errors.Count > 0)
+        {
+            <div class="message-box error" role="alert">
+                @foreach (var error in errors) { <div>@error</div> }
+            </div>
+        }
+        @if (!string.IsNullOrWhiteSpace(successMessage))
+        {
+            <div class="message-box success">@successMessage</div>
+        }
+
+        <div class="form-grid mapping-selector">
+            <div class="form-field">
+                <label>同期ルート</label>
+                <RadzenDropDown TValue="Guid?" @bind-Value="selectedRouteId" Data="@routes" TextProperty="Name" ValueProperty="Id" Placeholder="ルートを選択" AllowClear="true" class="form-control" />
+            </div>
+            <div class="form-field">
+                <label>宛先システム</label>
+                <RadzenDropDown TValue="string" @bind-Value="selectedDestinationSystem" Data="@systems" TextProperty="DisplayName" ValueProperty="Code" Placeholder="宛先を選択" AllowClear="true" class="form-control" />
+            </div>
+            <div class="form-actions wide">
+                <RadzenButton Text="テーブル一覧を読み込む" Icon="database" Click="@LoadTablesAsync" Disabled="@(loadingTables || selectedRouteId is null)" />
+            </div>
+        </div>
+
+        @if (sourceTables.Count > 0 || destinationTables.Count > 0)
+        {
+            <div class="mapping-table-picker">
+                <div class="form-field">
+                    <label>同期元テーブル（@SelectedRoute?.SourceSystem）</label>
+                    <RadzenDropDown TValue="DatabaseTableInfo" @bind-Value="selectedSourceTable" Data="@sourceTables" TextProperty="DisplayName" Placeholder="テーブルを選択" AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive" class="form-control" />
+                </div>
+                <RadzenIcon Icon="arrow_forward" class="mapping-arrow" />
+                <div class="form-field">
+                    <label>同期先テーブル（@selectedDestinationSystem）</label>
+                    <RadzenDropDown TValue="DatabaseTableInfo" @bind-Value="selectedDestinationTable" Data="@destinationTables" TextProperty="DisplayName" Placeholder="テーブルを選択" AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive" class="form-control" />
+                </div>
+                <RadzenButton Text="列一覧を読み込む" Icon="view_column" ButtonStyle="ButtonStyle.Light" Click="@LoadColumnsAsync" Disabled="@(selectedSourceTable is null || selectedDestinationTable is null || loadingColumns)" />
+            </div>
+        }
+
+        @if (columnRows.Count > 0)
+        {
+            <div class="column-mapping-header">
+                <div><strong>同期対象</strong><small>チェックした列だけを保存します。同名列は自動候補です。</small></div>
+                <span>@columnRows.Count(x => x.Included) / @columnRows.Count 列</span>
+            </div>
+            <div class="column-mapping-list">
+                @foreach (var row in columnRows)
+                {
+                    <div class="column-mapping-row" @key="row.Source.Name">
+                        <RadzenCheckBox TValue="bool" @bind-Value="row.Included" />
+                        <div class="column-source">
+                            <strong>@row.Source.Name</strong>
+                            <small>@row.Source.DataType @(row.Source.IsNullable ? "NULL" : "NOT NULL")</small>
+                        </div>
+                        <RadzenIcon Icon="arrow_forward" />
+                        <RadzenDropDown TValue="string" @bind-Value="row.DestinationColumn" Data="@destinationColumns" TextProperty="DisplayName" ValueProperty="Name" Placeholder="同期先列を選択" AllowClear="true" AllowFiltering="true" class="form-control" />
+                        <div class="check-row key-check">
+                            <RadzenCheckBox TValue="bool" @bind-Value="row.IsKey" Disabled="@(!row.Included)" />
+                            <span>キー</span>
+                        </div>
+                    </div>
+                }
+            </div>
+            <div class="form-actions page-actions">
+                <RadzenButton Text="@(saving ? "保存中…" : "マッピングを保存")" Icon="save" Click="@SaveMappingAsync" Disabled="@saving" />
+            </div>
+        }
+    </RadzenCard>
+</div>
+
+@code {
+    private IReadOnlyList<RouteListItem> routes = [];
+    private IReadOnlyList<SystemListItem> systems = [];
+    private IReadOnlyList<TableMappingListItem> savedMappings = [];
+    private IReadOnlyList<DatabaseTableInfo> sourceTables = [];
+    private IReadOnlyList<DatabaseTableInfo> destinationTables = [];
+    private IReadOnlyList<DatabaseColumnInfo> destinationColumns = [];
+    private List<ColumnMappingRow> columnRows = [];
+    private Guid? selectedRouteId;
+    private string selectedDestinationSystem = string.Empty;
+    private DatabaseTableInfo? selectedSourceTable;
+    private DatabaseTableInfo? selectedDestinationTable;
+    private TableMappingInput? existingMapping;
+    private IReadOnlyList<string> errors = [];
+    private string? successMessage;
+    private bool loadingTables;
+    private bool loadingColumns;
+    private bool saving;
+
+    private RouteListItem? SelectedRoute => routes.SingleOrDefault(x => x.Id == selectedRouteId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        routes = await ReadService.GetRoutesAsync(CancellationToken.None);
+        systems = await AdminService.GetSystemsAsync(CancellationToken.None);
+        savedMappings = await AdminService.GetTableMappingsAsync(CancellationToken.None);
+    }
+
+    private async Task LoadTablesAsync()
+    {
+        errors = [];
+        successMessage = null;
+        columnRows = [];
+        loadingTables = true;
+        try
+        {
+            var route = SelectedRoute ?? throw new ConfigurationValidationException(["同期ルートを選択してください。"]);
+            if (route.Destination != DestinationMode.OriginSystem.ToString())
+            {
+                selectedDestinationSystem = route.Destination;
+            }
+            if (string.IsNullOrWhiteSpace(selectedDestinationSystem))
+            {
+                throw new ConfigurationValidationException(["宛先システムを選択してください。"]);
+            }
+            var source = GetConfiguredSystem(route.SourceSystem);
+            var destination = GetConfiguredSystem(selectedDestinationSystem);
+            sourceTables = await MetadataService.GetTablesAsync(source.Id, CancellationToken.None);
+            destinationTables = await MetadataService.GetTablesAsync(destination.Id, CancellationToken.None);
+            existingMapping = await AdminService.GetTableMappingAsync(route.Id, selectedDestinationSystem, CancellationToken.None);
+            selectedSourceTable = FindTable(sourceTables, existingMapping?.SourceSchema, existingMapping?.SourceTable);
+            selectedDestinationTable = FindTable(destinationTables, existingMapping?.DestinationSchema, existingMapping?.DestinationTable);
+            if (selectedSourceTable is not null && selectedDestinationTable is not null)
+            {
+                await LoadColumnsAsync();
+            }
+        }
+        catch (ConfigurationValidationException exception)
+        {
+            errors = exception.Errors;
+        }
+        catch (Exception exception)
+        {
+            errors = [exception.Message];
+        }
+        finally
+        {
+            loadingTables = false;
+        }
+    }
+
+    private async Task LoadColumnsAsync()
+    {
+        errors = [];
+        successMessage = null;
+        loadingColumns = true;
+        try
+        {
+            var route = SelectedRoute ?? throw new InvalidOperationException("同期ルートを選択してください。");
+            var source = GetConfiguredSystem(route.SourceSystem);
+            var destination = GetConfiguredSystem(selectedDestinationSystem);
+            var sourceColumns = await MetadataService.GetColumnsAsync(source.Id, selectedSourceTable!.Schema, selectedSourceTable.Name, CancellationToken.None);
+            destinationColumns = await MetadataService.GetColumnsAsync(destination.Id, selectedDestinationTable!.Schema, selectedDestinationTable.Name, CancellationToken.None);
+            var saved = existingMapping?.Columns.ToDictionary(x => x.SourceColumn, StringComparer.OrdinalIgnoreCase) ?? [];
+            columnRows = sourceColumns.Select(sourceColumn =>
+            {
+                saved.TryGetValue(sourceColumn.Name, out var savedColumn);
+                var sameName = destinationColumns.FirstOrDefault(x => string.Equals(x.Name, sourceColumn.Name, StringComparison.OrdinalIgnoreCase));
+                return new ColumnMappingRow
+                {
+                    Source = sourceColumn,
+                    Included = savedColumn is not null || sameName is not null,
+                    DestinationColumn = savedColumn?.DestinationColumn ?? sameName?.Name ?? string.Empty,
+                    IsKey = savedColumn?.IsKey ?? sourceColumn.IsPrimaryKey
+                };
+            }).ToList();
+        }
+        catch (Exception exception)
+        {
+            errors = [exception.Message];
+        }
+        finally
+        {
+            loadingColumns = false;
+        }
+    }
+
+    private async Task SaveMappingAsync()
+    {
+        saving = true;
+        errors = [];
+        successMessage = null;
+        try
+        {
+            var model = new TableMappingInput
+            {
+                Id = existingMapping?.Id,
+                RouteId = selectedRouteId!.Value,
+                DestinationSystem = selectedDestinationSystem,
+                SourceSchema = selectedSourceTable!.Schema,
+                SourceTable = selectedSourceTable.Name,
+                DestinationSchema = selectedDestinationTable!.Schema,
+                DestinationTable = selectedDestinationTable.Name,
+                Columns = columnRows.Where(x => x.Included).Select(x => new ColumnMappingInput
+                {
+                    SourceColumn = x.Source.Name,
+                    DestinationColumn = x.DestinationColumn,
+                    IsKey = x.IsKey
+                }).ToList()
+            };
+            await AdminService.SaveTableMappingAsync(model, CancellationToken.None);
+            existingMapping = await AdminService.GetTableMappingAsync(model.RouteId, model.DestinationSystem, CancellationToken.None);
+            savedMappings = await AdminService.GetTableMappingsAsync(CancellationToken.None);
+            successMessage = "テーブル／列マッピングを保存しました。";
+        }
+        catch (ConfigurationValidationException exception)
+        {
+            errors = exception.Errors;
+        }
+        catch (Exception exception)
+        {
+            errors = [exception.Message];
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task EditMappingAsync(TableMappingListItem item)
+    {
+        selectedRouteId = item.RouteId;
+        selectedDestinationSystem = item.DestinationSystem;
+        await LoadTablesAsync();
+    }
+
+    private SystemListItem GetConfiguredSystem(string code)
+    {
+        var system = systems.SingleOrDefault(x => string.Equals(x.Code, code, StringComparison.OrdinalIgnoreCase)) ??
+                     throw new InvalidOperationException($"システム '{code}' が存在しません。");
+        if (!system.ConnectionConfigured)
+        {
+            throw new ConfigurationValidationException([$"システム '{code}' のDB接続情報が未設定です。システム管理から設定してください。"]);
+        }
+        return system;
+    }
+
+    private static DatabaseTableInfo? FindTable(IReadOnlyList<DatabaseTableInfo> tables, string? schema, string? name) =>
+        tables.FirstOrDefault(x => string.Equals(x.Schema, schema, StringComparison.OrdinalIgnoreCase) && string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+
+    private sealed class ColumnMappingRow
+    {
+        public required DatabaseColumnInfo Source { get; init; }
+        public bool Included { get; set; }
+        public string DestinationColumn { get; set; } = string.Empty;
+        public bool IsKey { get; set; }
+    }
+}

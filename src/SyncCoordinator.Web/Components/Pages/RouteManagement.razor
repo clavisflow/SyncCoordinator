@@ -1,0 +1,46 @@
+@page "/routes"
+@using SyncCoordinator.Core
+@inject ICoordinatorReadService ReadService
+@inject NavigationManager Navigation
+
+<PageTitle>同期ルート管理 | SyncCoordinator</PageTitle>
+
+<section class="page-heading">
+    <div>
+        <p class="kicker">CONFIGURATION</p>
+        <h1>同期ルート管理</h1>
+        <p>発生元、宛先、Entity、競合ポリシーを設定します。</p>
+    </div>
+    <RadzenButton Text="新しいルート" Icon="add" Click="@CreateRoute" />
+</section>
+
+<RadzenCard>
+    <div class="panel-title"><h2>登録ルート</h2><span>@routes.Count 件</span></div>
+    <RadzenDataGrid Data="@routes" TItem="RouteListItem" AllowSorting="true" AllowFiltering="true" FilterMode="FilterMode.Simple" AllowPaging="true" PageSize="20" EmptyText="登録されたルートはありません。" Density="Density.Compact">
+        <Columns>
+            <RadzenDataGridColumn TItem="RouteListItem" Property="Name" Title="ルート" />
+            <RadzenDataGridColumn TItem="RouteListItem" Title="方向" Sortable="false" Filterable="false">
+                <Template Context="route"><code class="direction">@route.SourceSystem → @route.Destination</code></Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="RouteListItem" Property="EntityType" Title="Entity" />
+            <RadzenDataGridColumn TItem="RouteListItem" Title="競合設定" Sortable="false" Filterable="false">
+                <Template Context="route">@route.ConflictScope / @route.ConflictPolicy</Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="RouteListItem" Property="Enabled" Title="状態" Width="90px">
+                <Template Context="route"><span class="status-pill @(route.Enabled ? "enabled" : "disabled")">@(route.Enabled ? "有効" : "無効")</span></Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="RouteListItem" Title="" Sortable="false" Filterable="false" Width="72px" TextAlign="TextAlign.Right">
+                <Template Context="route"><RadzenButton Icon="edit" title="編集" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => EditRoute(route.Id))" /></Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+</RadzenCard>
+
+@code {
+    private IReadOnlyList<RouteListItem> routes = [];
+
+    protected override async Task OnInitializedAsync() => routes = await ReadService.GetRoutesAsync(CancellationToken.None);
+
+    private void CreateRoute() => Navigation.NavigateTo("/routes/new");
+    private void EditRoute(Guid id) => Navigation.NavigateTo($"/routes/{id}");
+}
