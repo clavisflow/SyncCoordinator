@@ -1,28 +1,30 @@
 @page "/operations"
+@attribute [Authorize]
 @using SyncCoordinator.Core
 @inject ICoordinatorAdminService AdminService
+@inject IStringLocalizer<SharedResource> L
 
-<PageTitle>処理状況 | SyncCoordinator</PageTitle>
+<PageTitle>@L["Operations_PageTitle"]</PageTitle>
 
 <section class="page-heading">
     <div>
         <p class="kicker">OPERATIONS</p>
-        <h1>処理状況</h1>
-        <p>システムごとのCheckpoint、Inbox、設定変更履歴を確認します。</p>
+        <h1>@L["Operations_Title"]</h1>
+        <p>@L["Operations_Description"]</p>
     </div>
-    <RadzenButton Text="@(loading ? "更新中…" : "再読み込み")" Icon="refresh" Click="@LoadAsync" Disabled="@loading" />
+    <RadzenButton Text="@(loading ? L["Action_Refreshing"] : L["Action_Reload"])" Icon="refresh" Click="@LoadAsync" Disabled="@loading" />
 </section>
 
 <div class="content-stack">
     <RadzenCard>
-        <div class="panel-title"><h2>Queue Checkpoint</h2><span>@checkpoints.Count システム</span></div>
-        <RadzenDataGrid Data="@checkpoints" TItem="CheckpointListItem" AllowSorting="true" EmptyText="Checkpointはありません。" Density="Density.Compact">
+        <div class="panel-title"><h2>Queue Checkpoint</h2><span>@L["Common_SystemCount", checkpoints.Count]</span></div>
+        <RadzenDataGrid Data="@checkpoints" TItem="CheckpointListItem" AllowSorting="true" EmptyText="@L["Operations_NoCheckpoints"]" Density="Density.Compact">
             <Columns>
-                <RadzenDataGridColumn TItem="CheckpointListItem" Property="SystemCode" Title="システム">
-                    <Template Context="checkpoint"><code>@checkpoint.SystemCode</code> @checkpoint.SystemName</Template>
+                <RadzenDataGridColumn TItem="CheckpointListItem" Property="SystemName" Title="@L["Common_System"]">
+                    <Template Context="checkpoint">@checkpoint.SystemName</Template>
                 </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="CheckpointListItem" Property="LastQueueId" Title="最終QueueId" />
-                <RadzenDataGridColumn TItem="CheckpointListItem" Property="UpdatedAtUtc" Title="更新日時">
+                <RadzenDataGridColumn TItem="CheckpointListItem" Property="LastQueueId" Title="@L["Operations_LastQueueId"]" />
+                <RadzenDataGridColumn TItem="CheckpointListItem" Property="UpdatedAtUtc" Title="@L["Common_UpdatedAt"]">
                     <Template Context="checkpoint">@FormatDate(checkpoint.UpdatedAtUtc)</Template>
                 </RadzenDataGridColumn>
             </Columns>
@@ -30,27 +32,27 @@
     </RadzenCard>
 
     <RadzenCard>
-        <div class="panel-title"><h2>最近のInbox</h2><span>@inbox.Count 件</span></div>
-        <RadzenDataGrid Data="@inbox" TItem="InboxListItem" AllowSorting="true" AllowFiltering="true" FilterMode="FilterMode.Simple" AllowPaging="true" PageSize="25" ShowPagingSummary="true" EmptyText="Inbox履歴はありません。" Density="Density.Compact">
+        <div class="panel-title"><h2>@L["Operations_RecentInbox"]</h2><span>@L["Common_Count", inbox.Count]</span></div>
+        <RadzenDataGrid Data="@inbox" TItem="InboxListItem" AllowSorting="true" AllowFiltering="true" FilterMode="FilterMode.Simple" AllowPaging="true" PageSize="25" ShowPagingSummary="true" PagingSummaryFormat="@L["Common_PagingSummary"]" EmptyText="@L["Operations_NoInbox"]" Density="Density.Compact">
             <Columns>
-                <RadzenDataGridColumn TItem="InboxListItem" Property="UpdatedAtUtc" Title="更新日時">
+                <RadzenDataGridColumn TItem="InboxListItem" Property="UpdatedAtUtc" Title="@L["Common_UpdatedAt"]">
                     <Template Context="item">@FormatDate(item.UpdatedAtUtc)</Template>
                 </RadzenDataGridColumn>
                 <RadzenDataGridColumn TItem="InboxListItem" Property="SourceMessageId" Title="MessageId">
                     <Template Context="item"><code>@item.SourceMessageId</code></Template>
                 </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="InboxListItem" Property="RouteName" Title="ルート／宛先">
-                    <Template Context="item">@item.RouteName<br /><small>→ @item.DestinationSystem</small></Template>
+                <RadzenDataGridColumn TItem="InboxListItem" Property="RouteName" Title="@L["Operations_RouteDestination"]">
+                    <Template Context="item">@item.RouteName<br /><small>→ @item.DestinationSystemName</small></Template>
                 </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="InboxListItem" Property="State" Title="状態" Width="110px">
-                    <Template Context="item"><span class="status-pill @StateClass(item.State)">@item.State</span></Template>
+                <RadzenDataGridColumn TItem="InboxListItem" Property="State" Title="@L["Common_Status"]" Width="110px">
+                    <Template Context="item"><span class="status-pill @StateClass(item.State)">@StateText(item.State)</span></Template>
                 </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="InboxListItem" Property="AttemptCount" Title="試行" Width="80px" />
-                <RadzenDataGridColumn TItem="InboxListItem" Property="LastError" Title="エラー" Sortable="false">
+                <RadzenDataGridColumn TItem="InboxListItem" Property="AttemptCount" Title="@L["Operations_Attempts"]" Width="80px" />
+                <RadzenDataGridColumn TItem="InboxListItem" Property="LastError" Title="@L["Common_Error"]" Sortable="false">
                     <Template Context="item">
                         @if (!string.IsNullOrWhiteSpace(item.LastError))
                         {
-                            <details><summary>表示</summary><pre class="error-text">@item.LastError</pre></details>
+                            <details><summary>@L["Common_Show"]</summary><pre class="error-text">@item.LastError</pre></details>
                         }
                         else
                         {
@@ -63,16 +65,16 @@
     </RadzenCard>
 
     <RadzenCard>
-        <div class="panel-title"><h2>設定変更履歴</h2><span>@audits.Count 件</span></div>
-        <RadzenDataGrid Data="@audits" TItem="ConfigurationAuditListItem" AllowSorting="true" AllowFiltering="true" FilterMode="FilterMode.Simple" AllowPaging="true" PageSize="25" ShowPagingSummary="true" EmptyText="設定変更履歴はありません。" Density="Density.Compact">
+        <div class="panel-title"><h2>@L["Operations_AuditHistory"]</h2><span>@L["Common_Count", audits.Count]</span></div>
+        <RadzenDataGrid Data="@audits" TItem="ConfigurationAuditListItem" AllowSorting="true" AllowFiltering="true" FilterMode="FilterMode.Simple" AllowPaging="true" PageSize="25" ShowPagingSummary="true" PagingSummaryFormat="@L["Common_PagingSummary"]" EmptyText="@L["Operations_NoAudits"]" Density="Density.Compact">
             <Columns>
-                <RadzenDataGridColumn TItem="ConfigurationAuditListItem" Property="ChangedAtUtc" Title="変更日時">
+                <RadzenDataGridColumn TItem="ConfigurationAuditListItem" Property="ChangedAtUtc" Title="@L["Common_ChangedAt"]">
                     <Template Context="audit">@FormatDate(audit.ChangedAtUtc)</Template>
                 </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="ConfigurationAuditListItem" Property="ConfigurationType" Title="種類" />
-                <RadzenDataGridColumn TItem="ConfigurationAuditListItem" Property="ConfigurationName" Title="対象" />
-                <RadzenDataGridColumn TItem="ConfigurationAuditListItem" Property="Action" Title="操作" />
-                <RadzenDataGridColumn TItem="ConfigurationAuditListItem" Property="ChangedBy" Title="実行元" />
+                <RadzenDataGridColumn TItem="ConfigurationAuditListItem" Property="ConfigurationType" Title="@L["Common_Type"]"><Template Context="audit">@AuditTypeText(audit.ConfigurationType)</Template></RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="ConfigurationAuditListItem" Property="ConfigurationName" Title="@L["Common_Target"]" />
+                <RadzenDataGridColumn TItem="ConfigurationAuditListItem" Property="Action" Title="@L["Common_Action"]"><Template Context="audit">@AuditActionText(audit.Action)</Template></RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="ConfigurationAuditListItem" Property="ChangedBy" Title="@L["Operations_ChangedBy"]"><Template Context="audit">@ChangedByText(audit.ChangedBy)</Template></RadzenDataGridColumn>
             </Columns>
         </RadzenDataGrid>
     </RadzenCard>
@@ -101,7 +103,48 @@
         }
     }
 
-    private static string FormatDate(DateTimeOffset? value) => value?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "未処理";
+    private string FormatDate(DateTimeOffset? value) => UiFormat.LocalDateTime(value, L["Operations_NotProcessed"]);
+
+    private string StateText(InboxState state) => state switch
+    {
+        InboxState.Completed => L["Operations_Completed"],
+        InboxState.Processing => L["Operations_Processing"],
+        InboxState.Held => L["Operations_Held"],
+        InboxState.Failed => L["Operations_Failed"],
+        _ => state.ToString()
+    };
+
+    private string AuditTypeText(string value) => value switch
+    {
+        "System" => L["Common_System"],
+        "Route" => L["Common_Rule"],
+        "TableMapping" => L["Common_Mapping"],
+        "DatabaseDeployment" => L["Common_DatabaseDeployment"],
+        "AdminAccount" => L["Operations_AdminAccount"],
+        _ => value
+    };
+
+    private string AuditActionText(string value) => value switch
+    {
+        "Created" => L["Operations_Created"],
+        "Updated" => L["Operations_Updated"],
+        "Enabled" => L["Operations_Enabled"],
+        "Disabled" => L["Operations_Disabled"],
+        "Paused" => L["Operations_Paused"],
+        "Resumed" => L["Operations_Resumed"],
+        "Initialized" => L["Operations_Initialized"],
+        "PasswordReset" => L["Operations_PasswordReset"],
+        "PasswordChanged" => L["Operations_PasswordChanged"],
+        _ => value
+    };
+
+    private string ChangedByText(string value) => value switch
+    {
+        "management-ui" => L["Operations_ManagementUi"],
+        "administrator" => L["Operations_Administrator"],
+        "localhost-recovery" => L["Operations_LocalRecovery"],
+        _ => value
+    };
 
     private static string StateClass(InboxState state) => state switch
     {

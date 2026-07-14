@@ -1,0 +1,26 @@
+@using System.Globalization
+@inject NavigationManager Navigation
+@inject IStringLocalizer<SharedResource> L
+
+<form method="post" action="/culture" class="culture-form">
+    <AntiforgeryToken />
+    <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+    <label for="culture-selector">@L["Culture_Label"]</label>
+    <select id="culture-selector" name="culture" aria-label="@L["Culture_Label"]" onchange="this.form.requestSubmit()">
+        <option value="ja-JP" selected="@(CurrentCulture == "ja-JP")">日本語</option>
+        <option value="en-US" selected="@(CurrentCulture == "en-US")">English</option>
+    </select>
+</form>
+
+@code {
+    private string CurrentCulture => CultureInfo.CurrentUICulture.Name;
+
+    private string ReturnUrl
+    {
+        get
+        {
+            var relative = Navigation.ToBaseRelativePath(Navigation.Uri);
+            return string.IsNullOrEmpty(relative) ? "/" : $"/{relative}";
+        }
+    }
+}

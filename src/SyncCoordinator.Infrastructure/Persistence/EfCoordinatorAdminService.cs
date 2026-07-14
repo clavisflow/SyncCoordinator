@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using SyncCoordinator.Contracts;
 using SyncCoordinator.Core;
 
 namespace SyncCoordinator.Infrastructure.Persistence;
@@ -7,6 +8,7 @@ namespace SyncCoordinator.Infrastructure.Persistence;
 public sealed class EfCoordinatorAdminService(
     CoordinatorDbContext dbContext,
     ProtectedConnectionStringService connectionProtector,
+    WebhookOutboxWriter webhookOutbox,
     TimeProvider timeProvider) : ICoordinatorAdminService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -14,7 +16,14 @@ public sealed class EfCoordinatorAdminService(
     public async Task<IReadOnlyList<SystemListItem>> GetSystemsAsync(CancellationToken cancellationToken) =>
         await dbContext.Systems.AsNoTracking()
             .OrderBy(x => x.Code)
-            .Select(x => new SystemListItem(x.Id, x.Code, x.DisplayName, x.Provider, x.Enabled, x.ProtectedConnectionString != null))
+            .Select(x => new SystemListItem(
+                x.Id,
+                x.Code,
+                x.DisplayName,
+                x.Provider,
+                x.Enabled,
+                x.ProtectedConnectionString != null,
+                x.PausedAtUtc))
             .ToListAsync(cancellationToken);
 
     public async Task<SystemConfigurationInput?> GetSystemAsync(Guid id, CancellationToken cancellationToken) =>
@@ -32,10 +41,16 @@ public sealed class EfCoordinatorAdminService(
 
     public async Task<Guid> SaveSystemAsync(
         SystemConfigurationInput input,
+        DatabaseConnectionInput? connection,
         CancellationToken cancellationToken)
     {
         Normalize(input);
         ConfigurationValidator.ValidateSystem(input);
+        if (connection is not null)
+        {
+            ConfigurationValidator.ValidateConnection(connection, input.Provider);
+        }
+
         SystemDefinitionEntity entity;
         object? before = null;
         var action = "Created";
@@ -54,9 +69,22 @@ public sealed class EfCoordinatorAdminService(
             {
                 throw new ConfigurationValidationException(["接続情報の登録後はProviderを変更できません。接続情報を再設定する運用が必要です。"]);
             }
+            if (entity.Enabled && !input.Enabled && await dbContext.Routes.AnyAsync(
+                    x => x.Enabled &&
+                         (x.SourceSystemId == entity.Id || x.DestinationSystemId == entity.Id),
+                    cancellationToken))
+            {
+                throw new ConfigurationValidationException([
+                    "有効な同期ルールで使用中のシステムは無効化できません。構成を外す場合は先に関連ルールを無効化し、保守目的なら一時停止を使用してください。"
+                ]);
+            }
             entity.DisplayName = input.DisplayName;
             entity.Provider = input.Provider;
             entity.Enabled = input.Enabled;
+            if (!input.Enabled)
+            {
+                entity.PausedAtUtc = null;
+            }
             action = "Updated";
         }
         else
@@ -80,9 +108,50 @@ public sealed class EfCoordinatorAdminService(
             dbContext.Systems.Add(entity);
         }
 
+        if (connection is not null)
+        {
+            connection.SystemId = entity.Id;
+            ApplyDatabaseConnection(entity, connection);
+        }
+
         AddAudit("System", entity.Id.ToString("N"), entity.DisplayName, action, before, SystemSnapshot(entity));
         await dbContext.SaveChangesAsync(cancellationToken);
         return entity.Id;
+    }
+
+    public async Task SetSystemPausedAsync(
+        Guid systemId,
+        bool paused,
+        CancellationToken cancellationToken)
+    {
+        var entity = await dbContext.Systems.SingleOrDefaultAsync(x => x.Id == systemId, cancellationToken) ??
+                     throw new KeyNotFoundException("指定されたシステムは存在しません。");
+        if (paused && !entity.Enabled)
+        {
+            throw new ConfigurationValidationException(["無効なシステムは一時停止できません。"]);
+        }
+        if ((entity.PausedAtUtc is not null) == paused)
+        {
+            return;
+        }
+
+        var before = SystemSnapshot(entity);
+        entity.PausedAtUtc = paused ? timeProvider.GetUtcNow() : null;
+        AddAudit(
+            "System",
+            entity.Id.ToString("N"),
+            entity.DisplayName,
+            paused ? "Paused" : "Resumed",
+            before,
+            SystemSnapshot(entity));
+        var eventType = paused ? WebhookEventTypes.SystemPaused : WebhookEventTypes.SystemResumed;
+        await webhookOutbox.AddAsync(new WebhookEventNotification(
+            WebhookEventId.Create(eventType, entity.Id, entity.PausedAtUtc ?? timeProvider.GetUtcNow()),
+            eventType,
+            timeProvider.GetUtcNow(),
+            SystemCode: entity.Code,
+            SystemName: entity.DisplayName), cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<DatabaseConnectionInput?> GetDatabaseConnectionAsync(
@@ -96,7 +165,7 @@ public sealed class EfCoordinatorAdminService(
             return new DatabaseConnectionInput
             {
                 SystemId = systemId,
-                Port = system.Provider == "MySql" ? 3306 : 1433,
+                Port = DefaultPort(system.Provider),
                 Encrypt = true
             };
         }
@@ -113,7 +182,12 @@ public sealed class EfCoordinatorAdminService(
         var system = await dbContext.Systems.SingleOrDefaultAsync(x => x.Id == input.SystemId, cancellationToken) ??
                      throw new KeyNotFoundException("指定されたシステムは存在しません。");
         ConfigurationValidator.ValidateConnection(input, system.Provider);
+        ApplyDatabaseConnection(system, input);
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
 
+    private void ApplyDatabaseConnection(SystemDefinitionEntity system, DatabaseConnectionInput input)
+    {
         var password = input.Password;
         if (string.IsNullOrEmpty(password) && input.HasStoredPassword && !string.IsNullOrWhiteSpace(system.ProtectedConnectionString))
         {
@@ -128,13 +202,13 @@ public sealed class EfCoordinatorAdminService(
         input.Password = string.Empty;
         input.HasStoredPassword = !input.IntegratedSecurity;
         AddAudit("DatabaseConnection", system.Id.ToString("N"), system.DisplayName, "Updated", before, ConnectionSnapshot(input));
-        await dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<RouteConfigurationInput?> GetRouteAsync(Guid id, CancellationToken cancellationToken)
     {
         var route = await dbContext.Routes.AsNoTracking()
-            .Include(x => x.FieldPolicies)
+            .Include(x => x.SourceSystem)
+            .Include(x => x.DestinationSystem)
             .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         return route is null ? null : ToInput(route);
     }
@@ -144,22 +218,34 @@ public sealed class EfCoordinatorAdminService(
         CancellationToken cancellationToken)
     {
         Normalize(input);
-        var systemCodes = await dbContext.Systems.AsNoTracking()
-            .Select(x => x.Code)
+        var systems = await dbContext.Systems
+            .Where(x => x.Enabled)
             .ToListAsync(cancellationToken);
-        ConfigurationValidator.ValidateRoute(input, systemCodes);
+        ConfigurationValidator.ValidateRoute(input, systems.Select(x => x.Code).ToArray());
+        var sourceSystem = systems.Single(x => string.Equals(x.Code, input.SourceSystem, StringComparison.OrdinalIgnoreCase));
+        var destinationSystem = systems.Single(x => string.Equals(x.Code, input.DestinationSystem, StringComparison.OrdinalIgnoreCase));
 
         SyncRouteEntity entity;
         object? before = null;
         var action = "Created";
+        var resetDeployment = false;
         if (input.Id is { } id)
         {
-            entity = await dbContext.Routes.Include(x => x.FieldPolicies)
+            entity = await dbContext.Routes
+                         .Include(x => x.SourceSystem)
+                         .Include(x => x.DestinationSystem)
                          .SingleOrDefaultAsync(x => x.Id == id, cancellationToken) ??
-                     throw new KeyNotFoundException("指定された同期ルートは存在しません。");
+                     throw new KeyNotFoundException("指定された同期ルールは存在しません。");
             before = RouteSnapshot(entity);
-            dbContext.RouteFieldPolicies.RemoveRange(entity.FieldPolicies);
-            entity.FieldPolicies = [];
+            resetDeployment = entity.SourceSystemId != sourceSystem.Id ||
+                              entity.DestinationSystemId != destinationSystem.Id ||
+                              entity.Direction != input.Direction;
+            if (resetDeployment && entity.DeploymentState == DatabaseDeploymentState.Prepared)
+            {
+                throw new ConfigurationValidationException([
+                    "DB反映済みルールの送信元・送信先・同期方向は変更できません。既存Triggerの廃止フローを実施してから変更してください。"
+                ]);
+            }
             action = "Updated";
         }
         else
@@ -168,30 +254,31 @@ public sealed class EfCoordinatorAdminService(
             {
                 Id = Guid.NewGuid(),
                 Name = input.Name,
-                SourceSystem = input.SourceSystem,
-                EntityType = input.EntityType
+                SourceSystemId = sourceSystem.Id,
+                DestinationSystemId = destinationSystem.Id,
+                SourceSystem = sourceSystem,
+                DestinationSystem = destinationSystem,
+                EntityType = string.Empty,
+                DeploymentState = DatabaseDeploymentState.Draft,
+                Enabled = false
             };
+            entity.EntityType = CreateInternalEntityType(entity.Id);
             dbContext.Routes.Add(entity);
         }
 
         entity.Name = input.Name;
-        entity.SourceSystem = input.SourceSystem;
-        entity.EntityType = input.EntityType;
-        entity.DestinationMode = input.DestinationMode;
-        entity.DestinationSystem = input.DestinationMode == DestinationMode.FixedSystem
-            ? input.DestinationSystem
-            : null;
+        entity.SourceSystemId = sourceSystem.Id;
+        entity.DestinationSystemId = destinationSystem.Id;
+        entity.SourceSystem = sourceSystem;
+        entity.DestinationSystem = destinationSystem;
+        entity.Direction = input.Direction;
         entity.ConflictScope = input.ConflictScope;
         entity.DefaultConflictPolicy = input.DefaultConflictPolicy;
-        entity.Enabled = input.Enabled;
-        entity.FieldPolicies.AddRange(input.FieldPolicies.Select(x => new RouteFieldPolicyEntity
+        if (resetDeployment)
         {
-            Id = Guid.NewGuid(),
-            RouteId = entity.Id,
-            FieldName = x.FieldName,
-            Policy = x.Policy
-        }));
-
+            entity.DeploymentState = DatabaseDeploymentState.Draft;
+            entity.Enabled = false;
+        }
         AddAudit("Route", entity.Id.ToString("N"), entity.Name, action, before, RouteSnapshot(entity));
         await dbContext.SaveChangesAsync(cancellationToken);
         return entity.Id;
@@ -199,13 +286,14 @@ public sealed class EfCoordinatorAdminService(
 
     public async Task<IReadOnlyList<TableMappingListItem>> GetTableMappingsAsync(CancellationToken cancellationToken) =>
         await dbContext.RouteTableMappings.AsNoTracking()
-            .OrderBy(x => x.Route.Name).ThenBy(x => x.DestinationSystem)
+            .OrderBy(x => x.Route.Name)
             .Select(x => new TableMappingListItem(
-                x.Id,
                 x.RouteId,
                 x.Route.Name,
-                x.Route.SourceSystem,
-                x.DestinationSystem,
+                x.Route.SourceSystem.Code,
+                x.Route.SourceSystem.DisplayName,
+                x.Route.DestinationSystem.Code,
+                x.Route.DestinationSystem.DisplayName,
                 x.SourceSchema + "." + x.SourceTable,
                 x.DestinationSchema + "." + x.DestinationTable,
                 x.Columns.Count))
@@ -213,42 +301,38 @@ public sealed class EfCoordinatorAdminService(
 
     public async Task<TableMappingInput?> GetTableMappingAsync(
         Guid routeId,
-        string destinationSystem,
         CancellationToken cancellationToken)
     {
         var entity = await dbContext.RouteTableMappings.AsNoTracking()
             .Include(x => x.Columns)
-            .SingleOrDefaultAsync(
-                x => x.RouteId == routeId && x.DestinationSystem == destinationSystem,
-                cancellationToken);
+            .Include(x => x.FixedValues)
+            .Include(x => x.Route)
+            .SingleOrDefaultAsync(x => x.RouteId == routeId, cancellationToken);
         return entity is null ? null : ToInput(entity);
     }
 
     public async Task<Guid> SaveTableMappingAsync(TableMappingInput input, CancellationToken cancellationToken)
     {
         Normalize(input);
-        var route = await dbContext.Routes.AsNoTracking().SingleOrDefaultAsync(x => x.Id == input.RouteId, cancellationToken) ??
-                    throw new KeyNotFoundException("指定された同期ルートは存在しません。");
+        var route = await dbContext.Routes
+                        .Include(x => x.SourceSystem)
+                        .Include(x => x.DestinationSystem)
+                        .SingleOrDefaultAsync(x => x.Id == input.RouteId, cancellationToken) ??
+                    throw new KeyNotFoundException("指定された同期ルールは存在しません。");
         var routeInput = ToInput(route);
         ConfigurationValidator.ValidateTableMapping(input, routeInput);
-        if (!await dbContext.Systems.AnyAsync(x => x.Code == input.DestinationSystem, cancellationToken))
-        {
-            throw new ConfigurationValidationException(["宛先システムが存在しません。"]);
-        }
-
-        var entity = await dbContext.RouteTableMappings.Include(x => x.Columns)
-            .SingleOrDefaultAsync(
-                x => x.RouteId == input.RouteId && x.DestinationSystem == input.DestinationSystem,
-                cancellationToken);
+        var entity = await dbContext.RouteTableMappings
+            .Include(x => x.Columns)
+            .Include(x => x.FixedValues)
+            .SingleOrDefaultAsync(x => x.RouteId == input.RouteId, cancellationToken);
         object? before = null;
         var action = "Created";
+        var requiresDeployment = entity is null;
         if (entity is null)
         {
             entity = new RouteTableMappingEntity
             {
-                Id = Guid.NewGuid(),
                 RouteId = input.RouteId,
-                DestinationSystem = input.DestinationSystem,
                 SourceSchema = input.SourceSchema,
                 SourceTable = input.SourceTable,
                 DestinationSchema = input.DestinationSchema,
@@ -258,26 +342,78 @@ public sealed class EfCoordinatorAdminService(
         }
         else
         {
+            var tableChanged =
+                !string.Equals(entity.SourceSchema, input.SourceSchema, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(entity.SourceTable, input.SourceTable, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(entity.DestinationSchema, input.DestinationSchema, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(entity.DestinationTable, input.DestinationTable, StringComparison.OrdinalIgnoreCase);
+            if (tableChanged && route.DeploymentState == DatabaseDeploymentState.Prepared)
+            {
+                throw new ConfigurationValidationException([
+                    "DB反映済みルールの対象テーブルは変更できません。既存Triggerの廃止フローを実施してから変更してください。"
+                ]);
+            }
+            var currentKeys = entity.Columns.Where(x => x.IsKey)
+                .Select(x => $"{x.SourceColumn}\u001f{x.DestinationColumn}")
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var incomingKeys = input.Columns.Where(x => x.IsKey)
+                .Select(x => $"{x.SourceColumn}\u001f{x.DestinationColumn}")
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            requiresDeployment = tableChanged || !currentKeys.SetEquals(incomingKeys);
+            var deleteConfigurationChanged =
+                entity.SyncDeletes != input.SyncDeletes ||
+                entity.SourceDeletionMode != input.SourceDeletionMode ||
+                !string.Equals(entity.SourceLogicalDeleteColumn ?? string.Empty, input.SourceLogicalDeleteColumn, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(entity.SourceLogicalDeleteValue ?? string.Empty, input.SourceLogicalDeleteValue, StringComparison.Ordinal) ||
+                entity.DestinationDeletionMode != input.DestinationDeletionMode ||
+                !string.Equals(entity.DestinationLogicalDeleteColumn ?? string.Empty, input.DestinationLogicalDeleteColumn, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(entity.DestinationLogicalDeleteValue ?? string.Empty, input.DestinationLogicalDeleteValue, StringComparison.Ordinal);
+            requiresDeployment |= deleteConfigurationChanged;
             before = TableMappingSnapshot(entity);
             dbContext.RouteColumnMappings.RemoveRange(entity.Columns);
+            dbContext.RouteFixedValueMappings.RemoveRange(entity.FixedValues);
             entity.Columns = [];
+            entity.FixedValues = [];
             action = "Updated";
         }
         entity.SourceSchema = input.SourceSchema;
         entity.SourceTable = input.SourceTable;
         entity.DestinationSchema = input.DestinationSchema;
         entity.DestinationTable = input.DestinationTable;
+        entity.SyncDeletes = input.SyncDeletes;
+        entity.SourceDeletionMode = input.SourceDeletionMode;
+        entity.SourceLogicalDeleteColumn = NullIfEmpty(input.SourceLogicalDeleteColumn);
+        entity.SourceLogicalDeleteValue = NullIfEmpty(input.SourceLogicalDeleteValue);
+        entity.DestinationDeletionMode = input.DestinationDeletionMode;
+        entity.DestinationLogicalDeleteColumn = NullIfEmpty(input.DestinationLogicalDeleteColumn);
+        entity.DestinationLogicalDeleteValue = NullIfEmpty(input.DestinationLogicalDeleteValue);
         entity.Columns.AddRange(input.Columns.Select(x => new RouteColumnMappingEntity
         {
             Id = Guid.NewGuid(),
-            TableMappingId = entity.Id,
+            TableMappingId = entity.RouteId,
             SourceColumn = x.SourceColumn,
             DestinationColumn = x.DestinationColumn,
-            IsKey = x.IsKey
+            IsKey = x.IsKey,
+            ConflictPolicy = x.ConflictPolicy
         }));
-        AddAudit("TableMapping", entity.Id.ToString("N"), route.Name, action, before, TableMappingSnapshot(entity));
+        entity.FixedValues.AddRange(input.FixedValues.Select(x => new RouteFixedValueMappingEntity
+        {
+            Id = Guid.NewGuid(),
+            TableMappingId = entity.RouteId,
+            Direction = x.Direction,
+            TargetColumn = x.TargetColumn,
+            Value = x.Value
+        }));
+
+        route.Enabled = false;
+        if (requiresDeployment)
+        {
+            route.DeploymentState = DatabaseDeploymentState.Draft;
+        }
+
+        AddAudit("TableMapping", entity.RouteId.ToString("N"), route.Name, action, before, TableMappingSnapshot(entity));
         await dbContext.SaveChangesAsync(cancellationToken);
-        return entity.Id;
+        return entity.RouteId;
     }
 
     public async Task<IReadOnlyList<InboxListItem>> GetRecentInboxAsync(
@@ -285,11 +421,13 @@ public sealed class EfCoordinatorAdminService(
         CancellationToken cancellationToken) =>
         await (from inbox in dbContext.InboxMessages.AsNoTracking()
                join route in dbContext.Routes.AsNoTracking() on inbox.RouteId equals route.Id
+               join system in dbContext.Systems.AsNoTracking() on inbox.DestinationSystem equals system.Code
                orderby inbox.UpdatedAtUtc descending
                select new InboxListItem(
                    inbox.SourceMessageId,
                    route.Name,
                    inbox.DestinationSystem,
+                   system.DisplayName,
                    inbox.State,
                    inbox.AttemptCount,
                    inbox.FirstSeenAtUtc,
@@ -319,7 +457,11 @@ public sealed class EfCoordinatorAdminService(
             .Select(x => new
             {
                 Conflict = x,
-                RouteName = x.Route.Name
+                RouteName = x.Route.Name,
+                SourceSystemName = dbContext.Systems.Where(system => system.Code == x.SourceSystem)
+                    .Select(system => system.DisplayName).FirstOrDefault() ?? x.SourceSystem,
+                DestinationSystemName = dbContext.Systems.Where(system => system.Code == x.DestinationSystem)
+                    .Select(system => system.DisplayName).FirstOrDefault() ?? x.DestinationSystem
             })
             .SingleOrDefaultAsync(cancellationToken);
         if (conflict is null)
@@ -336,7 +478,9 @@ public sealed class EfCoordinatorAdminService(
             conflict.Conflict.SourceMessageId,
             conflict.Conflict.DeliveryMessageId,
             conflict.Conflict.SourceSystem,
+            conflict.SourceSystemName,
             conflict.Conflict.DestinationSystem,
+            conflict.DestinationSystemName,
             conflict.Conflict.EntityType,
             conflict.Conflict.EntityId,
             conflict.Conflict.Scope,
@@ -387,6 +531,7 @@ public sealed class EfCoordinatorAdminService(
         entity.DisplayName,
         entity.Provider,
         entity.Enabled,
+        entity.PausedAtUtc,
         ConnectionConfigured = !string.IsNullOrWhiteSpace(entity.ProtectedConnectionString)
     };
 
@@ -407,63 +552,89 @@ public sealed class EfCoordinatorAdminService(
     {
         entity.Id,
         entity.Name,
-        entity.SourceSystem,
+        SourceSystem = entity.SourceSystem.Code,
         entity.EntityType,
-        entity.DestinationMode,
-        entity.DestinationSystem,
+        DestinationSystem = entity.DestinationSystem.Code,
+        entity.Direction,
         entity.ConflictScope,
         entity.DefaultConflictPolicy,
-        entity.Enabled,
-        FieldPolicies = entity.FieldPolicies
-            .OrderBy(x => x.FieldName)
-            .Select(x => new { x.FieldName, x.Policy })
-            .ToArray()
+        entity.DeploymentState,
+        entity.Enabled
     };
 
     private static RouteConfigurationInput ToInput(SyncRouteEntity route) => new()
     {
         Id = route.Id,
         Name = route.Name,
-        SourceSystem = route.SourceSystem,
-        EntityType = route.EntityType,
-        DestinationMode = route.DestinationMode,
-        DestinationSystem = route.DestinationSystem,
+        SourceSystem = route.SourceSystem.Code,
+        DestinationSystem = route.DestinationSystem.Code,
+        Direction = route.Direction,
         ConflictScope = route.ConflictScope,
         DefaultConflictPolicy = route.DefaultConflictPolicy,
-        Enabled = route.Enabled,
-        FieldPolicies = route.FieldPolicies.OrderBy(x => x.FieldName).Select(x => new FieldPolicyInput
-        {
-            FieldName = x.FieldName,
-            Policy = x.Policy
-        }).ToList()
+        DeploymentState = route.DeploymentState,
+        Enabled = route.Enabled
     };
 
     private static TableMappingInput ToInput(RouteTableMappingEntity entity) => new()
-    {
-        Id = entity.Id,
-        RouteId = entity.RouteId,
-        DestinationSystem = entity.DestinationSystem,
-        SourceSchema = entity.SourceSchema,
-        SourceTable = entity.SourceTable,
-        DestinationSchema = entity.DestinationSchema,
-        DestinationTable = entity.DestinationTable,
-        Columns = entity.Columns.OrderBy(x => x.SourceColumn).Select(x => new ColumnMappingInput
         {
-            SourceColumn = x.SourceColumn,
-            DestinationColumn = x.DestinationColumn,
-            IsKey = x.IsKey
-        }).ToList()
-    };
+            RouteId = entity.RouteId,
+            SourceSchema = entity.SourceSchema,
+            SourceTable = entity.SourceTable,
+            DestinationSchema = entity.DestinationSchema,
+            DestinationTable = entity.DestinationTable,
+            SyncDeletes = entity.SyncDeletes,
+            SourceDeletionMode = entity.SourceDeletionMode,
+            SourceLogicalDeleteColumn = entity.SourceLogicalDeleteColumn ?? string.Empty,
+            SourceLogicalDeleteValue = entity.SourceLogicalDeleteValue ?? string.Empty,
+            DestinationDeletionMode = entity.DestinationDeletionMode,
+            DestinationLogicalDeleteColumn = entity.DestinationLogicalDeleteColumn ?? string.Empty,
+            DestinationLogicalDeleteValue = entity.DestinationLogicalDeleteValue ?? string.Empty,
+            Columns = entity.Columns.OrderBy(x => x.SourceColumn).Select(x => new ColumnMappingInput
+            {
+                SourceColumn = x.SourceColumn,
+                DestinationColumn = x.DestinationColumn,
+                IsKey = x.IsKey,
+                ConflictPolicy = x.ConflictPolicy
+            }).ToList(),
+            FixedValues = entity.FixedValues
+                .OrderBy(x => x.Direction)
+                .ThenBy(x => x.TargetColumn)
+                .Select(x => new FixedValueMappingInput
+                {
+                    Direction = x.Direction,
+                    TargetColumn = x.TargetColumn,
+                    Value = x.Value
+                }).ToList()
+        };
 
     private static object TableMappingSnapshot(RouteTableMappingEntity entity) => new
     {
-        entity.Id,
         entity.RouteId,
-        entity.DestinationSystem,
         Source = entity.SourceSchema + "." + entity.SourceTable,
         Destination = entity.DestinationSchema + "." + entity.DestinationTable,
+        DeleteSynchronization = new
+        {
+            entity.SyncDeletes,
+            entity.SourceDeletionMode,
+            entity.SourceLogicalDeleteColumn,
+            entity.SourceLogicalDeleteValue,
+            entity.DestinationDeletionMode,
+            entity.DestinationLogicalDeleteColumn,
+            entity.DestinationLogicalDeleteValue
+        },
         Columns = entity.Columns.OrderBy(x => x.SourceColumn)
-            .Select(x => new { x.SourceColumn, x.DestinationColumn, x.IsKey }).ToArray()
+            .Select(x => new
+            {
+                x.SourceColumn,
+                x.DestinationColumn,
+                x.IsKey,
+                x.ConflictPolicy
+            }).ToArray(),
+        FixedValues = entity.FixedValues
+            .OrderBy(x => x.Direction)
+            .ThenBy(x => x.TargetColumn)
+            .Select(x => new { x.Direction, x.TargetColumn, x.Value })
+            .ToArray()
     };
 
     private static void Normalize(SystemConfigurationInput input)
@@ -477,25 +648,48 @@ public sealed class EfCoordinatorAdminService(
     {
         input.Name = input.Name.Trim();
         input.SourceSystem = input.SourceSystem.Trim();
-        input.EntityType = input.EntityType.Trim();
-        input.DestinationSystem = input.DestinationSystem?.Trim();
-        foreach (var field in input.FieldPolicies)
-        {
-            field.FieldName = field.FieldName.Trim();
-        }
+        input.DestinationSystem = input.DestinationSystem.Trim();
     }
 
     private static void Normalize(TableMappingInput input)
     {
-        input.DestinationSystem = input.DestinationSystem.Trim();
         input.SourceSchema = input.SourceSchema.Trim();
         input.SourceTable = input.SourceTable.Trim();
         input.DestinationSchema = input.DestinationSchema.Trim();
         input.DestinationTable = input.DestinationTable.Trim();
+        input.SourceLogicalDeleteColumn = input.SourceLogicalDeleteColumn.Trim();
+        input.SourceLogicalDeleteValue = input.SourceLogicalDeleteValue.Trim();
+        input.DestinationLogicalDeleteColumn = input.DestinationLogicalDeleteColumn.Trim();
+        input.DestinationLogicalDeleteValue = input.DestinationLogicalDeleteValue.Trim();
+        if (!input.SyncDeletes || input.SourceDeletionMode == DeletionMode.Physical)
+        {
+            input.SourceLogicalDeleteColumn = string.Empty;
+            input.SourceLogicalDeleteValue = string.Empty;
+        }
+        if (!input.SyncDeletes || input.DestinationDeletionMode == DeletionMode.Physical)
+        {
+            input.DestinationLogicalDeleteColumn = string.Empty;
+            input.DestinationLogicalDeleteValue = string.Empty;
+        }
         foreach (var column in input.Columns)
         {
             column.SourceColumn = column.SourceColumn.Trim();
             column.DestinationColumn = column.DestinationColumn.Trim();
         }
+        foreach (var fixedValue in input.FixedValues)
+        {
+            fixedValue.TargetColumn = fixedValue.TargetColumn.Trim();
+        }
     }
+
+    private static string CreateInternalEntityType(Guid routeId) => $"rule:{routeId:N}";
+
+    private static string? NullIfEmpty(string value) => string.IsNullOrEmpty(value) ? null : value;
+
+    private static int DefaultPort(string provider) => provider.ToUpperInvariant() switch
+    {
+        "MYSQL" => 3306,
+        "POSTGRESQL" => 5432,
+        _ => 1433
+    };
 }

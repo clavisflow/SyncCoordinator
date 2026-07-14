@@ -1,0 +1,69 @@
+@page "/login"
+@attribute [AllowAnonymous]
+@layout AuthLayout
+@inject AdminAccountService Accounts
+@inject IHttpContextAccessor HttpContextAccessor
+@inject IStringLocalizer<SharedResource> L
+@inject NavigationManager Navigation
+
+<PageTitle>@L["Auth_LoginPageTitle"]</PageTitle>
+
+<section class="auth-card">
+    <p class="kicker">ADMINISTRATION</p>
+    <h1>@L["Auth_LoginTitle"]</h1>
+    <p>@L["Auth_LoginDescription"]</p>
+
+    @if (!loaded)
+    {
+        <p class="auth-muted">@L["Auth_Loading"]</p>
+    }
+    else if (!initialized)
+    {
+        <div class="message-box error" role="alert">@L["Auth_SetupRequiredRemote"]</div>
+    }
+    else
+    {
+        @if (!string.IsNullOrEmpty(Error))
+        {
+            <div class="message-box error" role="alert">@L["Auth_InvalidCredentials"]</div>
+        }
+        <form method="post" action="/auth/login" class="auth-form">
+            <AntiforgeryToken />
+            <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+            <div class="form-field">
+                <label for="login-user">@L["Auth_UserName"]</label>
+                <input id="login-user" class="auth-input" name="userName" value="admin" autocomplete="username" required />
+            </div>
+            <div class="form-field">
+                <label for="login-password">@L["Auth_Password"]</label>
+                <input id="login-password" class="auth-input" name="password" type="password" autocomplete="current-password" required autofocus />
+            </div>
+            <label class="auth-check"><input type="checkbox" name="rememberMe" value="true" /> @L["Auth_RememberMe"]</label>
+            <button class="auth-primary" type="submit">@L["Auth_LoginAction"]</button>
+        </form>
+        @if (isLocal)
+        {
+            <p class="auth-footer"><a href="/account/reset">@L["Auth_ForgotPassword"]</a></p>
+        }
+    }
+</section>
+
+@code {
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? ReturnUrl { get; set; }
+
+    private bool loaded;
+    private bool initialized;
+    private bool isLocal;
+
+    protected override async Task OnInitializedAsync()
+    {
+        initialized = await Accounts.IsInitializedAsync(CancellationToken.None);
+        isLocal = HttpContextAccessor.HttpContext is { } context && LocalRequestGuard.IsLocal(context);
+        loaded = true;
+        if (!initialized && isLocal)
+        {
+            Navigation.NavigateTo("/account/setup", forceLoad: true);
+        }
+    }
+}

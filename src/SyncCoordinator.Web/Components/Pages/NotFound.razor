@@ -1,15 +1,17 @@
 @page "/not-found"
+@attribute [AllowAnonymous]
 @layout MainLayout
 @inject NavigationManager Navigation
+@inject IStringLocalizer<SharedResource> L
 
-<PageTitle>ページが見つかりません | SyncCoordinator</PageTitle>
+<PageTitle>@L["NotFound_PageTitle"]</PageTitle>
 
 <RadzenCard>
     <RadzenStack AlignItems="AlignItems.Center" Gap="1rem" Style="padding: 3rem 1rem; text-align: center;">
         <RadzenIcon Icon="search_off" Style="font-size: 3rem; color: var(--rz-text-secondary-color);" />
-        <RadzenText TextStyle="TextStyle.H4">ページが見つかりません</RadzenText>
-        <RadzenText TextStyle="TextStyle.Body1">指定されたURLを確認してください。</RadzenText>
-        <RadzenButton Text="概要へ戻る" Icon="home" Click="@GoHome" />
+        <RadzenText TextStyle="TextStyle.H4">@L["NotFound_Title"]</RadzenText>
+        <RadzenText TextStyle="TextStyle.Body1">@L["NotFound_Description"]</RadzenText>
+        <RadzenButton Text="@L["NotFound_Back"]" Icon="home" Click="@GoHome" />
     </RadzenStack>
 </RadzenCard>
 

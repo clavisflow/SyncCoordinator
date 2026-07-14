@@ -1,0 +1,439 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
+  <data name="Brand_DashboardAria" xml:space="preserve"><value>Open the SyncCoordinator dashboard</value></data>
+  <data name="Nav_Dashboard" xml:space="preserve"><value>Dashboard</value></data>
+  <data name="Nav_Main" xml:space="preserve"><value>Main menu</value></data>
+  <data name="Nav_GroupOperations" xml:space="preserve"><value>Operations</value></data>
+  <data name="Nav_GroupConfiguration" xml:space="preserve"><value>Configuration</value></data>
+  <data name="Nav_Systems" xml:space="preserve"><value>Systems</value></data>
+  <data name="Nav_Routes" xml:space="preserve"><value>Sync rules</value></data>
+  <data name="Nav_Mappings" xml:space="preserve"><value>Table mappings</value></data>
+  <data name="Nav_Conflicts" xml:space="preserve"><value>Conflicts</value></data>
+  <data name="Nav_Operations" xml:space="preserve"><value>Operations</value></data>
+  <data name="Error_Unexpected" xml:space="preserve"><value>An unexpected error occurred.</value></data>
+  <data name="Action_Reload" xml:space="preserve"><value>Reload</value></data>
+  <data name="Action_Refreshing" xml:space="preserve"><value>Refreshing…</value></data>
+  <data name="Home_PageTitle" xml:space="preserve"><value>Dashboard | SyncCoordinator</value></data>
+  <data name="Home_Title" xml:space="preserve"><value>Dashboard</value></data>
+  <data name="Home_Description" xml:space="preserve"><value>Review configured sync rules, processing states, and recent conflicts.</value></data>
+  <data name="Home_Loading" xml:space="preserve"><value>Loading from the coordinator database…</value></data>
+  <data name="Home_SyncStatus" xml:space="preserve"><value>Sync status</value></data>
+  <data name="Home_SyncStatusHelp" xml:space="preserve"><value>Shows up to six configured rules in name order. Arrows indicate sync direction.</value></data>
+  <data name="Home_NoRoutes" xml:space="preserve"><value>No sync rules are configured.</value></data>
+  <data name="Home_Source" xml:space="preserve"><value>Source</value></data>
+  <data name="Home_Destination" xml:space="preserve"><value>Destination</value></data>
+  <data name="Home_SourceTitle" xml:space="preserve"><value>Source: {0}</value></data>
+  <data name="Home_DestinationTitle" xml:space="preserve"><value>Destination: {0}</value></data>
+  <data name="Metric_Aria" xml:space="preserve"><value>Sync metrics</value></data>
+  <data name="Metric_EnabledSystems" xml:space="preserve"><value>Enabled systems</value></data>
+  <data name="Metric_EnabledRoutes" xml:space="preserve"><value>Enabled rules</value></data>
+  <data name="Metric_Processing" xml:space="preserve"><value>Processing</value></data>
+  <data name="Metric_Held" xml:space="preserve"><value>Held</value></data>
+  <data name="Metric_Failed" xml:space="preserve"><value>Failed</value></data>
+  <data name="Metric_UnresolvedConflicts" xml:space="preserve"><value>Unresolved conflicts</value></data>
+  <data name="Home_Rules" xml:space="preserve"><value>Sync rules</value></data>
+  <data name="Home_OpenManagement" xml:space="preserve"><value>Open management</value></data>
+  <data name="Home_Rule" xml:space="preserve"><value>Rule</value></data>
+  <data name="Home_Direction" xml:space="preserve"><value>Direction</value></data>
+  <data name="Home_SyncDirection" xml:space="preserve"><value>Sync direction</value></data>
+  <data name="Home_Conflict" xml:space="preserve"><value>Conflict</value></data>
+  <data name="Home_Status" xml:space="preserve"><value>Status</value></data>
+  <data name="Home_OneWay" xml:space="preserve"><value>One-way</value></data>
+  <data name="Home_Bidirectional" xml:space="preserve"><value>Bidirectional</value></data>
+  <data name="Home_Enabled" xml:space="preserve"><value>Enabled</value></data>
+  <data name="Home_Paused" xml:space="preserve"><value>Paused</value></data>
+  <data name="Home_Prepared" xml:space="preserve"><value>DB prepared</value></data>
+  <data name="Home_Draft" xml:space="preserve"><value>Draft</value></data>
+  <data name="Conflict_FieldScope" xml:space="preserve"><value>Per field</value></data>
+  <data name="Conflict_RecordScope" xml:space="preserve"><value>Per record</value></data>
+  <data name="Conflict_Hold" xml:space="preserve"><value>Hold</value></data>
+  <data name="Conflict_ApplyIncoming" xml:space="preserve"><value>Use source</value></data>
+  <data name="Conflict_KeepCurrent" xml:space="preserve"><value>Keep destination</value></data>
+  <data name="Conflict_Merge" xml:space="preserve"><value>Merge</value></data>
+  <data name="Home_RecentConflicts" xml:space="preserve"><value>Recent conflicts</value></data>
+  <data name="Home_OpenHistory" xml:space="preserve"><value>Open history</value></data>
+  <data name="Home_NoConflicts" xml:space="preserve"><value>No conflict history.</value></data>
+  <data name="Home_DetectedAt" xml:space="preserve"><value>Detected</value></data>
+  <data name="Home_Target" xml:space="preserve"><value>Target</value></data>
+  <data name="Home_Resolved" xml:space="preserve"><value>Resolved</value></data>
+  <data name="Home_Unresolved" xml:space="preserve"><value>Unresolved</value></data>
+  <data name="Culture_Label" xml:space="preserve"><value>Language</value></data>
+  <data name="Account_ChangePassword" xml:space="preserve"><value>Change password</value></data>
+  <data name="Account_Logout" xml:space="preserve"><value>Sign out</value></data>
+  <data name="Auth_LoginPageTitle" xml:space="preserve"><value>Sign in | SyncCoordinator</value></data>
+  <data name="Auth_LoginTitle" xml:space="preserve"><value>Administrator sign in</value></data>
+  <data name="Auth_LoginDescription" xml:space="preserve"><value>Sign in to access sync configuration and operations.</value></data>
+  <data name="Auth_Loading" xml:space="preserve"><value>Checking authentication status…</value></data>
+  <data name="Auth_SetupRequiredRemote" xml:space="preserve"><value>The administrator account isn't initialized. Complete setup from localhost on the server.</value></data>
+  <data name="Auth_InvalidCredentials" xml:space="preserve"><value>The user name or password is incorrect.</value></data>
+  <data name="Auth_UserName" xml:space="preserve"><value>User name</value></data>
+  <data name="Auth_Password" xml:space="preserve"><value>Password</value></data>
+  <data name="Auth_RememberMe" xml:space="preserve"><value>Keep me signed in</value></data>
+  <data name="Auth_LoginAction" xml:space="preserve"><value>Sign in</value></data>
+  <data name="Auth_ForgotPassword" xml:space="preserve"><value>Forgot your password?</value></data>
+  <data name="Auth_SetupPageTitle" xml:space="preserve"><value>Administrator setup | SyncCoordinator</value></data>
+  <data name="Auth_SetupTitle" xml:space="preserve"><value>Administrator setup</value></data>
+  <data name="Auth_SetupDescription" xml:space="preserve"><value>Set the password for administrator “admin”. This operation is only available from localhost.</value></data>
+  <data name="Auth_LocalOnly" xml:space="preserve"><value>This operation is only available from localhost on the server.</value></data>
+  <data name="Auth_AlreadyInitialized" xml:space="preserve"><value>The administrator account is already initialized.</value></data>
+  <data name="Auth_BackToLogin" xml:space="preserve"><value>Back to sign in</value></data>
+  <data name="Auth_NewPassword" xml:space="preserve"><value>New password</value></data>
+  <data name="Auth_ConfirmPassword" xml:space="preserve"><value>Confirm new password</value></data>
+  <data name="Auth_CurrentPassword" xml:space="preserve"><value>Current password</value></data>
+  <data name="Auth_PasswordRule" xml:space="preserve"><value>Use 12 to 128 characters.</value></data>
+  <data name="Auth_SetupAction" xml:space="preserve"><value>Create administrator</value></data>
+  <data name="Auth_ResetPageTitle" xml:space="preserve"><value>Reset password | SyncCoordinator</value></data>
+  <data name="Auth_ResetTitle" xml:space="preserve"><value>Reset password</value></data>
+  <data name="Auth_ResetDescription" xml:space="preserve"><value>Reset the administrator password and invalidate existing sign-in cookies. Sync settings and history aren't changed.</value></data>
+  <data name="Auth_ResetAction" xml:space="preserve"><value>Reset password</value></data>
+  <data name="Auth_ChangePageTitle" xml:space="preserve"><value>Change password | SyncCoordinator</value></data>
+  <data name="Auth_ChangeTitle" xml:space="preserve"><value>Change password</value></data>
+  <data name="Auth_ChangeDescription" xml:space="preserve"><value>Change the administrator password. Previous sign-in cookies become invalid.</value></data>
+  <data name="Auth_ChangeAction" xml:space="preserve"><value>Change password</value></data>
+  <data name="Auth_ChangeSuccess" xml:space="preserve"><value>Your password was changed.</value></data>
+  <data name="Auth_ErrorMismatch" xml:space="preserve"><value>The password confirmation doesn't match.</value></data>
+  <data name="Auth_ErrorTooShort" xml:space="preserve"><value>The password must be at least 12 characters.</value></data>
+  <data name="Auth_ErrorTooLong" xml:space="preserve"><value>The password must be no more than 128 characters.</value></data>
+  <data name="Auth_ErrorCurrentInvalid" xml:space="preserve"><value>The current password is incorrect.</value></data>
+  <data name="Auth_ErrorGeneric" xml:space="preserve"><value>The operation couldn't be completed. Check your input.</value></data>
+  <data name="Error_PageTitle" xml:space="preserve"><value>Error | SyncCoordinator</value></data>
+  <data name="Error_Title" xml:space="preserve"><value>An error occurred while processing the request</value></data>
+  <data name="Error_Description" xml:space="preserve"><value>Try again later. Contact the administrator if the problem continues.</value></data>
+  <data name="NotFound_PageTitle" xml:space="preserve"><value>Page not found | SyncCoordinator</value></data>
+  <data name="NotFound_Title" xml:space="preserve"><value>Page not found</value></data>
+  <data name="NotFound_Description" xml:space="preserve"><value>Check the requested URL.</value></data>
+  <data name="NotFound_Back" xml:space="preserve"><value>Back to dashboard</value></data>
+  <data name="Common_Action" xml:space="preserve"><value>Action</value></data>
+  <data name="Common_BackToList" xml:space="preserve"><value>Back to list</value></data>
+  <data name="Common_Bidirectional" xml:space="preserve"><value>Bidirectional</value></data>
+  <data name="Common_Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="Common_ChangedAt" xml:space="preserve"><value>Changed at</value></data>
+  <data name="Common_Clear" xml:space="preserve"><value>Clear</value></data>
+  <data name="Common_Configured" xml:space="preserve"><value>Configured</value></data>
+  <data name="Common_Count" xml:space="preserve"><value>{0} items</value></data>
+  <data name="Common_DatabaseDeployment" xml:space="preserve"><value>Database deployment</value></data>
+  <data name="Common_DbPrepared" xml:space="preserve"><value>Database configuration verified</value></data>
+  <data name="Common_Delete" xml:space="preserve"><value>Delete</value></data>
+  <data name="Common_DeployDatabase" xml:space="preserve"><value>Deploy to business databases</value></data>
+  <data name="Common_Details" xml:space="preserve"><value>Details</value></data>
+  <data name="Common_DetectedAt" xml:space="preserve"><value>Detected at</value></data>
+  <data name="Common_Direction" xml:space="preserve"><value>Direction</value></data>
+  <data name="Common_Disabled" xml:space="preserve"><value>Disabled</value></data>
+  <data name="Common_Draft" xml:space="preserve"><value>Draft</value></data>
+  <data name="Common_Edit" xml:space="preserve"><value>Edit</value></data>
+  <data name="Common_Enabled" xml:space="preserve"><value>Enabled</value></data>
+  <data name="Common_Error" xml:space="preserve"><value>Error</value></data>
+  <data name="Common_Field" xml:space="preserve"><value>Field</value></data>
+  <data name="Common_FieldScope" xml:space="preserve"><value>Per field</value></data>
+  <data name="Common_Hold" xml:space="preserve"><value>Held</value></data>
+  <data name="Common_ItemCount" xml:space="preserve"><value>{0} fields</value></data>
+  <data name="Common_KeepDestination" xml:space="preserve"><value>Keep destination</value></data>
+  <data name="Common_Mapping" xml:space="preserve"><value>Mapping</value></data>
+  <data name="Common_Merge" xml:space="preserve"><value>Merge</value></data>
+  <data name="Common_NotConfigured" xml:space="preserve"><value>Not configured</value></data>
+  <data name="Common_OneWay" xml:space="preserve"><value>One-way</value></data>
+  <data name="Common_PagingSummary" xml:space="preserve"><value>{0} / {1} pages ({2} total)</value></data>
+  <data name="Common_Paused" xml:space="preserve"><value>Paused</value></data>
+  <data name="Common_Policy" xml:space="preserve"><value>Policy</value></data>
+  <data name="Common_RecordScope" xml:space="preserve"><value>Per record</value></data>
+  <data name="Common_Resolved" xml:space="preserve"><value>Resolved</value></data>
+  <data name="Common_Result" xml:space="preserve"><value>Result</value></data>
+  <data name="Common_Rule" xml:space="preserve"><value>Sync rule</value></data>
+  <data name="Common_Running" xml:space="preserve"><value>Running</value></data>
+  <data name="Common_Save" xml:space="preserve"><value>Save</value></data>
+  <data name="Common_Saving" xml:space="preserve"><value>Saving…</value></data>
+  <data name="Common_Processing" xml:space="preserve"><value>Processing…</value></data>
+  <data name="Common_Scope" xml:space="preserve"><value>Scope</value></data>
+  <data name="Common_Select" xml:space="preserve"><value>Select…</value></data>
+  <data name="Common_Show" xml:space="preserve"><value>Show</value></data>
+  <data name="Common_Status" xml:space="preserve"><value>Status</value></data>
+  <data name="Common_System" xml:space="preserve"><value>System</value></data>
+  <data name="Common_SystemCount" xml:space="preserve"><value>{0} systems</value></data>
+  <data name="Common_Target" xml:space="preserve"><value>Target</value></data>
+  <data name="Common_TargetId" xml:space="preserve"><value>Target ID</value></data>
+  <data name="Common_Type" xml:space="preserve"><value>Type</value></data>
+  <data name="Common_Unresolved" xml:space="preserve"><value>Unresolved</value></data>
+  <data name="Common_UpdatedAt" xml:space="preserve"><value>Updated at</value></data>
+  <data name="Common_UseSource" xml:space="preserve"><value>Use source</value></data>
+  <data name="Systems_PageTitle" xml:space="preserve"><value>Systems | SyncCoordinator</value></data>
+  <data name="Systems_Title" xml:space="preserve"><value>Systems</value></data>
+  <data name="Systems_Description" xml:space="preserve"><value>Register and edit synchronized systems and their business database connections, and pause synchronization during maintenance. Connection details are encrypted in the coordinator database.</value></data>
+  <data name="Systems_New" xml:space="preserve"><value>New system</value></data>
+  <data name="Systems_Registered" xml:space="preserve"><value>Registered systems</value></data>
+  <data name="Systems_PauseNote" xml:space="preserve"><value>While a system is paused, checkpoints for rules involving it do not advance. After resuming, processing catches up from accumulated notifications to the latest state.</value></data>
+  <data name="Systems_Empty" xml:space="preserve"><value>No systems have been registered.</value></data>
+  <data name="Systems_Code" xml:space="preserve"><value>Code</value></data>
+  <data name="Systems_DisplayName" xml:space="preserve"><value>Display name</value></data>
+  <data name="Systems_DbConnection" xml:space="preserve"><value>Database connection</value></data>
+  <data name="Systems_Resume" xml:space="preserve"><value>Resume synchronization</value></data>
+  <data name="Systems_Pause" xml:space="preserve"><value>Pause synchronization</value></data>
+  <data name="Systems_Create" xml:space="preserve"><value>Create system</value></data>
+  <data name="Systems_Edit" xml:space="preserve"><value>Edit system</value></data>
+  <data name="Systems_SystemCode" xml:space="preserve"><value>System code</value></data>
+  <data name="Systems_SystemCodeHelp" xml:space="preserve"><value>Identifies the system in sync rules and checkpoints. It cannot be changed after registration.</value></data>
+  <data name="Systems_DisableHelp" xml:space="preserve"><value>Disabling removes a system from the active configuration. To catch up after maintenance, use Pause from the system list instead.</value></data>
+  <data name="Systems_DbConnectionHelp" xml:space="preserve"><value>Connection details are stored encrypted. You can also save only the system information without entering a connection.</value></data>
+  <data name="Systems_Server" xml:space="preserve"><value>Server / host</value></data>
+  <data name="Systems_Port" xml:space="preserve"><value>Port</value></data>
+  <data name="Systems_Database" xml:space="preserve"><value>Database name</value></data>
+  <data name="Systems_WindowsAuth" xml:space="preserve"><value>Use Windows authentication</value></data>
+  <data name="Systems_KeepPassword" xml:space="preserve"><value>Leave blank to keep the current password</value></data>
+  <data name="Systems_Encrypt" xml:space="preserve"><value>Use an encrypted connection</value></data>
+  <data name="Systems_TrustCertificate" xml:space="preserve"><value>Trust the server certificate (development only)</value></data>
+  <data name="Systems_TestConnection" xml:space="preserve"><value>Test connection</value></data>
+  <data name="Systems_Testing" xml:space="preserve"><value>Testing…</value></data>
+  <data name="Systems_ResumedMessage" xml:space="preserve"><value>Synchronization for {0} was resumed.</value></data>
+  <data name="Systems_PausedMessage" xml:space="preserve"><value>Synchronization for {0} was paused.</value></data>
+  <data name="Systems_Saved" xml:space="preserve"><value>The system and database connection settings were saved.</value></data>
+  <data name="Systems_ConnectionSucceeded" xml:space="preserve"><value>Connection succeeded</value></data>
+  <data name="Systems_ConnectionFailed" xml:space="preserve"><value>Connection failed</value></data>
+  <data name="Routes_PageTitle" xml:space="preserve"><value>Sync rules | SyncCoordinator</value></data>
+  <data name="Routes_Title" xml:space="preserve"><value>Sync rules</value></data>
+  <data name="Routes_Description" xml:space="preserve"><value>Configure source and destination systems, sync direction, conflict scope, and resolution policy. A rule can be enabled after deployment to its business databases is verified.</value></data>
+  <data name="Routes_New" xml:space="preserve"><value>New rule</value></data>
+  <data name="Routes_Registered" xml:space="preserve"><value>Configured rules</value></data>
+  <data name="Routes_Empty" xml:space="preserve"><value>No sync rules have been configured.</value></data>
+  <data name="Routes_SyncDirection" xml:space="preserve"><value>Sync direction</value></data>
+  <data name="Routes_ConflictSettings" xml:space="preserve"><value>Conflict settings</value></data>
+  <data name="RouteEdit_PageTitle" xml:space="preserve"><value>Edit sync rule | SyncCoordinator</value></data>
+  <data name="RouteEdit_CreateTitle" xml:space="preserve"><value>Create sync rule</value></data>
+  <data name="RouteEdit_EditTitle" xml:space="preserve"><value>Edit sync rule</value></data>
+  <data name="RouteEdit_Loading" xml:space="preserve"><value>Loading settings…</value></data>
+  <data name="RouteEdit_BasicSettings" xml:space="preserve"><value>Basic settings</value></data>
+  <data name="RouteEdit_BasicHelp" xml:space="preserve"><value>Choose the source, destination, and sync direction.</value></data>
+  <data name="RouteEdit_RuleName" xml:space="preserve"><value>Rule name</value></data>
+  <data name="RouteEdit_SourceSystem" xml:space="preserve"><value>Source system</value></data>
+  <data name="RouteEdit_DestinationSystem" xml:space="preserve"><value>Destination system</value></data>
+  <data name="RouteEdit_DirectionHelp" xml:space="preserve"><value>Even with bidirectional sync, records created independently at the destination are not synchronized.</value></data>
+  <data name="RouteEdit_OneWayDescription" xml:space="preserve"><value>(source → destination)</value></data>
+  <data name="RouteEdit_BidirectionalDescription" xml:space="preserve"><value>(source ⇄ destination)</value></data>
+  <data name="RouteEdit_ConflictScope" xml:space="preserve"><value>Conflict scope</value></data>
+  <data name="RouteEdit_DefaultPolicy" xml:space="preserve"><value>Default conflict policy</value></data>
+  <data name="RouteEdit_PolicyHelp" xml:space="preserve"><value>Conflicts are recorded in history. Configure per-column overrides in table mappings.</value></data>
+  <data name="RouteEdit_DeploymentNote" xml:space="preserve"><value>Save the table mapping, then verify every database configuration under Database deployment. The rule can be enabled after verification succeeds.</value></data>
+  <data name="RouteEdit_SaveSettings" xml:space="preserve"><value>Save settings</value></data>
+  <data name="RouteEdit_Saved" xml:space="preserve"><value>The sync rule settings were saved.</value></data>
+  <data name="RouteEdit_RuleStatus" xml:space="preserve"><value>Rule status</value></data>
+  <data name="RouteEdit_EnableRule" xml:space="preserve"><value>Enable rule</value></data>
+  <data name="RouteEdit_DisableRule" xml:space="preserve"><value>Disable rule</value></data>
+  <data name="RouteEdit_EnableBlocked" xml:space="preserve"><value>The rule can be enabled after the database configuration is verified.</value></data>
+  <data name="RouteTabs_Aria" xml:space="preserve"><value>Sync rule settings</value></data>
+  <data name="RouteTabs_Settings" xml:space="preserve"><value>Basic settings</value></data>
+  <data name="RouteTabs_Mappings" xml:space="preserve"><value>Table mappings</value></data>
+  <data name="RouteTabs_Database" xml:space="preserve"><value>Database deployment</value></data>
+  <data name="Conflicts_PageTitle" xml:space="preserve"><value>Conflict history | SyncCoordinator</value></data>
+  <data name="Conflicts_Title" xml:space="preserve"><value>Conflict history</value></data>
+  <data name="Conflicts_Description" xml:space="preserve"><value>Review values, applied policies, and selected results for conflicts detected during synchronization. This view is currently read-only.</value></data>
+  <data name="Conflicts_Recent" xml:space="preserve"><value>Recent conflicts</value></data>
+  <data name="Conflicts_Empty" xml:space="preserve"><value>No conflicts have been recorded.</value></data>
+  <data name="ConflictDetail_PageTitle" xml:space="preserve"><value>Conflict details | SyncCoordinator</value></data>
+  <data name="ConflictDetail_Loading" xml:space="preserve"><value>Loading conflict details…</value></data>
+  <data name="ConflictDetail_Target" xml:space="preserve"><value>Target {0}</value></data>
+  <data name="ConflictDetail_Fields" xml:space="preserve"><value>Conflicting fields and selected values</value></data>
+  <data name="ConflictDetail_Empty" xml:space="preserve"><value>This conflict has no field details.</value></data>
+  <data name="ConflictDetail_Previous" xml:space="preserve"><value>Previous value</value></data>
+  <data name="ConflictDetail_Adopted" xml:space="preserve"><value>Selected value</value></data>
+  <data name="Operations_PageTitle" xml:space="preserve"><value>Operations | SyncCoordinator</value></data>
+  <data name="Operations_Title" xml:space="preserve"><value>Operations</value></data>
+  <data name="Operations_Description" xml:space="preserve"><value>Review queue checkpoints by system, recent message processing results, and configuration audit history.</value></data>
+  <data name="Operations_NoCheckpoints" xml:space="preserve"><value>No checkpoints are available.</value></data>
+  <data name="Operations_LastQueueId" xml:space="preserve"><value>Last Queue ID</value></data>
+  <data name="Operations_RecentInbox" xml:space="preserve"><value>Recent inbox messages</value></data>
+  <data name="Operations_NoInbox" xml:space="preserve"><value>No inbox history is available.</value></data>
+  <data name="Operations_RouteDestination" xml:space="preserve"><value>Rule / destination</value></data>
+  <data name="Operations_Attempts" xml:space="preserve"><value>Attempts</value></data>
+  <data name="Operations_AuditHistory" xml:space="preserve"><value>Configuration audit history</value></data>
+  <data name="Operations_NoAudits" xml:space="preserve"><value>No configuration changes have been recorded.</value></data>
+  <data name="Operations_ChangedBy" xml:space="preserve"><value>Changed by</value></data>
+  <data name="Operations_NotProcessed" xml:space="preserve"><value>Not processed</value></data>
+  <data name="Operations_Completed" xml:space="preserve"><value>Completed</value></data>
+  <data name="Operations_Processing" xml:space="preserve"><value>Processing</value></data>
+  <data name="Operations_Held" xml:space="preserve"><value>Held</value></data>
+  <data name="Operations_Failed" xml:space="preserve"><value>Failed</value></data>
+  <data name="Operations_AdminAccount" xml:space="preserve"><value>Administrator account</value></data>
+  <data name="Operations_Created" xml:space="preserve"><value>Created</value></data>
+  <data name="Operations_Updated" xml:space="preserve"><value>Updated</value></data>
+  <data name="Operations_Enabled" xml:space="preserve"><value>Enabled</value></data>
+  <data name="Operations_Disabled" xml:space="preserve"><value>Disabled</value></data>
+  <data name="Operations_Paused" xml:space="preserve"><value>Paused</value></data>
+  <data name="Operations_Resumed" xml:space="preserve"><value>Resumed</value></data>
+  <data name="Operations_Initialized" xml:space="preserve"><value>Initialized</value></data>
+  <data name="Operations_PasswordReset" xml:space="preserve"><value>Password reset</value></data>
+  <data name="Operations_PasswordChanged" xml:space="preserve"><value>Password changed</value></data>
+  <data name="Operations_ManagementUi" xml:space="preserve"><value>Management UI</value></data>
+  <data name="Operations_Administrator" xml:space="preserve"><value>Administrator</value></data>
+  <data name="Operations_LocalRecovery" xml:space="preserve"><value>localhost recovery</value></data>
+  <data name="DatabaseSetup_PageTitle" xml:space="preserve"><value>Deploy to business databases | SyncCoordinator</value></data>
+  <data name="DatabaseSetup_Title" xml:space="preserve"><value>Deploy to business databases</value></data>
+  <data name="DatabaseSetup_BackToRule" xml:space="preserve"><value>Back to sync rule</value></data>
+  <data name="DatabaseSetup_Loading" xml:space="preserve"><value>Preparing deployment…</value></data>
+  <data name="DatabaseSetup_Empty" xml:space="preserve"><value>Deployment details are unavailable.</value></data>
+  <data name="DatabaseSetup_DbPreparation" xml:space="preserve"><value>Database configuration verification</value></data>
+  <data name="DatabaseSetup_Verified" xml:space="preserve"><value>Verified</value></data>
+  <data name="DatabaseSetup_Unverified" xml:space="preserve"><value>Not verified</value></data>
+  <data name="DatabaseSetup_Verifying" xml:space="preserve"><value>Verifying…</value></data>
+  <data name="DatabaseSetup_VerifyAll" xml:space="preserve"><value>Verify all database configurations</value></data>
+  <data name="DatabaseSetup_VerifyHelp" xml:space="preserve"><value>Verify that every target database contains the tables and triggers required for synchronization.</value></data>
+  <data name="DatabaseSetup_DirectDisabled" xml:space="preserve"><value>Direct deployment from the management UI is unavailable in this environment. Download the SQL and have a DBA review it before execution.</value></data>
+  <data name="DatabaseSetup_DownloadSql" xml:space="preserve"><value>Download SQL</value></data>
+  <data name="DatabaseSetup_ViewSql" xml:space="preserve"><value>View SQL</value></data>
+  <data name="DatabaseSetup_ViewChanges" xml:space="preserve"><value>Review deployment changes</value></data>
+  <data name="DatabaseSetup_ConfirmDatabaseName" xml:space="preserve"><value>Enter database name “{0}” to confirm</value></data>
+  <data name="DatabaseSetup_ConfirmedSql" xml:space="preserve"><value>I reviewed the SQL and target database</value></data>
+  <data name="DatabaseSetup_Applying" xml:space="preserve"><value>Applying…</value></data>
+  <data name="DatabaseSetup_ApplyDatabase" xml:space="preserve"><value>Apply to this database</value></data>
+  <data name="DatabaseSetup_DbaNote" xml:space="preserve"><value>If a DBA runs the downloaded SQL, select “Verify all databases” after deployment to every target database is complete.</value></data>
+  <data name="DatabaseSetup_TriggerNote" xml:space="preserve"><value>Deleting or disabling a rule does not automatically remove its triggers from business databases.</value></data>
+  <data name="DatabaseSetup_PlanFailed" xml:space="preserve"><value>Unable to prepare deployment</value></data>
+  <data name="DatabaseSetup_ConfirmationRequired" xml:space="preserve"><value>Review the SQL and confirm the target database first.</value></data>
+  <data name="DatabaseSetup_ApplyComplete" xml:space="preserve"><value>Database deployment complete</value></data>
+  <data name="DatabaseSetup_ApplyFailed" xml:space="preserve"><value>Database deployment failed</value></data>
+  <data name="DatabaseSetup_VerifyComplete" xml:space="preserve"><value>Database configuration verification complete</value></data>
+  <data name="DatabaseSetup_VerifyFailed" xml:space="preserve"><value>Database configuration verification failed</value></data>
+  <data name="DatabaseSetup_RuleEnabled" xml:space="preserve"><value>The rule was enabled</value></data>
+  <data name="DatabaseSetup_RuleDisabled" xml:space="preserve"><value>The rule was disabled</value></data>
+  <data name="Mappings_PageTitle" xml:space="preserve"><value>Table mappings | SyncCoordinator</value></data>
+  <data name="Mappings_Title" xml:space="preserve"><value>Table mappings</value></data>
+  <data name="Mappings_Description" xml:space="preserve"><value>Map business database tables, columns, and keys for each sync rule, and configure per-column policies, fixed values, and deletion behavior. Saving mappings does not change the business database schema.</value></data>
+  <data name="Mappings_Registered" xml:space="preserve"><value>Configured mappings</value></data>
+  <data name="Mappings_Empty" xml:space="preserve"><value>No mappings have been configured.</value></data>
+  <data name="Mappings_SourceTable" xml:space="preserve"><value>Source table</value></data>
+  <data name="Mappings_DestinationTable" xml:space="preserve"><value>Destination table</value></data>
+  <data name="Mappings_ColumnCount" xml:space="preserve"><value>Columns</value></data>
+  <data name="Mappings_Edit" xml:space="preserve"><value>Edit mapping</value></data>
+  <data name="Mappings_EditHelp" xml:space="preserve"><value>Only systems with a configured database connection can be inspected.</value></data>
+  <data name="Mappings_SelectRule" xml:space="preserve"><value>Select a rule</value></data>
+  <data name="Mappings_LoadingTables" xml:space="preserve"><value>Loading tables…</value></data>
+  <data name="Mappings_SourceTableFor" xml:space="preserve"><value>Source table ({0})</value></data>
+  <data name="Mappings_DestinationTableFor" xml:space="preserve"><value>Destination table ({0})</value></data>
+  <data name="Mappings_SelectTable" xml:space="preserve"><value>Select a table</value></data>
+  <data name="Mappings_LoadingColumns" xml:space="preserve"><value>Loading columns…</value></data>
+  <data name="Mappings_ColumnsAndPolicies" xml:space="preserve"><value>Included columns and conflict policies</value></data>
+  <data name="Mappings_ColumnsHelp" xml:space="preserve"><value>Only selected columns are saved. Columns without an override use the rule default.</value></data>
+  <data name="Mappings_SelectedColumns" xml:space="preserve"><value>{0} / {1} columns</value></data>
+  <data name="Mappings_FilterColumns" xml:space="preserve"><value>Search columns</value></data>
+  <data name="Mappings_ShowUnmappedOnly" xml:space="preserve"><value>Unmapped only</value></data>
+  <data name="Mappings_NoMatchingColumns" xml:space="preserve"><value>No columns match the current filters.</value></data>
+  <data name="Mappings_SourceColumn" xml:space="preserve"><value>Source column</value></data>
+  <data name="Mappings_DestinationColumn" xml:space="preserve"><value>Destination column</value></data>
+  <data name="Mappings_Key" xml:space="preserve"><value>Key</value></data>
+  <data name="Mappings_OnConflict" xml:space="preserve"><value>On conflict</value></data>
+  <data name="Mappings_SelectDestinationColumn" xml:space="preserve"><value>Select a destination column</value></data>
+  <data name="Mappings_FixedValues" xml:space="preserve"><value>Fixed values on write (optional)</value></data>
+  <data name="Mappings_FixedValuesHelp" xml:space="preserve"><value>Set fixed values at the write destination separately from regular column mappings.</value></data>
+  <data name="Mappings_AddFixedValue" xml:space="preserve"><value>Add fixed value</value></data>
+  <data name="Mappings_ApplyDirection" xml:space="preserve"><value>Apply direction</value></data>
+  <data name="Mappings_TargetColumn" xml:space="preserve"><value>Target column</value></data>
+  <data name="Mappings_FixedValue" xml:space="preserve"><value>Fixed value</value></data>
+  <data name="Mappings_SelectColumn" xml:space="preserve"><value>Select a column</value></data>
+  <data name="Mappings_FixedValueExample" xml:space="preserve"><value>Example: SYNC_COORDINATOR, 0</value></data>
+  <data name="Mappings_DeleteSync" xml:space="preserve"><value>Delete synchronization</value></data>
+  <data name="Mappings_DeleteSyncHelp" xml:space="preserve"><value>You can use different deletion methods at the source and destination. Physical deletion stores the previous values in a tombstone. Logical deletion treats an update to the configured deletion value as a delete.</value></data>
+  <data name="Mappings_SyncDeletes" xml:space="preserve"><value>Synchronize deletions</value></data>
+  <data name="Mappings_SourceFor" xml:space="preserve"><value>Source ({0})</value></data>
+  <data name="Mappings_DestinationFor" xml:space="preserve"><value>Destination ({0})</value></data>
+  <data name="Mappings_DeletionMode" xml:space="preserve"><value>Deletion mode</value></data>
+  <data name="Mappings_LogicalDeleteColumn" xml:space="preserve"><value>Logical deletion column</value></data>
+  <data name="Mappings_DeleteValue" xml:space="preserve"><value>Deletion value</value></data>
+  <data name="Mappings_DeleteValueExample" xml:space="preserve"><value>Example: 1, true, D</value></data>
+  <data name="Mappings_Save" xml:space="preserve"><value>Save mappings and policies</value></data>
+  <data name="Mappings_RuleDefault" xml:space="preserve"><value>Rule default</value></data>
+  <data name="Mappings_WriteDestination" xml:space="preserve"><value>Write to destination</value></data>
+  <data name="Mappings_WriteSource" xml:space="preserve"><value>Write back to source</value></data>
+  <data name="Mappings_PhysicalDelete" xml:space="preserve"><value>Physical deletion</value></data>
+  <data name="Mappings_LogicalDelete" xml:space="preserve"><value>Logical deletion</value></data>
+  <data name="Mappings_SelectRuleError" xml:space="preserve"><value>Select a sync rule.</value></data>
+  <data name="Mappings_Saved" xml:space="preserve"><value>Table and column mappings and conflict policies were saved.</value></data>
+  <data name="Mappings_SystemMissing" xml:space="preserve"><value>System '{0}' does not exist.</value></data>
+  <data name="Mappings_ConnectionMissing" xml:space="preserve"><value>The database connection for system '{0}' is not configured. Configure it under Systems.</value></data>
+  <data name="ConflictDetail_SourceMessageId" xml:space="preserve"><value>Source Message ID</value></data>
+  <data name="ConflictDetail_DeliveryMessageId" xml:space="preserve"><value>Delivery Message ID</value></data>
+  <data name="ConflictDetail_Incoming" xml:space="preserve"><value>Incoming value</value></data>
+  <data name="ConflictDetail_Current" xml:space="preserve"><value>Current value</value></data>
+  <data name="DatabaseSetup_ResultApplyVerified" xml:space="preserve"><value>Deployment to {0} was verified. Verify all databases after deploying to every target.</value></data>
+  <data name="DatabaseSetup_ResultApplyUnverified" xml:space="preserve"><value>The SQL was run on {0}, but the required objects could not be verified.</value></data>
+  <data name="DatabaseSetup_ResultObjectsMissing" xml:space="preserve"><value>{0} does not contain all required synchronization objects.</value></data>
+  <data name="DatabaseSetup_ResultAllVerified" xml:space="preserve"><value>Synchronization objects were verified in every business database. The rule can now be enabled under Basic settings.</value></data>
+  <data name="DatabaseSetup_ResultRuleEnabled" xml:space="preserve"><value>The sync rule was enabled.</value></data>
+  <data name="DatabaseSetup_ResultRuleDisabled" xml:space="preserve"><value>The sync rule was disabled.</value></data>
+  <data name="DatabaseSetup_ReviewBeforeApply" xml:space="preserve"><value>Review before deployment</value></data>
+  <data name="DatabaseSetup_WarningDdl" xml:space="preserve"><value>Synchronization tables, triggers, permissions, and related objects will be added to or updated in the business databases. Have a DBA review the SQL before deploying to production.</value></data>
+  <data name="DatabaseSetup_WarningDeleteEnabled" xml:space="preserve"><value>Delete synchronization is enabled. Deletes are synchronized per record and use the normal conflict check when the destination has changed.</value></data>
+  <data name="DatabaseSetup_WarningDeleteDisabled" xml:space="preserve"><value>Delete synchronization is disabled. Physical DELETE operations are not synchronized, and logical deletion changes are processed as normal updates.</value></data>
+  <data name="DatabaseSetup_WarningConnector" xml:space="preserve"><value>Database deployment alone does not start synchronization. Also deploy the connector that uses the saved mapping.</value></data>
+  <data name="DatabaseSetup_WarningCompositeKey" xml:space="preserve"><value>Composite keys are represented as a JSON EntityId. Confirm that the combined value is no longer than 256 characters.</value></data>
+  <data name="DatabaseSetup_SourceDirection" xml:space="preserve"><value>Source ({0} → {1})</value></data>
+  <data name="DatabaseSetup_DestinationReverseDirection" xml:space="preserve"><value>Destination, reverse direction ({0} → {1})</value></data>
+  <data name="DatabaseSetup_DestinationDirection" xml:space="preserve"><value>Destination ({0})</value></data>
+  <data name="DatabaseSetup_ChangeCreateQueue" xml:space="preserve"><value>Create SyncChangeQueue if it does not exist</value></data>
+  <data name="DatabaseSetup_ChangeCreateAppliedMessage" xml:space="preserve"><value>Create SyncAppliedMessage if it does not exist</value></data>
+  <data name="DatabaseSetup_ChangeCreateEntityOrigin" xml:space="preserve"><value>Create SyncEntityOrigin if it does not exist</value></data>
+  <data name="DatabaseSetup_ChangeCreateDeleteTombstone" xml:space="preserve"><value>Create SyncDeleteTombstone if it does not exist</value></data>
+  <data name="DatabaseSetup_ChangeRecordDeployment" xml:space="preserve"><value>Record this SQL deployment identifier in SyncCoordinatorDeployment</value></data>
+  <data name="DatabaseSetup_ChangeSqlServerPermissions" xml:space="preserve"><value>Required permissions: CREATE TABLE and CREATE/ALTER TRIGGER, or equivalent DDL permissions</value></data>
+  <data name="DatabaseSetup_ChangeMySqlPermissions" xml:space="preserve"><value>Required permissions: CREATE, TRIGGER, and DROP when updating existing triggers</value></data>
+  <data name="DatabaseSetup_ChangePostgreSqlPermissions" xml:space="preserve"><value>Required permissions: CREATE on the public and target schemas, and TRIGGER on the target table</value></data>
+  <data name="DatabaseSetup_ChangeTrigger" xml:space="preserve"><value>Create or update the change-detection trigger on {0}.{1}</value></data>
+  <data name="DatabaseSetup_ChangePhysicalDelete" xml:space="preserve"><value>Store physical DELETE values in the tombstone and detect them as deletes</value></data>
+  <data name="DatabaseSetup_ChangeLogicalDelete" xml:space="preserve"><value>Detect an update that sets {0} to the configured value as a delete</value></data>
+  <data name="ConflictDetail_MergeUnavailableHeld" xml:space="preserve"><value>Held because values could not be merged</value></data>
+  <data name="ConflictDetail_RecordHeld" xml:space="preserve"><value>Entire record held</value></data>
+  <data name="ConflictDetail_DeleteApplied" xml:space="preserve"><value>Applied source deletion</value></data>
+  <data name="ConflictDetail_DeleteKeptCurrent" xml:space="preserve"><value>Kept destination without deleting</value></data>
+  <data name="ConflictDetail_DeleteHeld" xml:space="preserve"><value>Deletion held</value></data>
+  <data name="ConflictDetail_DeleteMergeUnavailableHeld" xml:space="preserve"><value>Deletion held because it cannot be merged</value></data>
+  <data name="Common_Completed" xml:space="preserve"><value>Completed</value></data>
+  <data name="Common_OperationFailed" xml:space="preserve"><value>Operation failed</value></data>
+  <data name="Nav_Webhooks" xml:space="preserve"><value>Notifications</value></data>
+  <data name="Webhooks_PageTitle" xml:space="preserve"><value>Notifications | SyncCoordinator</value></data>
+  <data name="Webhooks_Title" xml:space="preserve"><value>Notifications</value></data>
+  <data name="Webhooks_Description" xml:space="preserve"><value>Manage notification destinations, synchronization events, and delivery results. Endpoint failures do not stop synchronization.</value></data>
+  <data name="Notifications_TabEndpoints" xml:space="preserve"><value>Destinations</value></data>
+  <data name="Notifications_TabHistory" xml:space="preserve"><value>Notification history</value></data>
+  <data name="Webhooks_New" xml:space="preserve"><value>New endpoint</value></data>
+  <data name="Webhooks_Endpoints" xml:space="preserve"><value>Endpoints</value></data>
+  <data name="Webhooks_NoEndpoints" xml:space="preserve"><value>No Webhook endpoints are configured.</value></data>
+  <data name="Webhooks_Name" xml:space="preserve"><value>Name</value></data>
+  <data name="Webhooks_Signature" xml:space="preserve"><value>Signature</value></data>
+  <data name="Webhooks_Test" xml:space="preserve"><value>Test</value></data>
+  <data name="Webhooks_Create" xml:space="preserve"><value>Create endpoint</value></data>
+  <data name="Webhooks_Edit" xml:space="preserve"><value>Edit endpoint</value></data>
+  <data name="Webhooks_HttpWarning" xml:space="preserve"><value>HTTP does not encrypt the payload or signature. Use HTTPS outside a closed internal network.</value></data>
+  <data name="Webhooks_NoSignatureWarning" xml:space="preserve"><value>Without a signature, the receiver cannot verify the sender.</value></data>
+  <data name="Webhooks_EnableSignature" xml:space="preserve"><value>Use HMAC-SHA256 signatures</value></data>
+  <data name="Webhooks_RegenerateSecret" xml:space="preserve"><value>Generate a new signing secret when saving</value></data>
+  <data name="Webhooks_Events" xml:space="preserve"><value>Notification events</value></data>
+  <data name="Webhooks_Settings" xml:space="preserve"><value>Delivery settings</value></data>
+  <data name="Webhooks_EnableEndpoint" xml:space="preserve"><value>Enable this endpoint</value></data>
+  <data name="Webhooks_GroupSync" xml:space="preserve"><value>Sync results</value></data>
+  <data name="Webhooks_GroupAttention" xml:space="preserve"><value>Needs attention</value></data>
+  <data name="Webhooks_GroupSystem" xml:space="preserve"><value>System status</value></data>
+  <data name="Webhooks_GroupTest" xml:space="preserve"><value>Verification</value></data>
+  <data name="Webhooks_NewSecret" xml:space="preserve"><value>Copy the signing secret now</value></data>
+  <data name="Webhooks_SecretOnce" xml:space="preserve"><value>It is shown only once. Click the field to select the entire value, then configure and store it securely.</value></data>
+  <data name="Webhooks_DeliveryHistory" xml:space="preserve"><value>Notification history</value></data>
+  <data name="Webhooks_NoDeliveries" xml:space="preserve"><value>No deliveries have been recorded.</value></data>
+  <data name="Webhooks_Endpoint" xml:space="preserve"><value>Endpoint</value></data>
+  <data name="Webhooks_Saved" xml:space="preserve"><value>The Webhook endpoint was saved.</value></data>
+  <data name="Webhooks_TestQueued" xml:space="preserve"><value>A test event was queued in the outbox.</value></data>
+  <data name="Webhooks_EventUpserted" xml:space="preserve"><value>Sync applied (create or update)</value></data>
+  <data name="Webhooks_EventDeleted" xml:space="preserve"><value>Deletion synchronized</value></data>
+  <data name="Webhooks_EventConflict" xml:space="preserve"><value>Conflict detected</value></data>
+  <data name="Webhooks_EventFailed" xml:space="preserve"><value>Synchronization failed</value></data>
+  <data name="Webhooks_EventPaused" xml:space="preserve"><value>System paused</value></data>
+  <data name="Webhooks_EventResumed" xml:space="preserve"><value>System resumed</value></data>
+  <data name="Webhooks_EventTest" xml:space="preserve"><value>Test</value></data>
+  <data name="Webhooks_StatePending" xml:space="preserve"><value>Pending</value></data>
+  <data name="Webhooks_StateProcessing" xml:space="preserve"><value>Processing</value></data>
+  <data name="Webhooks_StateRetry" xml:space="preserve"><value>Waiting to retry</value></data>
+  <data name="Webhooks_StateDelivered" xml:space="preserve"><value>Delivered</value></data>
+  <data name="Webhooks_StateFailed" xml:space="preserve"><value>Failed</value></data>
+  <data name="Webhooks_ErrorName" xml:space="preserve"><value>Name is required and must be no more than 200 characters.</value></data>
+  <data name="Webhooks_ErrorUrl" xml:space="preserve"><value>URL must be an absolute HTTP or HTTPS URL without user information or a fragment.</value></data>
+  <data name="Webhooks_ErrorEvents" xml:space="preserve"><value>Select at least one supported event.</value></data>
+  <data name="Webhooks_ErrorNotFound" xml:space="preserve"><value>The specified Webhook endpoint does not exist.</value></data>
+</root>

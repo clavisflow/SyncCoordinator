@@ -1,48 +1,130 @@
+.app-header {
+    background: var(--ledger-sidebar, #18251f);
+    border-bottom: 1px solid #304139;
+    box-shadow: none;
+    height: 3.5rem;
+    min-height: 3.5rem;
+    padding: 0 !important;
+}
+
 .header-content {
+    display: grid;
+    grid-template-columns: var(--app-sidebar-width, 17rem) minmax(0, 1fr);
     height: 100%;
-    padding: 0 1.25rem 0 .25rem;
+    min-height: 3.5rem;
+    width: 100%;
+}
+
+.header-brand-zone {
+    align-items: center;
+    background: var(--ledger-sidebar, #18251f);
+    display: flex;
+    gap: .55rem;
+    justify-content: flex-start;
+    padding: 0 1.1rem;
+}
+
+.header-brand-zone ::deep .rz-sidebar-toggle {
+    align-self: stretch;
+    background: transparent !important;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none !important;
+    color: #e7e4d9;
+    margin: 0 0 0 -.65rem;
+    padding: 0 .75rem;
+}
+
+.header-brand-zone ::deep .rz-sidebar-toggle:hover {
+    background: #263930 !important;
 }
 
 .brand {
     align-items: center;
-    color: var(--rz-header-color);
+    color: #f7f4ec;
     display: flex;
     gap: .65rem;
+    min-width: 0;
     text-decoration: none;
 }
 
-.brand ::deep .rzi { font-size: 1.65rem; }
-.brand span, .brand strong, .brand small { display: block; }
-.brand small { font-size: .58rem; letter-spacing: .16em; opacity: .72; }
-.brand strong { font-size: 1.05rem; letter-spacing: .01em; }
-.app-sidebar { border-right: 1px solid var(--rz-base-300); }
-.nav-caption {
-    color: var(--rz-text-secondary-color);
-    font-size: .7rem;
-    font-weight: 700;
-    letter-spacing: .12em;
-    padding: 1.5rem 1.25rem .5rem;
-}
-.app-menu { border: 0; padding: 0 .5rem; }
-.sidebar-note {
-    align-items: flex-start;
-    bottom: 1rem;
-    color: var(--rz-text-secondary-color);
+.brand-logo { display: block; height: 1.7rem; object-fit: contain; width: 1.7rem; }
+.brand strong { font-size: 1rem; font-weight: 500; letter-spacing: .015em; white-space: nowrap; }
+.header-utility {
+    align-items: center;
+    background: var(--ledger-sidebar, #18251f);
     display: flex;
-    font-size: .72rem;
-    gap: .5rem;
-    left: 0;
-    line-height: 1.5;
-    max-width: 100%;
-    padding: 1rem 1.25rem;
-    position: absolute;
-    right: 0;
+    gap: .75rem;
+    justify-content: flex-end;
+    padding: 0 1.4rem;
 }
-.sidebar-note ::deep .rzi { color: var(--rz-success); flex: 0 0 auto; margin-top: .1rem; }
-.sidebar-note span { min-width: 0; overflow-wrap: anywhere; }
+.header-account-link,
+.logout-form button {
+    background: transparent;
+    border: 0;
+    color: #d8dfdb;
+    cursor: pointer;
+    font: inherit;
+    font-size: .76rem;
+    padding: .25rem;
+    text-decoration: none;
+}
+.header-account-link:hover,
+.logout-form button:hover { color: #fff; text-decoration: underline; }
+.logout-form { margin: 0; }
+.app-sidebar {
+    background: var(--ledger-sidebar, #18251f);
+    border-right: 1px solid #304139;
+    width: var(--app-sidebar-width, 17rem);
+}
+.app-navigation { padding: .85rem .65rem 0; }
+.app-menu-section + .app-menu-section {
+    border-top: 1px solid #304139;
+    margin-top: .75rem;
+    padding-top: .75rem;
+}
+.app-menu-heading {
+    color: #82968d;
+    font-size: .68rem;
+    font-weight: 600;
+    letter-spacing: .08em;
+    margin: 0;
+    padding: .35rem .9rem .25rem;
+    text-transform: uppercase;
+}
+.app-menu { background: transparent; border: 0; padding: 0; }
+.app-sidebar ::deep .rz-panel-menu { background: transparent; border: 0; }
+.app-sidebar ::deep .rz-panel-menu-item { background: transparent; }
+.app-sidebar ::deep .rz-navigation-item-link {
+    border-left: 2px solid transparent;
+    border-radius: 0;
+    color: #c8d0cb;
+    font-size: .88rem;
+    margin: .15rem 0;
+    padding: .72rem .8rem;
+}
+.app-sidebar ::deep .rz-navigation-item-link:hover {
+    background: #21332b;
+    color: #fff;
+}
+.app-sidebar ::deep .rz-navigation-item-wrapper-active > .rz-navigation-item-link,
+.app-sidebar ::deep .rz-navigation-item-link.rz-state-active {
+    background: #263c33;
+    border-left-color: #8eb5a7;
+    color: #fff;
+}
+.app-sidebar ::deep .rz-navigation-item-icon { color: #87a398; }
 .page-shell { margin: 0 auto; max-width: 1500px; padding: clamp(1.25rem, 3vw, 2.75rem); }
 
 @media (max-width: 768px) {
-    .brand small { display: none; }
+    .header-content { grid-template-columns: minmax(0, 1fr) auto; }
+    .header-brand-zone { padding: 0 .75rem; }
+    .header-utility { padding: 0 .75rem; }
     .page-shell { padding: 1rem; }
+    .header-account-link,
+    .header-utility ::deep .culture-form label { display: none; }
+}
+
+@media (max-width: 460px) {
+    .brand strong { display: none; }
 }

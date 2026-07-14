@@ -1,0 +1,12 @@
+@inject IStringLocalizer<SharedResource> L
+
+<nav class="route-detail-tabs" aria-label="@L["RouteTabs_Aria"]">
+    <a href="@($"/routes/{RouteId}")" aria-current="@(Active == "settings" ? "page" : null)" class="@(Active == "settings" ? "active" : null)">@L["RouteTabs_Settings"]</a>
+    <a href="@($"/routes/{RouteId}/mappings")" aria-current="@(Active == "mappings" ? "page" : null)" class="@(Active == "mappings" ? "active" : null)">@L["RouteTabs_Mappings"]</a>
+    <a href="@($"/routes/{RouteId}/database-setup")" aria-current="@(Active == "database" ? "page" : null)" class="@(Active == "database" ? "active" : null)">@L["RouteTabs_Database"]</a>
+</nav>
+
+@code {
+    [Parameter, EditorRequired] public Guid RouteId { get; set; }
+    [Parameter, EditorRequired] public string Active { get; set; } = string.Empty;
+}

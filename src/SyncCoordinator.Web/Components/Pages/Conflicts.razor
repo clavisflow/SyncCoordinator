@@ -1,37 +1,38 @@
 @page "/conflicts"
+@attribute [Authorize]
 @using SyncCoordinator.Core
 @inject ICoordinatorReadService ReadService
 @inject NavigationManager Navigation
+@inject IStringLocalizer<SharedResource> L
 
-<PageTitle>競合履歴 | SyncCoordinator</PageTitle>
+<PageTitle>@L["Conflicts_PageTitle"]</PageTitle>
 
 <section class="page-heading">
     <div>
         <p class="kicker">HISTORY</p>
-        <h1>競合履歴</h1>
-        <p>検出した競合と採用結果を確認します。現在は参照専用です。</p>
+        <h1>@L["Conflicts_Title"]</h1>
+        <p>@L["Conflicts_Description"]</p>
     </div>
-    <RadzenButton Text="@(loading ? "更新中…" : "再読み込み")" Icon="refresh" Click="@LoadAsync" Disabled="@loading" />
+    <RadzenButton Text="@(loading ? L["Action_Refreshing"] : L["Action_Reload"])" Icon="refresh" Click="@LoadAsync" Disabled="@loading" />
 </section>
 
 <RadzenCard>
-    <div class="panel-title"><h2>最近の競合</h2><span>@conflicts.Count 件</span></div>
-    <RadzenDataGrid Data="@conflicts" TItem="ConflictListItem" AllowSorting="true" AllowFiltering="true" FilterMode="FilterMode.Simple" AllowPaging="true" PageSize="25" ShowPagingSummary="true" PagingSummaryFormat="{0} / {1}ページ（全{2}件）" EmptyText="競合履歴はありません。" Density="Density.Compact">
+    <div class="panel-title"><h2>@L["Conflicts_Recent"]</h2><span>@L["Common_Count", conflicts.Count]</span></div>
+    <RadzenDataGrid Data="@conflicts" TItem="ConflictListItem" AllowSorting="true" AllowFiltering="true" FilterMode="FilterMode.Simple" AllowPaging="true" PageSize="25" ShowPagingSummary="true" PagingSummaryFormat="@L["Common_PagingSummary"]" EmptyText="@L["Conflicts_Empty"]" Density="Density.Compact">
         <Columns>
-            <RadzenDataGridColumn TItem="ConflictListItem" Property="DetectedAtUtc" Title="検知日時">
-                <Template Context="conflict">@conflict.DetectedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</Template>
+            <RadzenDataGridColumn TItem="ConflictListItem" Property="DetectedAtUtc" Title="@L["Common_DetectedAt"]">
+                <Template Context="conflict">@UiFormat.LocalDateTime(conflict.DetectedAtUtc)</Template>
             </RadzenDataGridColumn>
-            <RadzenDataGridColumn TItem="ConflictListItem" Property="RouteName" Title="ルート" />
-            <RadzenDataGridColumn TItem="ConflictListItem" Title="方向" Sortable="false" Filterable="false">
-                <Template Context="conflict"><code class="direction">@conflict.SourceSystem → @conflict.DestinationSystem</code></Template>
+            <RadzenDataGridColumn TItem="ConflictListItem" Property="RouteName" Title="@L["Common_Rule"]" />
+            <RadzenDataGridColumn TItem="ConflictListItem" Title="@L["Common_Direction"]" Sortable="false" Filterable="false">
+                <Template Context="conflict"><code class="direction">@conflict.SourceSystemName → @conflict.DestinationSystemName</code></Template>
             </RadzenDataGridColumn>
-            <RadzenDataGridColumn TItem="ConflictListItem" Property="EntityType" Title="Entity" />
-            <RadzenDataGridColumn TItem="ConflictListItem" Property="EntityId" Title="対象ID" />
-            <RadzenDataGridColumn TItem="ConflictListItem" Property="Resolved" Title="状態" Width="100px">
-                <Template Context="conflict"><span class="status-pill @(conflict.Resolved ? "enabled" : "held")">@(conflict.Resolved ? "解決済み" : "未解決")</span></Template>
+            <RadzenDataGridColumn TItem="ConflictListItem" Property="EntityId" Title="@L["Common_TargetId"]" />
+            <RadzenDataGridColumn TItem="ConflictListItem" Property="Resolved" Title="@L["Common_Status"]" Width="100px">
+                <Template Context="conflict"><span class="status-pill @(conflict.Resolved ? "enabled" : "held")">@(conflict.Resolved ? L["Common_Resolved"] : L["Common_Unresolved"])</span></Template>
             </RadzenDataGridColumn>
             <RadzenDataGridColumn TItem="ConflictListItem" Title="" Sortable="false" Filterable="false" Width="72px" TextAlign="TextAlign.Right">
-                <Template Context="conflict"><RadzenButton Icon="open_in_new" title="詳細" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => OpenDetails(conflict.Id))" /></Template>
+                <Template Context="conflict"><RadzenButton Icon="open_in_new" title="@L["Common_Details"]" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => OpenDetails(conflict.Id))" /></Template>
             </RadzenDataGridColumn>
         </Columns>
     </RadzenDataGrid>

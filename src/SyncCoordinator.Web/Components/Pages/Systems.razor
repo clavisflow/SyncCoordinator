@@ -1,161 +1,142 @@
 @page "/systems"
+@attribute [Authorize]
 @using SyncCoordinator.Core
 @inject ICoordinatorAdminService AdminService
 @inject IDatabaseMetadataService MetadataService
+@inject NotificationService NotificationService
+@inject IStringLocalizer<SharedResource> L
 
-<PageTitle>システム管理 | SyncCoordinator</PageTitle>
+<PageTitle>@L["Systems_PageTitle"]</PageTitle>
 
 <section class="page-heading">
     <div>
         <p class="kicker">CONFIGURATION</p>
-        <h1>システム管理</h1>
-        <p>接続対象となるシステムコード、DB種別、有効状態を管理します。</p>
+        <h1>@L["Systems_Title"]</h1>
+        <p>@L["Systems_Description"]</p>
     </div>
-    <RadzenButton Text="新しいシステム" Icon="add" Click="@StartCreate" />
+    <RadzenButton Text="@L["Systems_New"]" Icon="add" Click="@StartCreate" />
 </section>
 
 <div class="split-layout">
     <RadzenCard>
-        <div class="panel-title"><h2>登録システム</h2><span>@systems.Count 件</span></div>
-        <RadzenDataGrid Data="@systems" TItem="SystemListItem" AllowSorting="true" AllowFiltering="true" FilterMode="FilterMode.Simple" AllowPaging="true" PageSize="15" EmptyText="登録されたシステムはありません。" Density="Density.Compact">
+        <div class="panel-title"><h2>@L["Systems_Registered"]</h2><span>@L["Common_Count", systems.Count]</span></div>
+        <p class="info-note">@L["Systems_PauseNote"]</p>
+        <RadzenDataGrid Data="@systems" TItem="SystemListItem" AllowSorting="true" AllowPaging="true" PageSize="15" EmptyText="@L["Systems_Empty"]" Density="Density.Compact">
             <Columns>
-                <RadzenDataGridColumn TItem="SystemListItem" Property="Code" Title="コード" Width="110px">
+                <RadzenDataGridColumn TItem="SystemListItem" Property="Code" Title="@L["Systems_Code"]" Width="110px">
                     <Template Context="system"><code>@system.Code</code></Template>
                 </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="SystemListItem" Property="DisplayName" Title="表示名" />
-                <RadzenDataGridColumn TItem="SystemListItem" Property="Provider" Title="Provider" Width="130px" />
-                <RadzenDataGridColumn TItem="SystemListItem" Property="Enabled" Title="状態" Width="90px">
-                    <Template Context="system"><span class="status-pill @(system.Enabled ? "enabled" : "disabled")">@(system.Enabled ? "有効" : "無効")</span></Template>
+                <RadzenDataGridColumn TItem="SystemListItem" Property="DisplayName" Title="@L["Systems_DisplayName"]" />
+                <RadzenDataGridColumn TItem="SystemListItem" Property="Provider" Title="Provider" Width="130px">
+                    <Template Context="system">@ProviderDisplayName(system.Provider)</Template>
                 </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="SystemListItem" Property="ConnectionConfigured" Title="DB接続" Width="100px">
-                    <Template Context="system"><span class="status-pill @(system.ConnectionConfigured ? "enabled" : "held")">@(system.ConnectionConfigured ? "設定済み" : "未設定")</span></Template>
+                <RadzenDataGridColumn TItem="SystemListItem" Property="Enabled" Title="@L["Common_Status"]" Width="110px">
+                    <Template Context="system"><span class="status-pill @SystemStatusClass(system)">@SystemStatusText(system)</span></Template>
                 </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="SystemListItem" Title="" Sortable="false" Filterable="false" Width="72px" TextAlign="TextAlign.Right">
-                    <Template Context="system"><RadzenButton Icon="edit" title="編集" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => StartEditAsync(system.Id))" /></Template>
+                <RadzenDataGridColumn TItem="SystemListItem" Property="ConnectionConfigured" Title="@L["Systems_DbConnection"]" Width="100px">
+                    <Template Context="system"><span class="status-pill @(system.ConnectionConfigured ? "enabled" : "held")">@(system.ConnectionConfigured ? L["Common_Configured"] : L["Common_NotConfigured"])</span></Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="SystemListItem" Title="" Sortable="false" Filterable="false" Width="112px" TextAlign="TextAlign.Right">
+                    <Template Context="system">
+                        <RadzenButton Icon="@(system.IsPaused ? "play_circle" : "pause_circle")"
+                                      title="@(system.IsPaused ? L["Systems_Resume"] : L["Systems_Pause"])"
+                                      ButtonStyle="@(system.IsPaused ? ButtonStyle.Success : ButtonStyle.Warning)"
+                                      Variant="Variant.Text"
+                                      Size="ButtonSize.Small"
+                                      Disabled="@(!system.Enabled || pausingSystemId is not null)"
+                                      Click="@(() => SetPausedAsync(system))" />
+                        <RadzenButton Icon="edit" title="@L["Common_Edit"]" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => StartEditAsync(system.Id))" />
+                    </Template>
                 </RadzenDataGridColumn>
             </Columns>
         </RadzenDataGrid>
     </RadzenCard>
 
     <RadzenCard class="editor-panel">
-        <div class="panel-title"><h2>@(editModel.Id is null ? "新規登録" : "システム編集")</h2></div>
+        <div class="panel-title"><h2>@(editModel.Id is null ? L["Systems_Create"] : L["Systems_Edit"])</h2></div>
         <EditForm Model="editModel" OnSubmit="SaveAsync" class="form-stack">
-            @if (errors.Count > 0)
-            {
-                <div class="message-box error" role="alert">
-                    @foreach (var error in errors) { <div>@error</div> }
-                </div>
-            }
-            @if (saved)
-            {
-                <div class="message-box success">保存しました。</div>
-            }
-
             <div class="form-field">
-                <label for="SystemCode">システムコード</label>
+                <div class="caption-title"><label for="SystemCode">@L["Systems_SystemCode"]</label><HelpTip Text="@L["Systems_SystemCodeHelp"]" /></div>
                 <RadzenTextBox Name="SystemCode" @bind-Value="editModel.Code" Disabled="@(editModel.Id is not null)" MaxLength="64" class="form-control" />
-                <small>ルートとCheckpointの識別子です。登録後は変更できません。</small>
             </div>
             <div class="form-field">
-                <label for="DisplayName">表示名</label>
+                <label for="DisplayName">@L["Systems_DisplayName"]</label>
                 <RadzenTextBox Name="DisplayName" @bind-Value="editModel.DisplayName" MaxLength="200" class="form-control" />
             </div>
             <div class="form-field">
                 <label for="Provider">Provider</label>
-                <RadzenDropDown Name="Provider" TValue="string" @bind-Value="editModel.Provider" Data="@providers" class="form-control" />
+                <RadzenDropDown Name="Provider" TValue="string" @bind-Value="editModel.Provider" Data="@providers" TextProperty="Text" ValueProperty="Value" Change="@OnProviderChanged" class="form-control" />
             </div>
             <div class="check-row">
                 <RadzenCheckBox Name="Enabled" TValue="bool" @bind-Value="editModel.Enabled" />
-                <RadzenLabel Text="有効" Component="Enabled" />
+                <RadzenLabel Text="@L["Common_Enabled"]" Component="Enabled" />
             </div>
+            <small>@L["Systems_DisableHelp"]</small>
+            <div class="section-divider"></div>
+            <div class="panel-title"><div class="caption-title"><h2>@L["Systems_DbConnection"]</h2><HelpTip Text="@L["Systems_DbConnectionHelp"]" /></div></div>
+            <div class="form-field">
+                <label for="DbServer">@L["Systems_Server"]</label>
+                <RadzenTextBox Name="DbServer" @bind-Value="connectionModel.Server" class="form-control" />
+            </div>
+            <div class="form-field">
+                <label for="DbPort">@L["Systems_Port"]</label>
+                <RadzenNumeric Name="DbPort" TValue="int?" @bind-Value="connectionModel.Port" Min="1" Max="65535" class="form-control" />
+            </div>
+            <div class="form-field">
+                <label for="DbName">@L["Systems_Database"]</label>
+                <RadzenTextBox Name="DbName" @bind-Value="connectionModel.Database" class="form-control" />
+            </div>
+            @if (editModel.Provider == "SqlServer")
+            {
+                <div class="check-row">
+                    <RadzenCheckBox Name="IntegratedSecurity" TValue="bool" @bind-Value="connectionModel.IntegratedSecurity" />
+                    <RadzenLabel Text="@L["Systems_WindowsAuth"]" Component="IntegratedSecurity" />
+                </div>
+            }
+            @if (!connectionModel.IntegratedSecurity)
+            {
+                <div class="form-field">
+                    <label for="DbUser">@L["Auth_UserName"]</label>
+                    <RadzenTextBox Name="DbUser" @bind-Value="connectionModel.UserName" AutoComplete="off" class="form-control" />
+                </div>
+                <div class="form-field">
+                    <label for="DbPassword">@L["Auth_Password"]</label>
+                    <RadzenPassword Name="DbPassword" @bind-Value="connectionModel.Password" Placeholder="@(connectionModel.HasStoredPassword ? L["Systems_KeepPassword"] : L["Auth_Password"])" AutoComplete="new-password" class="form-control" />
+                </div>
+            }
+            <div class="check-row">
+                <RadzenCheckBox Name="DbEncrypt" TValue="bool" @bind-Value="connectionModel.Encrypt" />
+                <RadzenLabel Text="@L["Systems_Encrypt"]" Component="DbEncrypt" />
+            </div>
+            @if (editModel.Provider is "SqlServer" or "PostgreSql")
+            {
+                <div class="check-row">
+                    <RadzenCheckBox Name="TrustCertificate" TValue="bool" @bind-Value="connectionModel.TrustServerCertificate" />
+                    <RadzenLabel Text="@L["Systems_TrustCertificate"]" Component="TrustCertificate" />
+                </div>
+            }
             <div class="form-actions">
-                <RadzenButton Text="@(saving ? "保存中…" : "保存")" Icon="save" ButtonType="ButtonType.Submit" Disabled="@saving" />
-                <RadzenButton Text="クリア" Icon="restart_alt" ButtonStyle="ButtonStyle.Light" Click="@StartCreate" />
+                <RadzenButton Text="@(saving ? L["Common_Saving"] : L["Common_Save"])" Icon="save" ButtonType="ButtonType.Submit" Disabled="@(saving || testingConnection)" />
+                <RadzenButton Text="@(testingConnection ? L["Systems_Testing"] : L["Systems_TestConnection"])" Icon="cable" ButtonStyle="ButtonStyle.Light" ButtonType="ButtonType.Button" Click="@TestConnectionAsync" Disabled="@(saving || testingConnection)" />
+                <RadzenButton Text="@L["Common_Clear"]" Icon="restart_alt" ButtonStyle="ButtonStyle.Light" ButtonType="ButtonType.Button" Click="@StartCreate" Disabled="@(saving || testingConnection)" />
             </div>
         </EditForm>
-
-        @if (editModel.Id is { } systemId)
-        {
-            <div class="section-divider"></div>
-            <div class="panel-title"><h2>データベース接続</h2><span>接続文字列は暗号化して保存</span></div>
-            @if (connectionErrors.Count > 0)
-            {
-                <div class="message-box error" role="alert">
-                    @foreach (var error in connectionErrors) { <div>@error</div> }
-                </div>
-            }
-            @if (connectionResult is not null)
-            {
-                <div class="message-box @(connectionResult.Success ? "success" : "error")">@connectionResult.Message</div>
-            }
-            <EditForm Model="connectionModel" OnSubmit="SaveConnectionAsync" class="form-stack connection-form">
-                <div class="form-field">
-                    <label for="DbServer">サーバー／ホスト</label>
-                    <RadzenTextBox Name="DbServer" @bind-Value="connectionModel.Server" class="form-control" />
-                </div>
-                <div class="form-field">
-                    <label for="DbPort">ポート</label>
-                    <RadzenNumeric Name="DbPort" TValue="int?" @bind-Value="connectionModel.Port" Min="1" Max="65535" class="form-control" />
-                </div>
-                <div class="form-field">
-                    <label for="DbName">データベース名</label>
-                    <RadzenTextBox Name="DbName" @bind-Value="connectionModel.Database" class="form-control" />
-                </div>
-                @if (editModel.Provider == "SqlServer")
-                {
-                    <div class="check-row">
-                        <RadzenCheckBox Name="IntegratedSecurity" TValue="bool" @bind-Value="connectionModel.IntegratedSecurity" />
-                        <RadzenLabel Text="Windows認証を使用" Component="IntegratedSecurity" />
-                    </div>
-                }
-                @if (!connectionModel.IntegratedSecurity)
-                {
-                    <div class="form-field">
-                        <label for="DbUser">ユーザー名</label>
-                        <RadzenTextBox Name="DbUser" @bind-Value="connectionModel.UserName" AutoComplete="off" class="form-control" />
-                    </div>
-                    <div class="form-field">
-                        <label for="DbPassword">パスワード</label>
-                        <RadzenPassword Name="DbPassword" @bind-Value="connectionModel.Password" Placeholder="@(connectionModel.HasStoredPassword ? "変更しない場合は空欄" : "パスワード")" AutoComplete="new-password" class="form-control" />
-                    </div>
-                }
-                <div class="check-row">
-                    <RadzenCheckBox Name="DbEncrypt" TValue="bool" @bind-Value="connectionModel.Encrypt" />
-                    <RadzenLabel Text="暗号化接続を使用" Component="DbEncrypt" />
-                </div>
-                @if (editModel.Provider == "SqlServer")
-                {
-                    <div class="check-row">
-                        <RadzenCheckBox Name="TrustCertificate" TValue="bool" @bind-Value="connectionModel.TrustServerCertificate" />
-                        <RadzenLabel Text="サーバー証明書を信頼（開発用）" Component="TrustCertificate" />
-                    </div>
-                }
-                <div class="form-actions">
-                    <RadzenButton Text="@(savingConnection ? "保存中…" : "接続設定を保存")" Icon="key" ButtonType="ButtonType.Submit" Disabled="@savingConnection" />
-                    <RadzenButton Text="接続テスト" Icon="cable" ButtonStyle="ButtonStyle.Light" ButtonType="ButtonType.Button" Click="@(() => TestConnectionAsync(systemId))" Disabled="@(savingConnection || testingConnection)" />
-                </div>
-            </EditForm>
-        }
-        else
-        {
-            <div class="section-divider"></div>
-            <p class="info-note">データベース接続を設定するには、先にシステムを保存してください。</p>
-        }
     </RadzenCard>
 </div>
 
 @code {
-    private static readonly string[] providers = ["SqlServer", "MySql"];
+    private static readonly ProviderOption[] providers =
+    [
+        new("SqlServer", "SQL Server"),
+        new("MySql", "MySQL"),
+        new("PostgreSql", "PostgreSQL")
+    ];
     private IReadOnlyList<SystemListItem> systems = [];
     private SystemConfigurationInput editModel = NewModel();
-    private DatabaseConnectionInput connectionModel = new();
-    private IReadOnlyList<string> errors = [];
-    private IReadOnlyList<string> connectionErrors = [];
-    private ConnectionTestResult? connectionResult;
+    private DatabaseConnectionInput connectionModel = NewConnectionModel("SqlServer");
     private bool saving;
-    private bool saved;
-    private bool savingConnection;
     private bool testingConnection;
+    private Guid? pausingSystemId;
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
@@ -164,43 +145,61 @@
     private void StartCreate()
     {
         editModel = NewModel();
-        errors = [];
-        saved = false;
-        connectionModel = new();
-        connectionErrors = [];
-        connectionResult = null;
+        connectionModel = NewConnectionModel(editModel.Provider);
     }
 
     private async Task StartEditAsync(Guid id)
     {
         editModel = await AdminService.GetSystemAsync(id, CancellationToken.None) ?? NewModel();
-        connectionModel = await AdminService.GetDatabaseConnectionAsync(id, CancellationToken.None) ?? new DatabaseConnectionInput { SystemId = id };
-        errors = [];
-        saved = false;
-        connectionErrors = [];
-        connectionResult = null;
+        connectionModel = await AdminService.GetDatabaseConnectionAsync(id, CancellationToken.None) ?? NewConnectionModel(editModel.Provider, id);
+    }
+
+    private async Task SetPausedAsync(SystemListItem system)
+    {
+        pausingSystemId = system.Id;
+        try
+        {
+            await AdminService.SetSystemPausedAsync(system.Id, !system.IsPaused, CancellationToken.None);
+            await LoadAsync();
+            NotificationService.ShowSuccess(
+                system.IsPaused
+                    ? L["Systems_ResumedMessage", system.DisplayName]
+                    : L["Systems_PausedMessage", system.DisplayName],
+                L["Common_Completed"]);
+        }
+        catch (ConfigurationValidationException exception)
+        {
+            NotificationService.ShowError(exception.Errors, L["Common_OperationFailed"]);
+        }
+        catch (Exception exception)
+        {
+            NotificationService.ShowError([exception.Message], L["Common_OperationFailed"]);
+        }
+        finally
+        {
+            pausingSystemId = null;
+        }
     }
 
     private async Task SaveAsync()
     {
         saving = true;
-        errors = [];
-        saved = false;
         try
         {
-            var id = await AdminService.SaveSystemAsync(editModel, CancellationToken.None);
+            var connection = HasConnectionInput() ? connectionModel : null;
+            var id = await AdminService.SaveSystemAsync(editModel, connection, CancellationToken.None);
             await LoadAsync();
             editModel = await AdminService.GetSystemAsync(id, CancellationToken.None) ?? NewModel();
-            connectionModel = await AdminService.GetDatabaseConnectionAsync(id, CancellationToken.None) ?? new DatabaseConnectionInput { SystemId = id };
-            saved = true;
+            connectionModel = await AdminService.GetDatabaseConnectionAsync(id, CancellationToken.None) ?? NewConnectionModel(editModel.Provider, id);
+            NotificationService.ShowSuccess(L["Systems_Saved"], L["Common_Completed"]);
         }
         catch (ConfigurationValidationException exception)
         {
-            errors = exception.Errors;
+            NotificationService.ShowError(exception.Errors, L["Common_OperationFailed"]);
         }
         catch (Exception exception)
         {
-            errors = [exception.Message];
+            NotificationService.ShowError([exception.Message], L["Common_OperationFailed"]);
         }
         finally
         {
@@ -208,39 +207,24 @@
         }
     }
 
-    private async Task SaveConnectionAsync()
+    private async Task TestConnectionAsync()
     {
-        savingConnection = true;
-        connectionErrors = [];
-        connectionResult = null;
+        testingConnection = true;
         try
         {
-            await AdminService.SaveDatabaseConnectionAsync(connectionModel, CancellationToken.None);
-            connectionModel = await AdminService.GetDatabaseConnectionAsync(connectionModel.SystemId, CancellationToken.None) ?? connectionModel;
-            await LoadAsync();
-            connectionResult = new ConnectionTestResult(true, "接続設定を保存しました。");
-        }
-        catch (ConfigurationValidationException exception)
-        {
-            connectionErrors = exception.Errors;
+            var result = await MetadataService.TestConnectionAsync(editModel.Provider, connectionModel, CancellationToken.None);
+            if (result.Success)
+            {
+                NotificationService.ShowSuccess(result.Message, L["Systems_ConnectionSucceeded"]);
+            }
+            else
+            {
+                NotificationService.ShowError([result.Message], L["Systems_ConnectionFailed"]);
+            }
         }
         catch (Exception exception)
         {
-            connectionErrors = [exception.Message];
-        }
-        finally
-        {
-            savingConnection = false;
-        }
-    }
-
-    private async Task TestConnectionAsync(Guid systemId)
-    {
-        testingConnection = true;
-        connectionErrors = [];
-        try
-        {
-            connectionResult = await MetadataService.TestConnectionAsync(systemId, CancellationToken.None);
+            NotificationService.ShowError([exception.Message], L["Systems_ConnectionFailed"]);
         }
         finally
         {
@@ -248,5 +232,63 @@
         }
     }
 
+    private void OnProviderChanged(object? value)
+    {
+        var provider = value?.ToString() ?? "SqlServer";
+        editModel.Provider = provider;
+        if (!connectionModel.HasStoredPassword &&
+            string.IsNullOrWhiteSpace(connectionModel.Server) &&
+            string.IsNullOrWhiteSpace(connectionModel.Database))
+        {
+            connectionModel.Port = DefaultPort(provider);
+        }
+        if (provider != "SqlServer")
+        {
+            connectionModel.IntegratedSecurity = false;
+            connectionModel.TrustServerCertificate = false;
+        }
+    }
+
+    private bool HasConnectionInput() =>
+        connectionModel.HasStoredPassword ||
+        !string.IsNullOrWhiteSpace(connectionModel.Server) ||
+        !string.IsNullOrWhiteSpace(connectionModel.Database) ||
+        !string.IsNullOrWhiteSpace(connectionModel.UserName) ||
+        !string.IsNullOrEmpty(connectionModel.Password) ||
+        connectionModel.IntegratedSecurity ||
+        connectionModel.TrustServerCertificate ||
+        !connectionModel.Encrypt ||
+        connectionModel.Port != DefaultPort(editModel.Provider);
+
     private static SystemConfigurationInput NewModel() => new() { Provider = "SqlServer", Enabled = true };
+
+    private string SystemStatusText(SystemListItem system) =>
+        !system.Enabled ? L["Common_Disabled"] : system.IsPaused ? L["Common_Paused"] : L["Common_Running"];
+
+    private static string SystemStatusClass(SystemListItem system) =>
+        !system.Enabled ? "disabled" : system.IsPaused ? "held" : "enabled";
+
+    private static DatabaseConnectionInput NewConnectionModel(string provider, Guid systemId = default) => new()
+    {
+        SystemId = systemId,
+        Port = DefaultPort(provider),
+        Encrypt = true
+    };
+
+    private static int DefaultPort(string provider) => provider switch
+    {
+        "MySql" => 3306,
+        "PostgreSql" => 5432,
+        _ => 1433
+    };
+
+    private static string ProviderDisplayName(string provider) => provider switch
+    {
+        "SqlServer" => "SQL Server",
+        "MySql" => "MySQL",
+        "PostgreSql" => "PostgreSQL",
+        _ => provider
+    };
+
+    private sealed record ProviderOption(string Value, string Text);
 }

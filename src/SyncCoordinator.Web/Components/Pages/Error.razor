@@ -1,15 +1,17 @@
 @page "/Error"
+@attribute [AllowAnonymous]
 @using System.Diagnostics
+@inject IStringLocalizer<SharedResource> L
 
-<PageTitle>エラー | SyncCoordinator</PageTitle>
+<PageTitle>@L["Error_PageTitle"]</PageTitle>
 
 <RadzenCard>
     <RadzenStack Gap="1rem">
         <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.75rem">
             <RadzenIcon Icon="error" Style="font-size: 2rem; color: var(--rz-danger);" />
-            <RadzenText TextStyle="TextStyle.H4">処理中にエラーが発生しました</RadzenText>
+            <RadzenText TextStyle="TextStyle.H4">@L["Error_Title"]</RadzenText>
         </RadzenStack>
-        <RadzenText TextStyle="TextStyle.Body1">時間をおいて再実行してください。繰り返し発生する場合は管理者へ連絡してください。</RadzenText>
+        <RadzenText TextStyle="TextStyle.Body1">@L["Error_Description"]</RadzenText>
         @if (ShowRequestId)
         {
             <div>Request ID: <code>@RequestId</code></div>

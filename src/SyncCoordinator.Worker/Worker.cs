@@ -23,9 +23,15 @@ public sealed class Worker(
                 await using var scope = scopeFactory.CreateAsyncScope();
                 var coordinator = scope.ServiceProvider.GetRequiredService<SynchronizationCoordinator>();
                 var processed = await coordinator.RunOnceAsync(options.Value.BatchSize, stoppingToken);
+                var webhooks = scope.ServiceProvider.GetRequiredService<IWebhookDeliveryService>();
+                var delivered = await webhooks.DeliverDueAsync(options.Value.BatchSize, stoppingToken);
                 if (processed > 0)
                 {
                     WorkerLog.QueueItemsProcessed(logger, processed);
+                }
+                if (delivered > 0)
+                {
+                    WorkerLog.WebhooksProcessed(logger, delivered);
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -46,6 +52,9 @@ internal static partial class WorkerLog
 {
     [LoggerMessage(LogLevel.Information, "Processed {count} change queue items")]
     public static partial void QueueItemsProcessed(ILogger logger, int count);
+
+    [LoggerMessage(LogLevel.Information, "Processed {count} webhook deliveries")]
+    public static partial void WebhooksProcessed(ILogger logger, int count);
 
     [LoggerMessage(LogLevel.Error, "Synchronization polling cycle failed")]
     public static partial void PollingCycleFailed(ILogger logger, Exception exception);

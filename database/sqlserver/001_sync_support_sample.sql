@@ -25,12 +25,43 @@ CREATE TABLE dbo.SyncAppliedMessage
 );
 GO
 
+CREATE TABLE dbo.SyncEntityOrigin
+(
+    EntityType   nvarchar(128) NOT NULL,
+    EntityId     nvarchar(256) NOT NULL,
+    OriginSystem nvarchar(64) NOT NULL,
+    CONSTRAINT PK_SyncEntityOrigin PRIMARY KEY(EntityType, EntityId)
+);
+GO
+
+CREATE TABLE dbo.SyncDeleteTombstone
+(
+    MessageId    uniqueidentifier NOT NULL,
+    EntityType   nvarchar(128) NOT NULL,
+    EntityId     nvarchar(256) NOT NULL,
+    OriginSystem nvarchar(64) NOT NULL,
+    PayloadJson  nvarchar(max) NOT NULL,
+    DeletedAtUtc datetimeoffset(7) NOT NULL,
+    CONSTRAINT PK_SyncDeleteTombstone PRIMARY KEY(MessageId, EntityType, EntityId),
+    CONSTRAINT CK_SyncDeleteTombstone_PayloadJson CHECK (ISJSON(PayloadJson) = 1)
+);
+GO
+
+CREATE TABLE dbo.SyncCoordinatorDeployment
+(
+    DeploymentKey nvarchar(128) NOT NULL CONSTRAINT PK_SyncCoordinatorDeployment PRIMARY KEY,
+    DefinitionHash char(64) NOT NULL,
+    AppliedAtUtc   datetimeoffset(7) NOT NULL
+);
+GO
+
 CREATE TABLE dbo.SampleSyncEntity
 (
     EntityType   nvarchar(128) NOT NULL,
     EntityId     nvarchar(256) NOT NULL,
     OriginSystem nvarchar(64) NOT NULL,
     PayloadJson  nvarchar(max) NOT NULL,
+    IsDeleted    bit NOT NULL CONSTRAINT DF_SampleSyncEntity_IsDeleted DEFAULT 0,
     UpdatedAtUtc datetimeoffset(7) NOT NULL,
     CONSTRAINT PK_SampleSyncEntity PRIMARY KEY(EntityType, EntityId),
     CONSTRAINT CK_SampleSyncEntity_PayloadJson CHECK (ISJSON(PayloadJson) = 1)
@@ -49,17 +80,36 @@ BEGIN
 
     INSERT dbo.SyncChangeQueue(MessageId, EntityType, EntityId, Operation, OccurredAtUtc)
     SELECT COALESCE(@ContextMessageId, NEWID()), i.EntityType, i.EntityId, 'Upsert', SYSUTCDATETIME()
-    FROM inserted AS i;
+    FROM inserted AS i
+    WHERE i.IsDeleted = 0;
 
-    /*
-      物理削除を同期する場合は次を有効化するだけでは不十分。
-      ID キューから payload を復元できる tombstone/履歴表を Connector とセットで設計すること。
+    DECLARE @Deleted TABLE
+    (
+        MessageId uniqueidentifier NOT NULL,
+        EntityType nvarchar(128) NOT NULL,
+        EntityId nvarchar(256) NOT NULL,
+        OriginSystem nvarchar(64) NOT NULL,
+        PayloadJson nvarchar(max) NOT NULL
+    );
+    INSERT @Deleted(MessageId, EntityType, EntityId, OriginSystem, PayloadJson)
+    SELECT COALESCE(@ContextMessageId, NEWID()), d.EntityType, d.EntityId, d.OriginSystem, d.PayloadJson
+    FROM deleted AS d
+    WHERE NOT EXISTS
+        (SELECT 1 FROM inserted AS i WHERE i.EntityType=d.EntityType AND i.EntityId=d.EntityId);
 
-      INSERT dbo.SyncChangeQueue(MessageId, EntityType, EntityId, Operation, OccurredAtUtc)
-      SELECT COALESCE(@ContextMessageId, NEWID()), d.EntityType, d.EntityId, 'Delete', SYSUTCDATETIME()
-      FROM deleted AS d
-      WHERE NOT EXISTS
-          (SELECT 1 FROM inserted AS i WHERE i.EntityType=d.EntityType AND i.EntityId=d.EntityId);
-    */
+    INSERT dbo.SyncDeleteTombstone(MessageId, EntityType, EntityId, OriginSystem, PayloadJson, DeletedAtUtc)
+    SELECT MessageId, EntityType, EntityId, OriginSystem, PayloadJson, SYSUTCDATETIME()
+    FROM @Deleted;
+
+    INSERT dbo.SyncChangeQueue(MessageId, EntityType, EntityId, Operation, OccurredAtUtc)
+    SELECT MessageId, EntityType, EntityId, 'Delete', SYSUTCDATETIME()
+    FROM @Deleted;
+
+    DELETE origin
+    FROM dbo.SyncEntityOrigin AS origin
+    INNER JOIN @Deleted AS item
+        ON origin.EntityType = item.EntityType AND origin.EntityId = item.EntityId;
 END;
 GO
+
+/* 論理削除を検知するTriggerは管理画面の論理削除列・削除値から生成する。 */

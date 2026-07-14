@@ -1,114 +1,104 @@
 @page "/routes/new"
 @page "/routes/{Id:guid}"
+@attribute [Authorize]
 @using SyncCoordinator.Core
 @inject ICoordinatorAdminService AdminService
+@inject IDatabaseDeploymentService DeploymentService
 @inject NavigationManager Navigation
+@inject NotificationService NotificationService
+@inject IStringLocalizer<SharedResource> L
 
-<PageTitle>同期ルート編集 | SyncCoordinator</PageTitle>
+<PageTitle>@L["RouteEdit_PageTitle"]</PageTitle>
 
 <section class="page-heading compact">
     <div>
         <p class="kicker">CONFIGURATION</p>
-        <h1>@(Id is null ? "同期ルートの新規作成" : "同期ルートの編集")</h1>
+        <h1>@(Id is null ? L["RouteEdit_CreateTitle"] : L["RouteEdit_EditTitle"])</h1>
+        @if (Id is not null && !string.IsNullOrWhiteSpace(model.Name)) { <p>@model.Name</p> }
     </div>
-    <RadzenButton Text="一覧へ戻る" Icon="arrow_back" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Click="@BackToList" />
+    <RadzenButton Text="@L["Common_BackToList"]" Icon="arrow_back" ButtonStyle="ButtonStyle.Primary" Variant="Variant.Text" Click="@BackToList" />
 </section>
+
+@if (Id is { } routeId)
+{
+    <RouteDetailTabs RouteId="@routeId" Active="settings" />
+}
 
 @if (loading)
 {
-    <div class="loading-state"><RadzenProgressBar Mode="ProgressBarMode.Indeterminate" ShowValue="false" Style="width: 8rem" /><span>設定を読み込んでいます…</span></div>
+    <div class="loading-state"><RadzenProgressBar Mode="ProgressBarMode.Indeterminate" ShowValue="false" Style="width: 8rem" /><span>@L["RouteEdit_Loading"]</span></div>
 }
 else
 {
     <EditForm Model="model" OnSubmit="SaveAsync">
         <div class="content-stack">
             <RadzenCard>
-                <div class="panel-title"><h2>基本設定</h2><span>同期方向と競合時の既定動作</span></div>
-                @if (errors.Count > 0)
-                {
-                    <div class="message-box error" role="alert">
-                        @foreach (var error in errors) { <div>@error</div> }
-                    </div>
-                }
-
+                <div class="panel-title"><div class="caption-title"><h2>@L["RouteEdit_BasicSettings"]</h2><HelpTip Text="@L["RouteEdit_BasicHelp"]" /></div></div>
                 <div class="form-grid">
                     <div class="form-field wide">
-                        <label for="RouteName">ルート名</label>
+                        <label for="RouteName">@L["RouteEdit_RuleName"]</label>
                         <RadzenTextBox Name="RouteName" @bind-Value="model.Name" MaxLength="200" class="form-control" />
                     </div>
                     <div class="form-field">
-                        <label for="SourceSystem">発生元システム</label>
-                        <RadzenDropDown Name="SourceSystem" TValue="string" @bind-Value="model.SourceSystem" Data="@systems" TextProperty="DisplayName" ValueProperty="Code" Placeholder="選択してください" AllowClear="true" class="form-control" />
+                        <label for="SourceSystem">@L["RouteEdit_SourceSystem"]</label>
+                        <RadzenDropDown Name="SourceSystem" TValue="string" @bind-Value="model.SourceSystem" Data="@systems" TextProperty="DisplayName" ValueProperty="Code" Placeholder="@L["Common_Select"]" AllowClear="true" class="form-control" />
                     </div>
                     <div class="form-field">
-                        <label for="EntityType">Entity Type</label>
-                        <RadzenTextBox Name="EntityType" @bind-Value="model.EntityType" MaxLength="128" class="form-control" />
-                        <small>実Connectorが返す共通Entity名を入力します。</small>
+                        <label for="DestinationSystem">@L["RouteEdit_DestinationSystem"]</label>
+                        <RadzenDropDown Name="DestinationSystem" TValue="string" @bind-Value="model.DestinationSystem" Data="@systems" TextProperty="DisplayName" ValueProperty="Code" Placeholder="@L["Common_Select"]" AllowClear="true" class="form-control" />
+                    </div>
+                    <div class="form-field wide">
+                        <div class="caption-title"><label>@L["Routes_SyncDirection"]</label><HelpTip Text="@L["RouteEdit_DirectionHelp"]" /></div>
+                        <InputRadioGroup TValue="SyncDirection" @bind-Value="model.Direction" class="direction-options">
+                            <label class="direction-option">
+                                <InputRadio TValue="SyncDirection" Value="SyncDirection.OneWay" />
+                                <span><strong>@L["Common_OneWay"]</strong> @L["RouteEdit_OneWayDescription"]</span>
+                            </label>
+                            <label class="direction-option">
+                                <InputRadio TValue="SyncDirection" Value="SyncDirection.Bidirectional" />
+                                <span><strong>@L["Common_Bidirectional"]</strong> @L["RouteEdit_BidirectionalDescription"]</span>
+                            </label>
+                        </InputRadioGroup>
                     </div>
                     <div class="form-field">
-                        <label for="DestinationMode">宛先の決定方法</label>
-                        <RadzenDropDown Name="DestinationMode" TValue="DestinationMode" @bind-Value="model.DestinationMode" Data="@destinationModes" class="form-control" />
+                        <label for="ConflictScope">@L["RouteEdit_ConflictScope"]</label>
+                        <RadzenDropDown Name="ConflictScope" TValue="ConflictScope" @bind-Value="model.ConflictScope" Data="@conflictScopes" TextProperty="Text" ValueProperty="Value" class="form-control" />
                     </div>
-                    @if (model.DestinationMode == DestinationMode.FixedSystem)
+                    <div class="form-field">
+                        <div class="caption-title"><label for="DefaultPolicy">@L["RouteEdit_DefaultPolicy"]</label><HelpTip Text="@L["RouteEdit_PolicyHelp"]" /></div>
+                        <RadzenDropDown Name="DefaultPolicy" TValue="ConflictPolicy" @bind-Value="model.DefaultConflictPolicy" Data="@conflictPolicies" TextProperty="Text" ValueProperty="Value" class="form-control" />
+                    </div>
+                    @if (model.DeploymentState != DatabaseDeploymentState.Prepared)
                     {
-                        <div class="form-field">
-                            <label for="DestinationSystem">固定宛先</label>
-                            <RadzenDropDown Name="DestinationSystem" TValue="string" @bind-Value="model.DestinationSystem" Data="@systems" TextProperty="DisplayName" ValueProperty="Code" Placeholder="選択してください" AllowClear="true" class="form-control" />
-                        </div>
+                        <div class="info-note deployment-warning wide">@L["RouteEdit_DeploymentNote"]</div>
                     }
-                    else
-                    {
-                        <div class="form-field"><label>宛先</label><p class="info-note">メッセージのOriginSystemを使用します。</p></div>
-                    }
-                    <div class="form-field">
-                        <label for="ConflictScope">競合スコープ</label>
-                        <RadzenDropDown Name="ConflictScope" TValue="ConflictScope" @bind-Value="model.ConflictScope" Data="@conflictScopes" class="form-control" />
-                    </div>
-                    <div class="form-field">
-                        <label for="DefaultPolicy">既定の競合ポリシー</label>
-                        <RadzenDropDown Name="DefaultPolicy" TValue="ConflictPolicy" @bind-Value="model.DefaultConflictPolicy" Data="@conflictPolicies" class="form-control" />
-                    </div>
-                    <div class="check-row wide">
-                        <RadzenCheckBox Name="RouteEnabled" TValue="bool" @bind-Value="model.Enabled" />
-                        <RadzenLabel Text="このルートを有効にする" Component="RouteEnabled" />
-                    </div>
                 </div>
+                @if (Id is not null)
+                {
+                    <section class="route-activation">
+                        <div class="route-activation-status">
+                            <span>@L["RouteEdit_RuleStatus"]</span>
+                            <strong class="status-pill @(model.Enabled ? "enabled" : "disabled")">@(model.Enabled ? L["Common_Enabled"] : L["Common_Disabled"])</strong>
+                            @if (!model.Enabled && model.DeploymentState != DatabaseDeploymentState.Prepared)
+                            {
+                                <small>@L["RouteEdit_EnableBlocked"]</small>
+                            }
+                        </div>
+                        <RadzenButton Text="@(changingEnabled ? L["Common_Processing"] : model.Enabled ? L["RouteEdit_DisableRule"] : L["RouteEdit_EnableRule"])"
+                                      Icon="@(model.Enabled ? "pause_circle" : "play_circle")"
+                                      ButtonStyle="@(model.Enabled ? ButtonStyle.Warning : ButtonStyle.Primary)"
+                                      ButtonType="ButtonType.Button"
+                                      Disabled="@(changingEnabled || (!model.Enabled && model.DeploymentState != DatabaseDeploymentState.Prepared))"
+                                      Click="@(() => SetEnabledAsync(!model.Enabled))" />
+                    </section>
+                }
             </RadzenCard>
 
-            <RadzenCard>
-                <div class="panel-title">
-                    <div><h2>項目別ポリシー</h2><span>未指定項目はルート既定を使用</span></div>
-                    <RadzenButton Text="項目を追加" Icon="add" ButtonStyle="ButtonStyle.Light" ButtonType="ButtonType.Button" Click="@AddFieldPolicy" />
-                </div>
-                @if (model.FieldPolicies.Count == 0)
-                {
-                    <div class="empty-state">項目別の上書きはありません。</div>
-                }
-                else
-                {
-                    <div class="policy-list">
-                        @foreach (var item in model.FieldPolicies)
-                        {
-                            <div class="policy-row" @key="item">
-                                <div class="form-field">
-                                    <label>共通項目名</label>
-                                    <RadzenTextBox @bind-Value="item.FieldName" MaxLength="128" class="form-control" />
-                                </div>
-                                <div class="form-field">
-                                    <label>ポリシー</label>
-                                    <RadzenDropDown TValue="ConflictPolicy" @bind-Value="item.Policy" Data="@conflictPolicies" class="form-control" />
-                                </div>
-                                <RadzenButton Icon="delete" Text="削除" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Text" Size="ButtonSize.Small" ButtonType="ButtonType.Button" Click="@(() => RemoveFieldPolicy(item))" />
-                            </div>
-                        }
-                    </div>
-                }
-            </RadzenCard>
         </div>
 
         <div class="form-actions page-actions">
-            <RadzenButton Text="@(saving ? "保存中…" : "設定を保存")" Icon="save" ButtonType="ButtonType.Submit" Disabled="@saving" />
-            <RadzenButton Text="キャンセル" ButtonStyle="ButtonStyle.Light" ButtonType="ButtonType.Button" Click="@BackToList" />
+            <RadzenButton Text="@(saving ? L["Common_Saving"] : L["RouteEdit_SaveSettings"])" Icon="save" ButtonType="ButtonType.Submit" Disabled="@saving" />
+            <RadzenButton Text="@L["Common_Cancel"]" ButtonStyle="ButtonStyle.Light" ButtonType="ButtonType.Button" Click="@BackToList" />
         </div>
     </EditForm>
 }
@@ -116,14 +106,23 @@ else
 @code {
     [Parameter] public Guid? Id { get; set; }
 
-    private static readonly DestinationMode[] destinationModes = Enum.GetValues<DestinationMode>();
-    private static readonly ConflictScope[] conflictScopes = Enum.GetValues<ConflictScope>();
-    private static readonly ConflictPolicy[] conflictPolicies = Enum.GetValues<ConflictPolicy>();
+    private SelectionOption<ConflictScope>[] conflictScopes =>
+    [
+        new(ConflictScope.Field, L["Common_FieldScope"]),
+        new(ConflictScope.Record, L["Common_RecordScope"])
+    ];
+    private SelectionOption<ConflictPolicy>[] conflictPolicies =>
+    [
+        new(ConflictPolicy.HoldAndNotify, L["Common_Hold"]),
+        new(ConflictPolicy.ApplyIncomingAndNotify, L["Common_UseSource"]),
+        new(ConflictPolicy.KeepCurrentAndNotify, L["Common_KeepDestination"]),
+        new(ConflictPolicy.MergeAndNotify, L["Common_Merge"])
+    ];
     private RouteConfigurationInput model = NewModel();
     private IReadOnlyList<SystemListItem> systems = [];
-    private IReadOnlyList<string> errors = [];
     private bool loading = true;
     private bool saving;
+    private bool changingEnabled;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -135,26 +134,27 @@ else
         loading = false;
     }
 
-    private void AddFieldPolicy() => model.FieldPolicies.Add(new FieldPolicyInput { Policy = model.DefaultConflictPolicy });
-    private void RemoveFieldPolicy(FieldPolicyInput item) => model.FieldPolicies.Remove(item);
     private void BackToList() => Navigation.NavigateTo("/routes");
 
     private async Task SaveAsync()
     {
         saving = true;
-        errors = [];
         try
         {
-            await AdminService.SaveRouteAsync(model, CancellationToken.None);
-            Navigation.NavigateTo("/routes");
+            var routeId = await AdminService.SaveRouteAsync(model, CancellationToken.None);
+            NotificationService.ShowSuccess(L["RouteEdit_Saved"], L["Common_Completed"]);
+            if (Id is null)
+            {
+                Navigation.NavigateTo($"/routes/{routeId}");
+            }
         }
         catch (ConfigurationValidationException exception)
         {
-            errors = exception.Errors;
+            NotificationService.ShowError(exception.Errors, L["Common_OperationFailed"]);
         }
         catch (Exception exception)
         {
-            errors = [exception.Message];
+            NotificationService.ShowError([exception.Message], L["Common_OperationFailed"]);
         }
         finally
         {
@@ -162,11 +162,40 @@ else
         }
     }
 
+    private async Task SetEnabledAsync(bool enabled)
+    {
+        if (Id is null) return;
+        changingEnabled = true;
+        try
+        {
+            var result = await DeploymentService.SetEnabledAsync(Id.Value, enabled, CancellationToken.None);
+            model.Enabled = result.Enabled;
+            model.DeploymentState = result.State;
+            NotificationService.ShowSuccess(Display(result.Message), L["Common_Completed"]);
+        }
+        catch (Exception exception)
+        {
+            NotificationService.ShowError(
+                exception is ConfigurationValidationException validation ? validation.Errors : [exception.Message],
+                L["Common_OperationFailed"]);
+        }
+        finally
+        {
+            changingEnabled = false;
+        }
+    }
+
+    private string Display(DisplayText text) =>
+        L[text.ResourceKey, text.Arguments.Select(value => (object)value).ToArray()];
+
     private static RouteConfigurationInput NewModel() => new()
     {
-        DestinationMode = DestinationMode.FixedSystem,
+        Direction = SyncDirection.OneWay,
         ConflictScope = ConflictScope.Field,
         DefaultConflictPolicy = ConflictPolicy.HoldAndNotify,
-        Enabled = true
+        Enabled = false,
+        DeploymentState = DatabaseDeploymentState.Draft
     };
+
+    private sealed record SelectionOption<T>(T Value, string Text);
 }

@@ -1,5 +1,15 @@
 # Third-Party Notices
 
+## Zen Kaku Gothic New
+
+Project: https://github.com/googlefonts/zen-kakugothic
+
+Copyright 2022 The Zen Kaku Gothic Project Authors
+
+Licensed under the SIL Open Font License, Version 1.1. The complete license
+text is distributed at
+`src/SyncCoordinator.Web/wwwroot/fonts/zen-kaku-gothic-new/OFL.txt`.
+
 ## Radzen.Blazor 11.1.0
 
 Project: https://github.com/radzenhq/radzen-blazor
@@ -25,3 +35,12 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+
+## Npgsql 10.0.3
+
+Project: https://github.com/npgsql/npgsql
+
+Copyright 2025 © The Npgsql Development Team
+
+Licensed under the PostgreSQL License:
+https://licenses.nuget.org/PostgreSQL

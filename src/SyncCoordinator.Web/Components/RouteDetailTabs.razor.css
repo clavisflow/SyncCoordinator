@@ -1,0 +1,26 @@
+.route-detail-tabs {
+    border-bottom: 1px solid var(--ledger-line);
+    display: flex;
+    gap: .25rem;
+    margin: -.35rem 0 1.25rem;
+    overflow-x: auto;
+}
+
+.route-detail-tabs a {
+    border-bottom: 3px solid transparent;
+    color: var(--ledger-muted);
+    flex: 0 0 auto;
+    font-weight: 600;
+    padding: .7rem 1.1rem .65rem;
+    text-decoration: none;
+}
+
+.route-detail-tabs a:hover {
+    background: var(--ledger-paper-muted);
+    color: var(--ledger-ink);
+}
+
+.route-detail-tabs a.active {
+    border-bottom-color: var(--ledger-accent);
+    color: var(--ledger-accent);
+}

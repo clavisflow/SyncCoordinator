@@ -7,33 +7,37 @@ public sealed class ConflictResolver(IConflictValueMerger valueMerger)
 {
     public ConflictResolution Resolve(
         string entityType,
-        EntityPayload? baseline,
+        SyncSnapshot? baseline,
         EntityPayload incoming,
         EntityPayload? current,
         SyncRouteDefinition route)
     {
-        var baseFields = baseline?.Fields ?? EmptyFields;
+        var sourceBaseFields = baseline?.SourcePayload?.Fields ?? EmptyFields;
+        var destinationBaseFields = baseline?.DestinationPayload?.Fields ?? EmptyFields;
         var currentFields = current?.Fields ?? EmptyFields;
-        var fieldNames = baseFields.Keys
+        var fieldNames = sourceBaseFields.Keys
+            .Concat(destinationBaseFields.Keys)
             .Concat(incoming.Fields.Keys)
             .Concat(currentFields.Keys)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal);
 
         var adopted = Clone(currentFields);
+        var adoptedExists = current is not null;
         var conflicts = new List<FieldConflict>();
 
         foreach (var fieldName in fieldNames)
         {
-            var baseSlot = ReadSlot(baseFields, fieldName);
+            var sourceBaseSlot = ReadSlot(sourceBaseFields, fieldName);
+            var destinationBaseSlot = ReadSlot(destinationBaseFields, fieldName);
             var incomingSlot = ReadSlot(incoming.Fields, fieldName);
             var currentSlot = ReadSlot(currentFields, fieldName);
 
             // 初回同期では incoming が管理する項目だけを反映し、宛先固有項目は保持する。
             var incomingChanged = baseline is null
                 ? incomingSlot.Present
-                : !SlotEquals(incomingSlot, baseSlot);
-            var currentChanged = baseline is not null && !SlotEquals(currentSlot, baseSlot);
+                : !SlotEquals(incomingSlot, sourceBaseSlot);
+            var currentChanged = baseline is not null && !SlotEquals(currentSlot, destinationBaseSlot);
             var isConflict = incomingChanged && currentChanged && !SlotEquals(incomingSlot, currentSlot);
 
             if (!isConflict)
@@ -41,6 +45,7 @@ public sealed class ConflictResolver(IConflictValueMerger valueMerger)
                 if (incomingChanged)
                 {
                     SetSlot(adopted, fieldName, incomingSlot);
+                    adoptedExists = true;
                 }
                 continue;
             }
@@ -53,6 +58,7 @@ public sealed class ConflictResolver(IConflictValueMerger valueMerger)
             {
                 case ConflictPolicy.ApplyIncomingAndNotify:
                     selected = incomingSlot;
+                    adoptedExists = true;
                     resolution = "AppliedIncoming";
                     break;
                 case ConflictPolicy.KeepCurrentAndNotify:
@@ -61,12 +67,13 @@ public sealed class ConflictResolver(IConflictValueMerger valueMerger)
                     if (valueMerger.TryMerge(
                         entityType,
                         fieldName,
-                        baseSlot.Value,
+                        destinationBaseSlot.Value,
                         incomingSlot.Value,
                         currentSlot.Value,
                         out var merged))
                     {
                         selected = new ValueSlot(true, Clone(merged));
+                        adoptedExists = true;
                         resolution = "Merged";
                     }
                     else
@@ -84,7 +91,7 @@ public sealed class ConflictResolver(IConflictValueMerger valueMerger)
             SetSlot(adopted, fieldName, selected);
             conflicts.Add(new FieldConflict(
                 fieldName,
-                Clone(baseSlot.Value),
+                Clone(destinationBaseSlot.Value),
                 Clone(incomingSlot.Value),
                 Clone(currentSlot.Value),
                 Clone(selected.Value),
@@ -99,6 +106,7 @@ public sealed class ConflictResolver(IConflictValueMerger valueMerger)
         if (recordHeld)
         {
             adopted = Clone(currentFields);
+            adoptedExists = current is not null;
             conflicts = conflicts.Select(x => x with
             {
                 AdoptedValue = Clone(ReadSlot(currentFields, x.FieldName).Value),
@@ -107,8 +115,76 @@ public sealed class ConflictResolver(IConflictValueMerger valueMerger)
         }
 
         var adoptedPayload = new EntityPayload(adopted);
-        var shouldApply = !recordHeld && !PayloadEquals(adoptedPayload, current);
-        return new ConflictResolution(adoptedPayload, conflicts, shouldApply, hasHeldConflict);
+        var shouldApply = !recordHeld && !PayloadEquals(adoptedPayload, adoptedExists, current);
+        return new ConflictResolution(adoptedPayload, adoptedExists, conflicts, shouldApply, hasHeldConflict);
+    }
+
+    public static ConflictResolution ResolveDelete(
+        SyncSnapshot? baseline,
+        EntityPayload deleted,
+        EntityPayload? current,
+        SyncRouteDefinition route)
+    {
+        if (current is null)
+        {
+            return new ConflictResolution(EntityPayload.Empty, false, [], false, false);
+        }
+
+        var referenceFields = baseline is null
+            ? deleted.Fields
+            : baseline.DestinationPayload?.Fields ?? EmptyFields;
+        var changedFields = referenceFields.Keys
+            .Concat(current.Fields.Keys)
+            .Distinct(StringComparer.Ordinal)
+            .Where(fieldName => !SlotEquals(
+                ReadSlot(referenceFields, fieldName),
+                ReadSlot(current.Fields, fieldName)))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        if (changedFields.Length == 0)
+        {
+            return new ConflictResolution(EntityPayload.Empty, false, [], true, false);
+        }
+
+        var conflicts = new List<FieldConflict>();
+        var deleteAllowed = true;
+        var held = false;
+        foreach (var fieldName in changedFields)
+        {
+            var policy = route.FieldPolicies.GetValueOrDefault(fieldName, route.DefaultConflictPolicy);
+            var currentValue = Clone(ReadSlot(current.Fields, fieldName).Value);
+            var resolution = policy switch
+            {
+                ConflictPolicy.ApplyIncomingAndNotify => "AppliedIncomingDelete",
+                ConflictPolicy.KeepCurrentAndNotify => "DeleteKeptCurrent",
+                ConflictPolicy.HoldAndNotify => "DeleteHeld",
+                ConflictPolicy.MergeAndNotify => "DeleteMergeUnavailableHeld",
+                _ => throw new ArgumentOutOfRangeException(nameof(route), policy, "Unsupported conflict policy.")
+            };
+            if (policy != ConflictPolicy.ApplyIncomingAndNotify)
+            {
+                deleteAllowed = false;
+            }
+            if (policy is ConflictPolicy.HoldAndNotify or ConflictPolicy.MergeAndNotify)
+            {
+                held = true;
+            }
+            conflicts.Add(new FieldConflict(
+                fieldName,
+                Clone(ReadSlot(referenceFields, fieldName).Value),
+                null,
+                currentValue,
+                policy == ConflictPolicy.ApplyIncomingAndNotify ? null : currentValue,
+                policy,
+                resolution));
+        }
+
+        return new ConflictResolution(
+            deleteAllowed ? EntityPayload.Empty : new EntityPayload(Clone(current.Fields)),
+            !deleteAllowed,
+            conflicts,
+            deleteAllowed,
+            held);
     }
 
     private static readonly IReadOnlyDictionary<string, JsonNode?> EmptyFields =
@@ -139,8 +215,12 @@ public sealed class ConflictResolver(IConflictValueMerger valueMerger)
     private static bool SlotEquals(ValueSlot left, ValueSlot right) =>
         left.Present == right.Present && (!left.Present || JsonNode.DeepEquals(left.Value, right.Value));
 
-    private static bool PayloadEquals(EntityPayload left, EntityPayload? right)
+    private static bool PayloadEquals(EntityPayload left, bool leftExists, EntityPayload? right)
     {
+        if (!leftExists)
+        {
+            return right is null;
+        }
         if (right is null || left.Fields.Count != right.Fields.Count)
         {
             return false;

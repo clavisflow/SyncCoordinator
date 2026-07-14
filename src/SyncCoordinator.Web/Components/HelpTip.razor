@@ -1,0 +1,11 @@
+<span class="help-tip"
+      tabindex="0"
+      role="note"
+      aria-label="@Text"
+      data-tooltip="@Text">
+    <RadzenIcon Icon="help_outline" aria-hidden="true" />
+</span>
+
+@code {
+    [Parameter, EditorRequired] public string Text { get; set; } = string.Empty;
+}

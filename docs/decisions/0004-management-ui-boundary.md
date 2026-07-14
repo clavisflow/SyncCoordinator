@@ -7,7 +7,7 @@
 
 Blazor管理画面はCoreの`ICoordinatorAdminService`と`ICoordinatorReadService`だけを使用し、同期処理やDapper Connectorを直接呼ばない。
 
-業務テーブル未確定でも安定して管理できるシステム、ルート、競合ポリシーを更新対象とする。システムコードは登録後変更不可とし、A⇔Bの固定ルート、同一システム間ルート、重複項目ポリシーをCoreで拒否する。設定変更は管理DBの`ConfigurationAudit`へ保存する。
+業務テーブル未確定でも安定して管理できるシステム、同期ルール、競合ポリシーを更新対象とする。システムコードは登録後変更不可とし、A⇔Bの同期ルール、同一システム間ルール、重複項目ポリシーをCoreで拒否する。設定変更は管理DBの`ConfigurationAudit`へ保存する。
 
 Inboxの強制再処理、保留競合の手動解決、業務データの直接編集は参照画面に含めない。これらは実Connector、認証・認可、操作監査、再適用時の整合性仕様が確定してからApplication Serviceとして追加する。
 

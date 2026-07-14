@@ -22,12 +22,18 @@ public sealed class EfCoordinatorReadService(CoordinatorDbContext dbContext) : I
         await dbContext.Routes.AsNoTracking().OrderBy(x => x.Name).Select(x => new RouteListItem(
             x.Id,
             x.Name,
-            x.SourceSystem,
-            x.DestinationMode == DestinationMode.OriginSystem ? "OriginSystem" : x.DestinationSystem!,
-            x.EntityType,
+            x.SourceSystem.Code,
+            x.SourceSystem.DisplayName,
+            x.DestinationSystem.Code,
+            x.DestinationSystem.DisplayName,
+            x.Direction,
+            x.DeploymentState,
             x.Enabled,
             x.ConflictScope,
-            x.DefaultConflictPolicy)).ToListAsync(cancellationToken);
+            x.DefaultConflictPolicy)
+        {
+            OperationallyPaused = x.SourceSystem.PausedAtUtc != null || x.DestinationSystem.PausedAtUtc != null
+        }).ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<ConflictListItem>> GetRecentConflictsAsync(
         int take,
@@ -39,7 +45,11 @@ public sealed class EfCoordinatorReadService(CoordinatorDbContext dbContext) : I
                 x.Id,
                 x.Route.Name,
                 x.SourceSystem,
+                dbContext.Systems.Where(system => system.Code == x.SourceSystem)
+                    .Select(system => system.DisplayName).FirstOrDefault() ?? x.SourceSystem,
                 x.DestinationSystem,
+                dbContext.Systems.Where(system => system.Code == x.DestinationSystem)
+                    .Select(system => system.DisplayName).FirstOrDefault() ?? x.DestinationSystem,
                 x.EntityType,
                 x.EntityId,
                 x.DetectedAtUtc,

@@ -27,14 +27,13 @@ public sealed class CoordinatorDatabaseInitializer(
             return;
         }
 
-        dbContext.Systems.AddRange(
-            NewSystem("A", "System A", "SqlServer"),
-            NewSystem("B", "System B", "MySql"),
-            NewSystem("C", "System C", "SqlServer"));
+        var systemA = NewSystem("A", "System A", "SqlServer");
+        var systemB = NewSystem("B", "System B", "MySql");
+        var systemC = NewSystem("C", "System C", "SqlServer");
+        dbContext.Systems.AddRange(systemA, systemB, systemC);
         dbContext.Routes.AddRange(
-            NewRoute("Sample: A requests to C", "A", "SampleWorkRequest", DestinationMode.FixedSystem, "C"),
-            NewRoute("Sample: B requests to C", "B", "SampleWorkRequest", DestinationMode.FixedSystem, "C"),
-            NewRoute("Sample: C results to origin", "C", "SampleWorkResult", DestinationMode.OriginSystem, null));
+            NewRule("Sample: A and C", systemA, "SampleWorkRequest", systemC, SyncDirection.Bidirectional),
+            NewRule("Sample: B and C", systemB, "SampleWorkRequest", systemC, SyncDirection.Bidirectional));
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
@@ -47,21 +46,24 @@ public sealed class CoordinatorDatabaseInitializer(
         Enabled = true
     };
 
-    private static SyncRouteEntity NewRoute(
+    private static SyncRouteEntity NewRule(
         string name,
-        string source,
+        SystemDefinitionEntity source,
         string entityType,
-        DestinationMode mode,
-        string? destination) => new()
+        SystemDefinitionEntity destination,
+        SyncDirection direction) => new()
         {
             Id = Guid.NewGuid(),
             Name = name,
+            SourceSystemId = source.Id,
             SourceSystem = source,
             EntityType = entityType,
-            DestinationMode = mode,
+            DestinationSystemId = destination.Id,
             DestinationSystem = destination,
+            Direction = direction,
+            DeploymentState = DatabaseDeploymentState.Draft,
             ConflictScope = ConflictScope.Field,
             DefaultConflictPolicy = ConflictPolicy.HoldAndNotify,
-            Enabled = true
+            Enabled = false
         };
 }

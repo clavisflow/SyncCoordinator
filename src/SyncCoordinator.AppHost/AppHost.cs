@@ -1,15 +1,28 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
-var coordinatorDatabase = builder.AddSqlServer("coordinator-sql")
-    .AddDatabase("coordinator-db");
+var worker = builder.AddProject<Projects.SyncCoordinator_Worker>("worker");
+var web = builder.AddProject<Projects.SyncCoordinator_Web>("web")
+    .WithExternalHttpEndpoints();
 
-builder.AddProject<Projects.SyncCoordinator_Worker>("worker")
-    .WithReference(coordinatorDatabase)
-    .WaitFor(coordinatorDatabase);
+var useContainerDatabase = bool.TryParse(
+    builder.Configuration["CoordinatorDatabase:UseContainer"],
+    out var configuredUseContainer) && configuredUseContainer;
 
-builder.AddProject<Projects.SyncCoordinator_Web>("web")
-    .WithExternalHttpEndpoints()
-    .WithReference(coordinatorDatabase)
-    .WaitFor(coordinatorDatabase);
+if (useContainerDatabase)
+{
+    var coordinatorDatabase = builder.AddSqlServer("coordinator-sql")
+        .AddDatabase("coordinator-db");
+
+    worker.WithReference(coordinatorDatabase)
+        .WaitFor(coordinatorDatabase);
+    web.WithReference(coordinatorDatabase)
+        .WaitFor(coordinatorDatabase);
+}
+else
+{
+    var coordinatorDatabase = builder.AddConnectionString("coordinator-db");
+    worker.WithReference(coordinatorDatabase);
+    web.WithReference(coordinatorDatabase);
+}
 
 builder.Build().Run();

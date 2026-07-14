@@ -1,0 +1,267 @@
+@page "/notifications"
+@page "/webhooks"
+@attribute [Authorize]
+@using SyncCoordinator.Core
+@inject IWebhookAdminService WebhookService
+@inject NotificationService NotificationService
+@inject IStringLocalizer<SharedResource> L
+
+<PageTitle>@L["Webhooks_PageTitle"]</PageTitle>
+
+<section class="page-heading">
+    <div>
+        <p class="kicker">NOTIFICATIONS</p>
+        <h1>@L["Webhooks_Title"]</h1>
+        <p>@L["Webhooks_Description"]</p>
+    </div>
+    @if (selectedTab == 0)
+    {
+        <RadzenButton Text="@L["Webhooks_New"]" Icon="add" Click="@NewEndpoint" />
+    }
+</section>
+
+<nav class="notification-tabs" role="tablist" aria-label="@L["Webhooks_Title"]">
+    <button type="button" role="tab" aria-selected="@(selectedTab == 0)" class="@(selectedTab == 0 ? "active" : null)" @onclick="@(() => selectedTab = 0)">@L["Notifications_TabEndpoints"]</button>
+    <button type="button" role="tab" aria-selected="@(selectedTab == 1)" class="@(selectedTab == 1 ? "active" : null)" @onclick="@(() => selectedTab = 1)">@L["Notifications_TabHistory"]</button>
+</nav>
+
+@if (selectedTab == 0)
+{
+<div class="content-stack notification-tab-content">
+    <RadzenCard>
+        <div class="panel-title"><h2>@L["Webhooks_Endpoints"]</h2><span>@L["Common_Count", endpoints.Count]</span></div>
+        <RadzenDataGrid Data="@endpoints" TItem="WebhookEndpointListItem" EmptyText="@L["Webhooks_NoEndpoints"]" Density="Density.Compact">
+            <Columns>
+                <RadzenDataGridColumn TItem="WebhookEndpointListItem" Property="Name" Title="@L["Webhooks_Name"]" />
+                <RadzenDataGridColumn TItem="WebhookEndpointListItem" Property="Url" Title="URL" />
+                <RadzenDataGridColumn TItem="WebhookEndpointListItem" Title="@L["Webhooks_Signature"]"><Template Context="item">@(item.SignatureEnabled ? L["Common_Enabled"] : L["Common_Disabled"])</Template></RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="WebhookEndpointListItem" Title="@L["Common_Status"]"><Template Context="item">@(item.Enabled ? L["Common_Enabled"] : L["Common_Disabled"])</Template></RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="WebhookEndpointListItem" Title="@L["Common_Action"]" Sortable="false">
+                    <Template Context="item">
+                        <div class="table-actions">
+                            <RadzenButton Text="@L["Common_Edit"]" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" Click="@(() => EditAsync(item.Id))" />
+                            <RadzenButton Text="@L["Webhooks_Test"]" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" Click="@(() => TestAsync(item.Id))" />
+                            <RadzenButton Text="@L["Common_Delete"]" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Danger" Click="@(() => DeleteAsync(item.Id))" />
+                        </div>
+                    </Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    </RadzenCard>
+
+    <RadzenCard>
+        <div class="panel-title"><h2>@(model.Id is null ? L["Webhooks_Create"] : L["Webhooks_Edit"])</h2></div>
+        @if (!string.IsNullOrWhiteSpace(newSecret))
+        {
+            <section class="webhook-secret-alert" role="alert" aria-live="assertive">
+                <div class="webhook-secret-heading">
+                    <RadzenIcon Icon="key" />
+                    <div><strong>@L["Webhooks_NewSecret"]</strong><p>@L["Webhooks_SecretOnce"]</p></div>
+                </div>
+                <input class="webhook-secret-value" value="@newSecret" readonly onclick="this.select()" aria-label="@L["Webhooks_NewSecret"]" />
+            </section>
+        }
+        <EditForm Model="@model" OnValidSubmit="@SaveAsync">
+            <div class="webhook-form">
+                <div class="webhook-address-grid">
+                    <div class="form-field webhook-name-field"><label>@L["Webhooks_Name"]</label><RadzenTextBox @bind-Value="model.Name" MaxLength="200" class="form-control" /></div>
+                    <div class="form-field"><label>URL</label><RadzenTextBox @bind-Value="model.Url" class="form-control" Placeholder="https://example.internal/webhooks/sync" /></div>
+                </div>
+                @if (IsHttp)
+                {
+                    <div class="info-note deployment-warning">@L["Webhooks_HttpWarning"]</div>
+                }
+                @if (!model.SignatureEnabled)
+                {
+                    <div class="info-note deployment-warning">@L["Webhooks_NoSignatureWarning"]</div>
+                }
+
+                <section class="webhook-form-section">
+                    <h3 class="webhook-section-title">@L["Webhooks_Settings"]</h3>
+                    <div class="webhook-switches">
+                        <label class="check-row"><RadzenCheckBox TValue="bool" @bind-Value="model.Enabled" /><span>@L["Webhooks_EnableEndpoint"]</span></label>
+                        <label class="check-row"><RadzenCheckBox TValue="bool" @bind-Value="model.SignatureEnabled" /><span>@L["Webhooks_EnableSignature"]</span></label>
+                        @if (model.Id is not null && model.SignatureEnabled)
+                        {
+                            <label class="check-row"><RadzenCheckBox TValue="bool" @bind-Value="model.RegenerateSecret" /><span>@L["Webhooks_RegenerateSecret"]</span></label>
+                        }
+                    </div>
+                </section>
+
+                <section class="webhook-form-section">
+                    <h3 class="webhook-section-title">@L["Webhooks_Events"]</h3>
+                    <div class="webhook-event-groups">
+                    @foreach (var group in EventGroups)
+                    {
+                        <section class="webhook-event-group">
+                            <h3>@group.Title</h3>
+                            <div>
+                            @foreach (var eventType in group.EventTypes)
+                            {
+                                <label class="check-row webhook-event-option @(model.EventTypes.Contains(eventType) ? "selected" : null)"><RadzenCheckBox TValue="bool" Value="@model.EventTypes.Contains(eventType)" Change="@(value => ToggleEvent(eventType, value))" /><span>@EventLabel(eventType)</span></label>
+                            }
+                            </div>
+                        </section>
+                    }
+                    </div>
+                </section>
+
+                <div class="form-actions webhook-form-actions">
+                    <RadzenButton Text="@L["Common_Clear"]" ButtonStyle="ButtonStyle.Light" Click="@NewEndpoint" />
+                    <RadzenButton Text="@(saving ? L["Common_Saving"] : L["Common_Save"])" ButtonType="ButtonType.Submit" Disabled="@saving" />
+                </div>
+            </div>
+        </EditForm>
+    </RadzenCard>
+</div>
+}
+else
+{
+    <RadzenCard class="notification-tab-content">
+        <div class="panel-title"><h2>@L["Webhooks_DeliveryHistory"]</h2><span>@L["Common_Count", deliveries.Count]</span></div>
+        <RadzenDataGrid Data="@deliveries" TItem="WebhookDeliveryListItem" EmptyText="@L["Webhooks_NoDeliveries"]" AllowPaging="true" PageSize="25" Density="Density.Compact">
+            <Columns>
+                <RadzenDataGridColumn TItem="WebhookDeliveryListItem" Title="@L["Common_DetectedAt"]"><Template Context="item">@UiFormat.LocalDateTime(item.OccurredAtUtc)</Template></RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="WebhookDeliveryListItem" Property="EndpointName" Title="@L["Webhooks_Endpoint"]" />
+                <RadzenDataGridColumn TItem="WebhookDeliveryListItem" Property="EventType" Title="@L["Common_Type"]"><Template Context="item">@EventLabel(item.EventType)</Template></RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="WebhookDeliveryListItem" Property="State" Title="@L["Common_Status"]"><Template Context="item">@StateLabel(item.State)</Template></RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="WebhookDeliveryListItem" Property="AttemptCount" Title="@L["Operations_Attempts"]" />
+                <RadzenDataGridColumn TItem="WebhookDeliveryListItem" Property="HttpStatusCode" Title="HTTP" />
+                <RadzenDataGridColumn TItem="WebhookDeliveryListItem" Property="LastError" Title="@L["Common_Error"]" />
+            </Columns>
+        </RadzenDataGrid>
+    </RadzenCard>
+}
+
+@code {
+    private IReadOnlyList<WebhookEndpointListItem> endpoints = [];
+    private IReadOnlyList<WebhookDeliveryListItem> deliveries = [];
+    private WebhookEndpointInput model = new();
+    private int selectedTab;
+    private bool saving;
+    private string? newSecret;
+    private bool IsHttp => Uri.TryCreate(model.Url, UriKind.Absolute, out var uri) && uri.Scheme == "http";
+    private IReadOnlyList<EventGroup> EventGroups =>
+    [
+        new(L["Webhooks_GroupSync"], [WebhookEventTypes.SyncUpserted, WebhookEventTypes.SyncDeleted]),
+        new(L["Webhooks_GroupAttention"], [WebhookEventTypes.ConflictDetected, WebhookEventTypes.SyncFailed]),
+        new(L["Webhooks_GroupSystem"], [WebhookEventTypes.SystemPaused, WebhookEventTypes.SystemResumed]),
+        new(L["Webhooks_GroupTest"], [WebhookEventTypes.Test])
+    ];
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        endpoints = await WebhookService.GetEndpointsAsync(CancellationToken.None);
+        deliveries = await WebhookService.GetRecentDeliveriesAsync(200, CancellationToken.None);
+    }
+
+    private void NewEndpoint()
+    {
+        selectedTab = 0;
+        model = new WebhookEndpointInput();
+        newSecret = null;
+    }
+
+    private async Task EditAsync(Guid id)
+    {
+        selectedTab = 0;
+        model = await WebhookService.GetEndpointAsync(id, CancellationToken.None) ?? new WebhookEndpointInput();
+        newSecret = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        try
+        {
+            var result = await WebhookService.SaveEndpointAsync(model, CancellationToken.None);
+            newSecret = result.NewSecret;
+            model = await WebhookService.GetEndpointAsync(result.Id, CancellationToken.None) ?? new();
+            await LoadAsync();
+            NotificationService.ShowSuccess(L["Webhooks_Saved"], L["Common_Completed"]);
+        }
+        catch (ConfigurationValidationException exception)
+        {
+            NotificationService.ShowError(exception.Errors.Select(LocalizeError), L["Common_OperationFailed"]);
+        }
+        catch (Exception exception)
+        {
+            NotificationService.ShowError([exception.Message], L["Common_OperationFailed"]);
+        }
+        finally { saving = false; }
+    }
+
+    private async Task TestAsync(Guid id)
+    {
+        try
+        {
+            await WebhookService.QueueTestAsync(id, CancellationToken.None);
+            await LoadAsync();
+            NotificationService.ShowSuccess(L["Webhooks_TestQueued"], L["Common_Completed"]);
+        }
+        catch (Exception exception)
+        {
+            ShowError(exception);
+        }
+    }
+
+    private async Task DeleteAsync(Guid id)
+    {
+        try
+        {
+            await WebhookService.DeleteEndpointAsync(id, CancellationToken.None);
+            if (model.Id == id) NewEndpoint();
+            await LoadAsync();
+        }
+        catch (Exception exception)
+        {
+            ShowError(exception);
+        }
+    }
+
+    private void ToggleEvent(string eventType, bool selected)
+    {
+        if (selected && !model.EventTypes.Contains(eventType)) model.EventTypes.Add(eventType);
+        if (!selected) model.EventTypes.Remove(eventType);
+    }
+
+    private string EventLabel(string eventType) => eventType switch
+    {
+        WebhookEventTypes.SyncUpserted => L["Webhooks_EventUpserted"],
+        WebhookEventTypes.SyncDeleted => L["Webhooks_EventDeleted"],
+        WebhookEventTypes.ConflictDetected => L["Webhooks_EventConflict"],
+        WebhookEventTypes.SyncFailed => L["Webhooks_EventFailed"],
+        WebhookEventTypes.SystemPaused => L["Webhooks_EventPaused"],
+        WebhookEventTypes.SystemResumed => L["Webhooks_EventResumed"],
+        WebhookEventTypes.Test => L["Webhooks_EventTest"],
+        _ => eventType
+    };
+
+    private string StateLabel(string state) => state switch
+    {
+        "Pending" => L["Webhooks_StatePending"],
+        "Processing" => L["Webhooks_StateProcessing"],
+        "Retry" => L["Webhooks_StateRetry"],
+        "Delivered" => L["Webhooks_StateDelivered"],
+        "Failed" => L["Webhooks_StateFailed"],
+        _ => state
+    };
+
+    private string LocalizeError(string error)
+    {
+        var localized = L[error];
+        return localized.ResourceNotFound ? error : localized.Value;
+    }
+
+    private void ShowError(Exception exception)
+    {
+        var errors = exception is ConfigurationValidationException validation
+            ? validation.Errors.Select(LocalizeError)
+            : [exception.Message];
+        NotificationService.ShowError(errors, L["Common_OperationFailed"]);
+    }
+
+    private sealed record EventGroup(string Title, IReadOnlyList<string> EventTypes);
+}

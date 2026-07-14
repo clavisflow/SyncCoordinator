@@ -1,36 +1,42 @@
 @page "/routes"
+@attribute [Authorize]
 @using SyncCoordinator.Core
 @inject ICoordinatorReadService ReadService
 @inject NavigationManager Navigation
+@inject IStringLocalizer<SharedResource> L
 
-<PageTitle>同期ルート管理 | SyncCoordinator</PageTitle>
+<PageTitle>@L["Routes_PageTitle"]</PageTitle>
 
 <section class="page-heading">
     <div>
         <p class="kicker">CONFIGURATION</p>
-        <h1>同期ルート管理</h1>
-        <p>発生元、宛先、Entity、競合ポリシーを設定します。</p>
+        <h1>@L["Routes_Title"]</h1>
+        <p>@L["Routes_Description"]</p>
     </div>
-    <RadzenButton Text="新しいルート" Icon="add" Click="@CreateRoute" />
+    <RadzenButton Text="@L["Routes_New"]" Icon="add" Click="@CreateRoute" />
 </section>
 
 <RadzenCard>
-    <div class="panel-title"><h2>登録ルート</h2><span>@routes.Count 件</span></div>
-    <RadzenDataGrid Data="@routes" TItem="RouteListItem" AllowSorting="true" AllowFiltering="true" FilterMode="FilterMode.Simple" AllowPaging="true" PageSize="20" EmptyText="登録されたルートはありません。" Density="Density.Compact">
+    <div class="panel-title"><h2>@L["Routes_Registered"]</h2><span>@L["Common_Count", routes.Count]</span></div>
+    <RadzenDataGrid Data="@routes" TItem="RouteListItem" AllowSorting="true" AllowPaging="true" PageSize="20" EmptyText="@L["Routes_Empty"]" Density="Density.Compact">
         <Columns>
-            <RadzenDataGridColumn TItem="RouteListItem" Property="Name" Title="ルート" />
-            <RadzenDataGridColumn TItem="RouteListItem" Title="方向" Sortable="false" Filterable="false">
-                <Template Context="route"><code class="direction">@route.SourceSystem → @route.Destination</code></Template>
+            <RadzenDataGridColumn TItem="RouteListItem" Property="Name" Title="@L["Common_Rule"]" />
+            <RadzenDataGridColumn TItem="RouteListItem" Title="@L["Common_Direction"]" Sortable="false" Filterable="false">
+                <Template Context="route"><code class="direction">@route.SourceSystemName @(route.Direction == SyncDirection.Bidirectional ? "⇄" : "→") @route.DestinationSystemName</code></Template>
             </RadzenDataGridColumn>
-            <RadzenDataGridColumn TItem="RouteListItem" Property="EntityType" Title="Entity" />
-            <RadzenDataGridColumn TItem="RouteListItem" Title="競合設定" Sortable="false" Filterable="false">
-                <Template Context="route">@route.ConflictScope / @route.ConflictPolicy</Template>
+            <RadzenDataGridColumn TItem="RouteListItem" Property="Direction" Title="@L["Routes_SyncDirection"]" Width="110px">
+                <Template Context="route">@(route.Direction == SyncDirection.Bidirectional ? L["Common_Bidirectional"] : L["Common_OneWay"])</Template>
             </RadzenDataGridColumn>
-            <RadzenDataGridColumn TItem="RouteListItem" Property="Enabled" Title="状態" Width="90px">
-                <Template Context="route"><span class="status-pill @(route.Enabled ? "enabled" : "disabled")">@(route.Enabled ? "有効" : "無効")</span></Template>
+            <RadzenDataGridColumn TItem="RouteListItem" Title="@L["Routes_ConflictSettings"]" Sortable="false" Filterable="false">
+                <Template Context="route">@ConflictScopeText(route.ConflictScope) / @ConflictPolicyText(route.ConflictPolicy)</Template>
             </RadzenDataGridColumn>
-            <RadzenDataGridColumn TItem="RouteListItem" Title="" Sortable="false" Filterable="false" Width="72px" TextAlign="TextAlign.Right">
-                <Template Context="route"><RadzenButton Icon="edit" title="編集" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => EditRoute(route.Id))" /></Template>
+            <RadzenDataGridColumn TItem="RouteListItem" Property="Enabled" Title="@L["Common_Status"]" Width="110px">
+                <Template Context="route"><span class="status-pill @StatusClass(route)">@StatusText(route)</span></Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="RouteListItem" Title="" Sortable="false" Filterable="false" Width="70px" TextAlign="TextAlign.Right">
+                <Template Context="route">
+                    <RadzenButton Icon="edit" title="@L["Common_Edit"]" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => EditRoute(route.Id))" />
+                </Template>
             </RadzenDataGridColumn>
         </Columns>
     </RadzenDataGrid>
@@ -43,4 +49,24 @@
 
     private void CreateRoute() => Navigation.NavigateTo("/routes/new");
     private void EditRoute(Guid id) => Navigation.NavigateTo($"/routes/{id}");
+
+    private string StatusText(RouteListItem route) => route.Enabled
+        ? route.OperationallyPaused ? L["Common_Paused"] : L["Common_Enabled"]
+        : route.DeploymentState == DatabaseDeploymentState.Prepared ? L["Common_DbPrepared"] : L["Common_Draft"];
+
+    private static string StatusClass(RouteListItem route) => route.Enabled
+        ? route.OperationallyPaused ? "held" : "enabled"
+        : route.DeploymentState == DatabaseDeploymentState.Prepared ? "prepared" : "disabled";
+
+    private string ConflictScopeText(ConflictScope scope) =>
+        scope == ConflictScope.Field ? L["Common_FieldScope"] : L["Common_RecordScope"];
+
+    private string ConflictPolicyText(ConflictPolicy policy) => policy switch
+    {
+        ConflictPolicy.HoldAndNotify => L["Common_Hold"],
+        ConflictPolicy.ApplyIncomingAndNotify => L["Common_UseSource"],
+        ConflictPolicy.KeepCurrentAndNotify => L["Common_KeepDestination"],
+        ConflictPolicy.MergeAndNotify => L["Common_Merge"],
+        _ => policy.ToString()
+    };
 }

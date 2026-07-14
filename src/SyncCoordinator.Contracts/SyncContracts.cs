@@ -14,6 +14,17 @@ public enum ApplyStatus
     AlreadyApplied = 1
 }
 
+public enum DeletionMode
+{
+    Physical = 0,
+    Logical = 1
+}
+
+public sealed record DeletionBehavior(
+    DeletionMode Mode,
+    string? LogicalDeleteColumn = null,
+    string? LogicalDeleteValue = null);
+
 /// <summary>
 /// Connector 間の共通表現。Fields には Connector で明示的にマッピングした項目だけを含める。
 /// </summary>
@@ -48,6 +59,7 @@ public sealed record ApplyRequest(
     string EntityType,
     string EntityId,
     ChangeOperation Operation,
+    DeletionBehavior? DeletionBehavior,
     EntityPayload Payload);
 
 public sealed record ApplyResult(ApplyStatus Status);

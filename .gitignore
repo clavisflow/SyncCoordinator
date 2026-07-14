@@ -7,5 +7,6 @@
 *.nupkg
 TestResults/
 artifacts/
+.codex-build/
 *.db
 *.bak

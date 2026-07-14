@@ -1,3 +1,5 @@
+using SyncCoordinator.Contracts;
+
 namespace SyncCoordinator.Core;
 
 public static class ConfigurationValidator
@@ -23,6 +25,10 @@ public static class ConfigurationValidator
         {
             errors.Add("Providerは必須です。");
         }
+        else if (!new[] { "SqlServer", "MySql", "PostgreSql" }.Contains(input.Provider, StringComparer.OrdinalIgnoreCase))
+        {
+            errors.Add("未対応のProviderです。");
+        }
 
         ThrowIfAny(errors);
     }
@@ -34,54 +40,28 @@ public static class ConfigurationValidator
         var errors = new List<string>();
         if (string.IsNullOrWhiteSpace(input.Name))
         {
-            errors.Add("ルート名は必須です。");
-        }
-
-        if (string.IsNullOrWhiteSpace(input.EntityType))
-        {
-            errors.Add("Entity Typeは必須です。");
+            errors.Add("ルール名は必須です。");
         }
 
         if (!ContainsCode(systemCodes, input.SourceSystem))
         {
-            errors.Add("発生元システムが存在しません。");
+            errors.Add("送信元システムが存在しません。");
         }
 
-        if (input.DestinationMode == DestinationMode.FixedSystem)
+        if (!ContainsCode(systemCodes, input.DestinationSystem))
         {
-            if (!ContainsCode(systemCodes, input.DestinationSystem))
-            {
-                errors.Add("固定宛先システムが存在しません。");
-            }
-            else if (string.Equals(
-                         input.SourceSystem,
-                         input.DestinationSystem,
-                         StringComparison.OrdinalIgnoreCase))
-            {
-                errors.Add("発生元と宛先に同じシステムは指定できません。");
-            }
-            else if (IsDirectRouteBetweenAAndB(input.SourceSystem, input.DestinationSystem!))
-            {
-                errors.Add("AとBを直接同期するルートは作成できません。");
-            }
+            errors.Add("送信先システムが存在しません。");
         }
-
-        var fieldNames = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var field in input.FieldPolicies)
+        else if (string.Equals(
+                     input.SourceSystem,
+                     input.DestinationSystem,
+                     StringComparison.OrdinalIgnoreCase))
         {
-            var name = field.FieldName.Trim();
-            if (name.Length == 0)
-            {
-                errors.Add("項目別ポリシーの項目名は必須です。");
-            }
-            else if (name.Length > 128)
-            {
-                errors.Add($"項目名 '{name}' は128文字以内です。");
-            }
-            else if (!fieldNames.Add(name))
-            {
-                errors.Add($"項目名 '{name}' が重複しています。");
-            }
+            errors.Add("送信元と送信先に同じシステムは指定できません。");
+        }
+        else if (IsDirectRouteBetweenAAndB(input.SourceSystem, input.DestinationSystem))
+        {
+            errors.Add("AとBを直接同期するルールは作成できません。");
         }
 
         ThrowIfAny(errors);
@@ -113,8 +93,7 @@ public static class ConfigurationValidator
     public static void ValidateTableMapping(TableMappingInput input, RouteConfigurationInput route)
     {
         var errors = new List<string>();
-        if (input.RouteId == Guid.Empty) errors.Add("同期ルートは必須です。");
-        if (string.IsNullOrWhiteSpace(input.DestinationSystem)) errors.Add("宛先システムは必須です。");
+        if (input.RouteId == Guid.Empty) errors.Add("同期ルールは必須です。");
         if (string.IsNullOrWhiteSpace(input.SourceSchema) || string.IsNullOrWhiteSpace(input.SourceTable)) errors.Add("同期元テーブルは必須です。");
         if (string.IsNullOrWhiteSpace(input.DestinationSchema) || string.IsNullOrWhiteSpace(input.DestinationTable)) errors.Add("同期先テーブルは必須です。");
         if (input.Columns.Count == 0) errors.Add("列マッピングを1件以上指定してください。");
@@ -123,15 +102,60 @@ public static class ConfigurationValidator
         if (input.Columns.GroupBy(x => x.SourceColumn, StringComparer.OrdinalIgnoreCase).Any(x => x.Count() > 1)) errors.Add("同期元列が重複しています。");
         if (input.Columns.GroupBy(x => x.DestinationColumn, StringComparer.OrdinalIgnoreCase).Any(x => x.Count() > 1)) errors.Add("同期先列が重複しています。");
 
-        if (route.DestinationMode == DestinationMode.FixedSystem &&
-            !string.Equals(route.DestinationSystem, input.DestinationSystem, StringComparison.OrdinalIgnoreCase))
+        if (input.SyncDeletes)
         {
-            errors.Add("固定宛先ルートの宛先とマッピングの宛先が一致しません。");
+            ValidateDeletionMode(
+                input.SourceDeletionMode,
+                input.SourceLogicalDeleteColumn,
+                input.SourceLogicalDeleteValue,
+                "同期元",
+                errors);
+            ValidateDeletionMode(
+                input.DestinationDeletionMode,
+                input.DestinationLogicalDeleteColumn,
+                input.DestinationLogicalDeleteValue,
+                "同期先",
+                errors);
         }
-        if (string.Equals(route.SourceSystem, input.DestinationSystem, StringComparison.OrdinalIgnoreCase))
+
+        foreach (var fixedValue in input.FixedValues)
         {
-            errors.Add("同期元と同期先に同じシステムは指定できません。");
+            if (string.IsNullOrWhiteSpace(fixedValue.TargetColumn))
+            {
+                errors.Add("固定値の書き込み先列は必須です。");
+            }
+            else if (fixedValue.TargetColumn.Length > 128)
+            {
+                errors.Add($"固定値の書き込み先列 '{fixedValue.TargetColumn}' は128文字以内です。");
+            }
+
+            if (fixedValue.Value.Length > 4000)
+            {
+                errors.Add($"固定値は4000文字以内です（{fixedValue.TargetColumn}）。");
+            }
+
+            if (fixedValue.Direction == MappingWriteDirection.Reverse && route.Direction != SyncDirection.Bidirectional)
+            {
+                errors.Add("片方向ルールに戻り方向の固定値は設定できません。");
+            }
         }
+
+        if (input.FixedValues
+            .GroupBy(x => (x.Direction, x.TargetColumn), new FixedValueKeyComparer())
+            .Any(x => x.Count() > 1))
+        {
+            errors.Add("同じ方向と書き込み先列の固定値が重複しています。");
+        }
+
+        var forwardColumns = input.Columns.Select(x => x.DestinationColumn).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var reverseColumns = input.Columns.Select(x => x.SourceColumn).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (input.FixedValues.Any(x =>
+                x.Direction == MappingWriteDirection.Forward && forwardColumns.Contains(x.TargetColumn) ||
+                x.Direction == MappingWriteDirection.Reverse && reverseColumns.Contains(x.TargetColumn)))
+        {
+            errors.Add("通常の列マッピングと固定値に同じ書き込み先列は指定できません。");
+        }
+
         ThrowIfAny(errors);
     }
 
@@ -143,6 +167,47 @@ public static class ConfigurationValidator
         string.Equals(destination, "B", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(source, "B", StringComparison.OrdinalIgnoreCase) &&
         string.Equals(destination, "A", StringComparison.OrdinalIgnoreCase);
+
+    private static void ValidateDeletionMode(
+        DeletionMode mode,
+        string logicalDeleteColumn,
+        string logicalDeleteValue,
+        string side,
+        List<string> errors)
+    {
+        if (mode != DeletionMode.Logical)
+        {
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(logicalDeleteColumn))
+        {
+            errors.Add($"{side}を論理削除にする場合は論理削除列が必須です。");
+        }
+        else if (logicalDeleteColumn.Length > 128)
+        {
+            errors.Add($"{side}の論理削除列は128文字以内です。");
+        }
+        if (string.IsNullOrWhiteSpace(logicalDeleteValue))
+        {
+            errors.Add($"{side}を論理削除にする場合は削除時の値が必須です。");
+        }
+        else if (logicalDeleteValue.Length > 4000)
+        {
+            errors.Add($"{side}の論理削除値は4000文字以内です。");
+        }
+    }
+
+    private sealed class FixedValueKeyComparer : IEqualityComparer<(MappingWriteDirection Direction, string TargetColumn)>
+    {
+        public bool Equals(
+            (MappingWriteDirection Direction, string TargetColumn) x,
+            (MappingWriteDirection Direction, string TargetColumn) y) =>
+            x.Direction == y.Direction &&
+            string.Equals(x.TargetColumn, y.TargetColumn, StringComparison.OrdinalIgnoreCase);
+
+        public int GetHashCode((MappingWriteDirection Direction, string TargetColumn) obj) =>
+            HashCode.Combine(obj.Direction, StringComparer.OrdinalIgnoreCase.GetHashCode(obj.TargetColumn));
+    }
 
     private static void ThrowIfAny(List<string> errors)
     {

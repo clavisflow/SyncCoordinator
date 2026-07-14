@@ -1,0 +1,321 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
+  <data name="Brand_DashboardAria" xml:space="preserve"><value>SyncCoordinator ダッシュボードへ</value></data>
+  <data name="Nav_Dashboard" xml:space="preserve"><value>ダッシュボード</value></data>
+  <data name="Nav_Main" xml:space="preserve"><value>メインメニュー</value></data>
+  <data name="Nav_GroupOperations" xml:space="preserve"><value>運用</value></data>
+  <data name="Nav_GroupConfiguration" xml:space="preserve"><value>設定</value></data>
+  <data name="Nav_Systems" xml:space="preserve"><value>システム</value></data>
+  <data name="Nav_Routes" xml:space="preserve"><value>同期ルール</value></data>
+  <data name="Nav_Mappings" xml:space="preserve"><value>テーブルマッピング</value></data>
+  <data name="Nav_Conflicts" xml:space="preserve"><value>コンフリクト</value></data>
+  <data name="Nav_Operations" xml:space="preserve"><value>運用状況</value></data>
+  <data name="Error_Unexpected" xml:space="preserve"><value>予期しないエラーが発生しました。</value></data>
+  <data name="Action_Reload" xml:space="preserve"><value>再読み込み</value></data>
+  <data name="Action_Refreshing" xml:space="preserve"><value>更新中…</value></data>
+  <data name="Home_PageTitle" xml:space="preserve"><value>ダッシュボード | SyncCoordinator</value></data>
+  <data name="Home_Title" xml:space="preserve"><value>ダッシュボード</value></data>
+  <data name="Home_Description" xml:space="preserve"><value>登録済みの同期ルールと処理中・保留・失敗の件数、直近のコンフリクトを確認します。</value></data>
+  <data name="Home_Loading" xml:space="preserve"><value>管理DBから読み込んでいます…</value></data>
+  <data name="Home_SyncStatus" xml:space="preserve"><value>同期状態</value></data>
+  <data name="Home_SyncStatusHelp" xml:space="preserve"><value>登録済みの同期ルールを名前順に最大6件表示します。矢印は同期方向を表します。</value></data>
+  <data name="Home_NoRoutes" xml:space="preserve"><value>登録された同期ルールはありません。</value></data>
+  <data name="Home_Source" xml:space="preserve"><value>送信元</value></data>
+  <data name="Home_Destination" xml:space="preserve"><value>送信先</value></data>
+  <data name="Home_SourceTitle" xml:space="preserve"><value>送信元: {0}</value></data>
+  <data name="Home_DestinationTitle" xml:space="preserve"><value>送信先: {0}</value></data>
+  <data name="Metric_Aria" xml:space="preserve"><value>同期メトリクス</value></data>
+  <data name="Metric_EnabledSystems" xml:space="preserve"><value>有効システム</value></data>
+  <data name="Metric_EnabledRoutes" xml:space="preserve"><value>有効ルール</value></data>
+  <data name="Metric_Processing" xml:space="preserve"><value>処理中</value></data>
+  <data name="Metric_Held" xml:space="preserve"><value>保留</value></data>
+  <data name="Metric_Failed" xml:space="preserve"><value>失敗</value></data>
+  <data name="Metric_UnresolvedConflicts" xml:space="preserve"><value>未解決コンフリクト</value></data>
+  <data name="Home_Rules" xml:space="preserve"><value>同期ルール</value></data>
+  <data name="Home_OpenManagement" xml:space="preserve"><value>管理画面を開く</value></data>
+  <data name="Home_Rule" xml:space="preserve"><value>ルール</value></data>
+  <data name="Home_Direction" xml:space="preserve"><value>方向</value></data>
+  <data name="Home_SyncDirection" xml:space="preserve"><value>同期方向</value></data>
+  <data name="Home_Conflict" xml:space="preserve"><value>コンフリクト</value></data>
+  <data name="Home_Status" xml:space="preserve"><value>状態</value></data>
+  <data name="Home_OneWay" xml:space="preserve"><value>片方向</value></data>
+  <data name="Home_Bidirectional" xml:space="preserve"><value>双方向</value></data>
+  <data name="Home_Enabled" xml:space="preserve"><value>有効</value></data>
+  <data name="Home_Paused" xml:space="preserve"><value>一時停止中</value></data>
+  <data name="Home_Prepared" xml:space="preserve"><value>DB反映済み</value></data>
+  <data name="Home_Draft" xml:space="preserve"><value>下書き</value></data>
+  <data name="Conflict_FieldScope" xml:space="preserve"><value>項目単位</value></data>
+  <data name="Conflict_RecordScope" xml:space="preserve"><value>レコード単位</value></data>
+  <data name="Conflict_Hold" xml:space="preserve"><value>保留</value></data>
+  <data name="Conflict_ApplyIncoming" xml:space="preserve"><value>送信元を採用</value></data>
+  <data name="Conflict_KeepCurrent" xml:space="preserve"><value>送信先を維持</value></data>
+  <data name="Conflict_Merge" xml:space="preserve"><value>マージ</value></data>
+  <data name="Home_RecentConflicts" xml:space="preserve"><value>最近のコンフリクト</value></data>
+  <data name="Home_OpenHistory" xml:space="preserve"><value>履歴を開く</value></data>
+  <data name="Home_NoConflicts" xml:space="preserve"><value>コンフリクト履歴はありません。</value></data>
+  <data name="Home_DetectedAt" xml:space="preserve"><value>検知日時</value></data>
+  <data name="Home_Target" xml:space="preserve"><value>対象</value></data>
+  <data name="Home_Resolved" xml:space="preserve"><value>解決済み</value></data>
+  <data name="Home_Unresolved" xml:space="preserve"><value>未解決</value></data>
+  <data name="Culture_Label" xml:space="preserve"><value>言語</value></data>
+  <data name="Account_ChangePassword" xml:space="preserve"><value>パスワード変更</value></data>
+  <data name="Account_Logout" xml:space="preserve"><value>ログアウト</value></data>
+  <data name="Auth_LoginPageTitle" xml:space="preserve"><value>ログイン | SyncCoordinator</value></data>
+  <data name="Auth_LoginTitle" xml:space="preserve"><value>管理者ログイン</value></data>
+  <data name="Auth_LoginDescription" xml:space="preserve"><value>同期設定と運用画面を開くにはログインしてください。</value></data>
+  <data name="Auth_Loading" xml:space="preserve"><value>認証状態を確認しています…</value></data>
+  <data name="Auth_SetupRequiredRemote" xml:space="preserve"><value>管理者の初期設定が完了していません。サーバー上のlocalhostから初期設定を行ってください。</value></data>
+  <data name="Auth_InvalidCredentials" xml:space="preserve"><value>ユーザー名またはパスワードが正しくありません。</value></data>
+  <data name="Auth_UserName" xml:space="preserve"><value>ユーザー名</value></data>
+  <data name="Auth_Password" xml:space="preserve"><value>パスワード</value></data>
+  <data name="Auth_RememberMe" xml:space="preserve"><value>ログイン状態を保持する</value></data>
+  <data name="Auth_LoginAction" xml:space="preserve"><value>ログイン</value></data>
+  <data name="Auth_ForgotPassword" xml:space="preserve"><value>パスワードを忘れた場合</value></data>
+  <data name="Auth_SetupPageTitle" xml:space="preserve"><value>管理者の初期設定 | SyncCoordinator</value></data>
+  <data name="Auth_SetupTitle" xml:space="preserve"><value>管理者の初期設定</value></data>
+  <data name="Auth_SetupDescription" xml:space="preserve"><value>管理者adminのパスワードを登録します。この操作はlocalhostからのみ実行できます。</value></data>
+  <data name="Auth_LocalOnly" xml:space="preserve"><value>この操作はサーバー上のlocalhostからのみ実行できます。</value></data>
+  <data name="Auth_AlreadyInitialized" xml:space="preserve"><value>管理者の初期設定は完了しています。</value></data>
+  <data name="Auth_BackToLogin" xml:space="preserve"><value>ログイン画面へ戻る</value></data>
+  <data name="Auth_NewPassword" xml:space="preserve"><value>新しいパスワード</value></data>
+  <data name="Auth_ConfirmPassword" xml:space="preserve"><value>新しいパスワード（確認）</value></data>
+  <data name="Auth_CurrentPassword" xml:space="preserve"><value>現在のパスワード</value></data>
+  <data name="Auth_PasswordRule" xml:space="preserve"><value>12文字以上128文字以下で設定してください。</value></data>
+  <data name="Auth_SetupAction" xml:space="preserve"><value>管理者を設定</value></data>
+  <data name="Auth_ResetPageTitle" xml:space="preserve"><value>パスワード再設定 | SyncCoordinator</value></data>
+  <data name="Auth_ResetTitle" xml:space="preserve"><value>パスワード再設定</value></data>
+  <data name="Auth_ResetDescription" xml:space="preserve"><value>管理者パスワードを再設定し、既存のログインCookieを無効化します。同期設定や履歴は変更しません。</value></data>
+  <data name="Auth_ResetAction" xml:space="preserve"><value>パスワードを再設定</value></data>
+  <data name="Auth_ChangePageTitle" xml:space="preserve"><value>パスワード変更 | SyncCoordinator</value></data>
+  <data name="Auth_ChangeTitle" xml:space="preserve"><value>パスワード変更</value></data>
+  <data name="Auth_ChangeDescription" xml:space="preserve"><value>管理者パスワードを変更します。変更後、以前のログインCookieは無効になります。</value></data>
+  <data name="Auth_ChangeAction" xml:space="preserve"><value>パスワードを変更</value></data>
+  <data name="Auth_ChangeSuccess" xml:space="preserve"><value>パスワードを変更しました。</value></data>
+  <data name="Auth_ErrorMismatch" xml:space="preserve"><value>確認用パスワードが一致しません。</value></data>
+  <data name="Auth_ErrorTooShort" xml:space="preserve"><value>パスワードは12文字以上にしてください。</value></data>
+  <data name="Auth_ErrorTooLong" xml:space="preserve"><value>パスワードは128文字以下にしてください。</value></data>
+  <data name="Auth_ErrorCurrentInvalid" xml:space="preserve"><value>現在のパスワードが正しくありません。</value></data>
+  <data name="Auth_ErrorGeneric" xml:space="preserve"><value>処理を完了できませんでした。入力内容を確認してください。</value></data>
+  <data name="Error_PageTitle" xml:space="preserve"><value>エラー | SyncCoordinator</value></data>
+  <data name="Error_Title" xml:space="preserve"><value>処理中にエラーが発生しました</value></data>
+  <data name="Error_Description" xml:space="preserve"><value>時間をおいて再実行してください。繰り返し発生する場合は管理者へ連絡してください。</value></data>
+  <data name="NotFound_PageTitle" xml:space="preserve"><value>ページが見つかりません | SyncCoordinator</value></data>
+  <data name="NotFound_Title" xml:space="preserve"><value>ページが見つかりません</value></data>
+  <data name="NotFound_Description" xml:space="preserve"><value>指定されたURLを確認してください。</value></data>
+  <data name="NotFound_Back" xml:space="preserve"><value>概要へ戻る</value></data>
+  <data name="Common_Action"><value>操作</value></data><data name="Common_BackToList"><value>一覧へ戻る</value></data>
+  <data name="Common_Bidirectional"><value>双方向</value></data><data name="Common_Cancel"><value>キャンセル</value></data>
+  <data name="Common_ChangedAt"><value>変更日時</value></data><data name="Common_Clear"><value>クリア</value></data>
+  <data name="Common_Configured"><value>設定済み</value></data><data name="Common_Count"><value>{0} 件</value></data>
+  <data name="Common_DatabaseDeployment"><value>DB反映</value></data><data name="Common_DbPrepared"><value>DB構成検証済み</value></data>
+  <data name="Common_Delete"><value>削除</value></data><data name="Common_DeployDatabase"><value>業務DBへ反映</value></data>
+  <data name="Common_Details"><value>詳細</value></data><data name="Common_DetectedAt"><value>検知日時</value></data>
+  <data name="Common_Direction"><value>方向</value></data><data name="Common_Disabled"><value>無効</value></data>
+  <data name="Common_Draft"><value>下書き</value></data><data name="Common_Edit"><value>編集</value></data>
+  <data name="Common_Enabled"><value>有効</value></data><data name="Common_Error"><value>エラー</value></data>
+  <data name="Common_Field"><value>項目</value></data><data name="Common_FieldScope"><value>項目単位</value></data>
+  <data name="Common_Hold"><value>保留</value></data><data name="Common_ItemCount"><value>{0} 項目</value></data>
+  <data name="Common_KeepDestination"><value>送信先を維持</value></data><data name="Common_Mapping"><value>マッピング</value></data>
+  <data name="Common_Merge"><value>マージ</value></data><data name="Common_NotConfigured"><value>未設定</value></data>
+  <data name="Common_OneWay"><value>片方向</value></data><data name="Common_PagingSummary"><value>{0} / {1}ページ（全{2}件）</value></data>
+  <data name="Common_Paused"><value>一時停止中</value></data><data name="Common_Policy"><value>ポリシー</value></data>
+  <data name="Common_RecordScope"><value>レコード単位</value></data><data name="Common_Resolved"><value>解決済み</value></data>
+  <data name="Common_Result"><value>結果</value></data><data name="Common_Rule"><value>同期ルール</value></data>
+  <data name="Common_Running"><value>稼働中</value></data><data name="Common_Save"><value>保存</value></data>
+  <data name="Common_Saving"><value>保存中…</value></data><data name="Common_Processing"><value>処理中…</value></data><data name="Common_Scope"><value>スコープ</value></data>
+  <data name="Common_Select"><value>選択してください</value></data><data name="Common_Show"><value>表示</value></data>
+  <data name="Common_Status"><value>状態</value></data><data name="Common_System"><value>システム</value></data>
+  <data name="Common_SystemCount"><value>{0} システム</value></data><data name="Common_Target"><value>対象</value></data>
+  <data name="Common_TargetId"><value>対象ID</value></data><data name="Common_Type"><value>種類</value></data>
+  <data name="Common_Unresolved"><value>未解決</value></data><data name="Common_UpdatedAt"><value>更新日時</value></data>
+  <data name="Common_UseSource"><value>送信元を採用</value></data>
+  <data name="Systems_PageTitle"><value>システム管理 | SyncCoordinator</value></data><data name="Systems_Title"><value>システム管理</value></data>
+  <data name="Systems_Description"><value>同期対象システムと業務DB接続を登録・編集し、保守中の同期を一時停止します。接続情報は暗号化して管理DBへ保存します。</value></data>
+  <data name="Systems_New"><value>新しいシステム</value></data><data name="Systems_Registered"><value>登録システム</value></data>
+  <data name="Systems_PauseNote"><value>一時停止中は対象システムを含む同期ルールのCheckpointを進めません。再開後、蓄積した通知から最新状態へ追いつきます。</value></data>
+  <data name="Systems_Empty"><value>登録されたシステムはありません。</value></data><data name="Systems_Code"><value>コード</value></data>
+  <data name="Systems_DisplayName"><value>表示名</value></data><data name="Systems_DbConnection"><value>DB接続</value></data>
+  <data name="Systems_Resume"><value>同期を再開</value></data><data name="Systems_Pause"><value>同期を一時停止</value></data>
+  <data name="Systems_Create"><value>新規登録</value></data><data name="Systems_Edit"><value>システム編集</value></data>
+  <data name="Systems_SystemCode"><value>システムコード</value></data><data name="Systems_SystemCodeHelp"><value>同期ルールとCheckpointの識別子です。登録後は変更できません。</value></data>
+  <data name="Systems_DisableHelp"><value>「無効」は構成から外す操作です。保守などで後から追いつかせる場合は、一覧の一時停止を使用してください。</value></data>
+  <data name="Systems_DbConnectionHelp"><value>接続情報は暗号化して保存します。接続情報を入力せず、システム情報だけを保存することもできます。</value></data>
+  <data name="Systems_Server"><value>サーバー／ホスト</value></data><data name="Systems_Port"><value>ポート</value></data><data name="Systems_Database"><value>データベース名</value></data>
+  <data name="Systems_WindowsAuth"><value>Windows認証を使用</value></data><data name="Systems_KeepPassword"><value>変更しない場合は空欄</value></data>
+  <data name="Systems_Encrypt"><value>暗号化接続を使用</value></data><data name="Systems_TrustCertificate"><value>サーバー証明書を信頼（開発用）</value></data>
+  <data name="Systems_TestConnection"><value>接続テスト</value></data><data name="Systems_Testing"><value>テスト中…</value></data>
+  <data name="Systems_ResumedMessage"><value>{0} の同期を再開しました。</value></data><data name="Systems_PausedMessage"><value>{0} の同期を一時停止しました。</value></data>
+  <data name="Systems_Saved"><value>システム設定とデータベース接続設定を保存しました。</value></data>
+  <data name="Systems_ConnectionSucceeded"><value>接続成功</value></data><data name="Systems_ConnectionFailed"><value>接続に失敗しました</value></data>
+  <data name="Routes_PageTitle"><value>同期ルール管理 | SyncCoordinator</value></data><data name="Routes_Title"><value>同期ルール管理</value></data>
+  <data name="Routes_Description"><value>システム間の送信元・送信先、同期方向、コンフリクトの判定単位と採用方針を設定します。ルールは業務DBへの反映確認後に有効化できます。</value></data>
+  <data name="Routes_New"><value>新しいルール</value></data><data name="Routes_Registered"><value>登録ルール</value></data><data name="Routes_Empty"><value>登録されたルールはありません。</value></data>
+  <data name="Routes_SyncDirection"><value>同期方向</value></data><data name="Routes_ConflictSettings"><value>コンフリクト設定</value></data>
+  <data name="RouteEdit_PageTitle"><value>同期ルール編集 | SyncCoordinator</value></data><data name="RouteEdit_CreateTitle"><value>同期ルールの新規作成</value></data><data name="RouteEdit_EditTitle"><value>同期ルールの編集</value></data>
+  <data name="RouteEdit_Loading"><value>設定を読み込んでいます…</value></data><data name="RouteEdit_BasicSettings"><value>基本設定</value></data><data name="RouteEdit_BasicHelp"><value>送信元、送信先、同期方向を設定します。</value></data>
+  <data name="RouteEdit_RuleName"><value>ルール名</value></data><data name="RouteEdit_SourceSystem"><value>送信元システム</value></data><data name="RouteEdit_DestinationSystem"><value>送信先システム</value></data>
+  <data name="RouteEdit_DirectionHelp"><value>双方向でも、送信先で独自に作成されたデータは同期対象になりません。</value></data>
+  <data name="RouteEdit_OneWayDescription"><value>（送信元 → 送信先）</value></data><data name="RouteEdit_BidirectionalDescription"><value>（送信元 ⇄ 送信先）</value></data>
+  <data name="RouteEdit_ConflictScope"><value>コンフリクトの判定単位</value></data><data name="RouteEdit_DefaultPolicy"><value>既定のコンフリクトポリシー</value></data>
+  <data name="RouteEdit_PolicyHelp"><value>コンフリクトは履歴に記録されます。列ごとの上書きはテーブルマッピングで設定します。</value></data>
+  <data name="RouteEdit_DeploymentNote"><value>テーブルマッピングを保存し、データベース反映タブで全DBの構成を検証してください。検証が完了するとルールを有効化できます。</value></data>
+  <data name="RouteEdit_SaveSettings"><value>設定を保存</value></data>
+  <data name="RouteEdit_Saved"><value>同期ルールの基本設定を保存しました。</value></data>
+  <data name="RouteEdit_RuleStatus"><value>ルールの状態</value></data>
+  <data name="RouteEdit_EnableRule"><value>ルールを有効化</value></data>
+  <data name="RouteEdit_DisableRule"><value>ルールを無効化</value></data>
+  <data name="RouteEdit_EnableBlocked"><value>DB構成の検証が完了すると有効化できます。</value></data>
+  <data name="RouteTabs_Aria"><value>同期ルール設定</value></data>
+  <data name="RouteTabs_Settings"><value>基本設定</value></data>
+  <data name="RouteTabs_Mappings"><value>テーブルマッピング</value></data>
+  <data name="RouteTabs_Database"><value>データベース反映</value></data>
+  <data name="Conflicts_PageTitle"><value>コンフリクト履歴 | SyncCoordinator</value></data><data name="Conflicts_Title"><value>コンフリクト履歴</value></data>
+  <data name="Conflicts_Description"><value>同期時に検出したコンフリクトの値、適用ポリシー、採用結果を確認します。現在は参照専用です。</value></data>
+  <data name="Conflicts_Recent"><value>最近のコンフリクト</value></data><data name="Conflicts_Empty"><value>コンフリクト履歴はありません。</value></data>
+  <data name="ConflictDetail_PageTitle"><value>コンフリクト詳細 | SyncCoordinator</value></data><data name="ConflictDetail_Loading"><value>コンフリクト情報を読み込んでいます…</value></data>
+  <data name="ConflictDetail_Target"><value>対象 {0}</value></data><data name="ConflictDetail_Fields"><value>コンフリクト項目と採用値</value></data>
+  <data name="ConflictDetail_Empty"><value>コンフリクト項目はありません。</value></data><data name="ConflictDetail_Previous"><value>前回値</value></data><data name="ConflictDetail_Adopted"><value>採用値</value></data>
+  <data name="Operations_PageTitle"><value>処理状況 | SyncCoordinator</value></data><data name="Operations_Title"><value>処理状況</value></data>
+  <data name="Operations_Description"><value>システムごとのキュー読取位置、直近のメッセージ処理結果、設定変更履歴を確認します。</value></data>
+  <data name="Operations_NoCheckpoints"><value>Checkpointはありません。</value></data><data name="Operations_LastQueueId"><value>最終QueueId</value></data>
+  <data name="Operations_RecentInbox"><value>最近のInbox</value></data><data name="Operations_NoInbox"><value>Inbox履歴はありません。</value></data>
+  <data name="Operations_RouteDestination"><value>ルール／送信先</value></data><data name="Operations_Attempts"><value>試行</value></data>
+  <data name="Operations_AuditHistory"><value>設定変更履歴</value></data><data name="Operations_NoAudits"><value>設定変更履歴はありません。</value></data>
+  <data name="Operations_ChangedBy"><value>実行元</value></data><data name="Operations_NotProcessed"><value>未処理</value></data>
+  <data name="Operations_Completed"><value>完了</value></data><data name="Operations_Processing"><value>処理中</value></data><data name="Operations_Held"><value>保留</value></data><data name="Operations_Failed"><value>失敗</value></data>
+  <data name="Operations_AdminAccount"><value>管理者アカウント</value></data><data name="Operations_Created"><value>作成</value></data><data name="Operations_Updated"><value>更新</value></data>
+  <data name="Operations_Enabled"><value>有効化</value></data><data name="Operations_Disabled"><value>無効化</value></data><data name="Operations_Paused"><value>一時停止</value></data><data name="Operations_Resumed"><value>再開</value></data>
+  <data name="Operations_Initialized"><value>初期設定</value></data><data name="Operations_PasswordReset"><value>パスワード再設定</value></data><data name="Operations_PasswordChanged"><value>パスワード変更</value></data>
+  <data name="Operations_ManagementUi"><value>管理画面</value></data><data name="Operations_Administrator"><value>管理者</value></data><data name="Operations_LocalRecovery"><value>localhost復旧</value></data>
+  <data name="DatabaseSetup_PageTitle"><value>業務DBへ反映 | SyncCoordinator</value></data><data name="DatabaseSetup_Title"><value>業務DBへ反映</value></data><data name="DatabaseSetup_BackToRule"><value>同期ルールへ戻る</value></data>
+  <data name="DatabaseSetup_Loading"><value>反映内容を作成しています…</value></data><data name="DatabaseSetup_Empty"><value>反映内容を表示できません。</value></data>
+  <data name="DatabaseSetup_DbPreparation"><value>DB構成の検証</value></data><data name="DatabaseSetup_Verified"><value>検証済み</value></data><data name="DatabaseSetup_Unverified"><value>未検証</value></data>
+  <data name="DatabaseSetup_Verifying"><value>検証中…</value></data><data name="DatabaseSetup_VerifyAll"><value>すべてのDB構成を検証</value></data>
+  <data name="DatabaseSetup_VerifyHelp"><value>同期に必要なテーブルとトリガーが、すべての対象DBに反映されているか検証します。</value></data>
+  <data name="DatabaseSetup_DirectDisabled"><value>この環境では管理画面から直接反映できません。SQLをダウンロードし、DBAが内容を確認したうえで実行してください。</value></data>
+  <data name="DatabaseSetup_DownloadSql"><value>SQLをダウンロード</value></data><data name="DatabaseSetup_ViewSql"><value>実行SQLを確認</value></data>
+  <data name="DatabaseSetup_ViewChanges"><value>反映内容を確認</value></data>
+  <data name="DatabaseSetup_ConfirmDatabaseName"><value>確認のためDB名「{0}」を入力</value></data><data name="DatabaseSetup_ConfirmedSql"><value>SQLと対象DBを確認しました</value></data>
+  <data name="DatabaseSetup_Applying"><value>反映中…</value></data><data name="DatabaseSetup_ApplyDatabase"><value>このDBへ反映</value></data>
+  <data name="DatabaseSetup_DbaNote"><value>DBAがダウンロードしたSQLを実行した場合は、対象となるすべてのDBへの反映後に「すべてのDBを確認」を押してください。</value></data>
+  <data name="DatabaseSetup_TriggerNote"><value>ルールを削除または無効化しても、業務DBのTriggerは自動では削除されません。</value></data>
+  <data name="DatabaseSetup_PlanFailed"><value>反映内容を作成できませんでした</value></data><data name="DatabaseSetup_ConfirmationRequired"><value>SQLと対象DBの確認が必要です。</value></data>
+  <data name="DatabaseSetup_ApplyComplete"><value>DB反映完了</value></data><data name="DatabaseSetup_ApplyFailed"><value>DB反映に失敗しました</value></data>
+  <data name="DatabaseSetup_VerifyComplete"><value>DB構成の検証完了</value></data><data name="DatabaseSetup_VerifyFailed"><value>DB構成の検証に失敗しました</value></data>
+  <data name="DatabaseSetup_RuleEnabled"><value>ルールを有効化しました</value></data><data name="DatabaseSetup_RuleDisabled"><value>ルールを無効化しました</value></data>
+  <data name="Mappings_PageTitle"><value>テーブルマッピング | SyncCoordinator</value></data><data name="Mappings_Title"><value>テーブルマッピング</value></data>
+  <data name="Mappings_Description"><value>同期ルールごとに業務DBのテーブル・列・キーを対応付け、列別の採用方針、固定値、削除方法を設定します。保存だけでは業務DBの構造を変更しません。</value></data>
+  <data name="Mappings_Registered"><value>登録済みマッピング</value></data><data name="Mappings_Empty"><value>登録済みのマッピングはありません。</value></data>
+  <data name="Mappings_SourceTable"><value>同期元テーブル</value></data><data name="Mappings_DestinationTable"><value>同期先テーブル</value></data><data name="Mappings_ColumnCount"><value>列数</value></data>
+  <data name="Mappings_Edit"><value>マッピング編集</value></data><data name="Mappings_EditHelp"><value>データベース接続が設定済みのシステムだけを参照できます。</value></data>
+  <data name="Mappings_SelectRule"><value>ルールを選択</value></data><data name="Mappings_LoadingTables"><value>テーブル一覧を読み込んでいます…</value></data>
+  <data name="Mappings_SourceTableFor"><value>同期元テーブル（{0}）</value></data><data name="Mappings_DestinationTableFor"><value>同期先テーブル（{0}）</value></data><data name="Mappings_SelectTable"><value>テーブルを選択</value></data>
+  <data name="Mappings_LoadingColumns"><value>列一覧を読み込んでいます…</value></data><data name="Mappings_ColumnsAndPolicies"><value>同期対象とコンフリクトポリシー</value></data>
+  <data name="Mappings_ColumnsHelp"><value>チェックした列だけを保存します。列ごとの指定がない場合はルール既定を使用します。</value></data><data name="Mappings_SelectedColumns"><value>{0} / {1} 列</value></data>
+  <data name="Mappings_FilterColumns"><value>列名で検索</value></data>
+  <data name="Mappings_ShowUnmappedOnly"><value>未設定のみ</value></data>
+  <data name="Mappings_NoMatchingColumns"><value>条件に一致する列はありません。</value></data>
+  <data name="Mappings_SourceColumn"><value>同期元列</value></data><data name="Mappings_DestinationColumn"><value>同期先列</value></data><data name="Mappings_Key"><value>キー</value></data><data name="Mappings_OnConflict"><value>コンフリクト時</value></data>
+  <data name="Mappings_SelectDestinationColumn"><value>同期先列を選択</value></data><data name="Mappings_FixedValues"><value>書き込み時の固定値（任意）</value></data>
+  <data name="Mappings_FixedValuesHelp"><value>通常の列マッピングとは別に、書き込み先へ固定値を設定します。</value></data><data name="Mappings_AddFixedValue"><value>固定値を追加</value></data>
+  <data name="Mappings_ApplyDirection"><value>適用方向</value></data><data name="Mappings_TargetColumn"><value>書き込み先列</value></data><data name="Mappings_FixedValue"><value>固定値</value></data>
+  <data name="Mappings_SelectColumn"><value>列を選択</value></data><data name="Mappings_FixedValueExample"><value>例: SYNC_COORDINATOR、0</value></data>
+  <data name="Mappings_DeleteSync"><value>削除同期</value></data><data name="Mappings_DeleteSyncHelp"><value>送信元と送信先で異なる削除方式を選べます。物理削除は削除前の値をTombstoneへ保存し、論理削除は指定列が削除値へ変わった更新をDeleteとして扱います。</value></data>
+  <data name="Mappings_SyncDeletes"><value>削除を同期する</value></data><data name="Mappings_SourceFor"><value>同期元（{0}）</value></data><data name="Mappings_DestinationFor"><value>同期先（{0}）</value></data>
+  <data name="Mappings_DeletionMode"><value>削除方式</value></data><data name="Mappings_LogicalDeleteColumn"><value>論理削除列</value></data><data name="Mappings_DeleteValue"><value>削除時の値</value></data><data name="Mappings_DeleteValueExample"><value>例: 1、true、D</value></data>
+  <data name="Mappings_Save"><value>マッピングとポリシーを保存</value></data><data name="Mappings_RuleDefault"><value>ルール既定</value></data>
+  <data name="Mappings_WriteDestination"><value>送信先へ書く</value></data><data name="Mappings_WriteSource"><value>送信元へ戻す</value></data>
+  <data name="Mappings_PhysicalDelete"><value>物理削除</value></data><data name="Mappings_LogicalDelete"><value>論理削除</value></data>
+  <data name="Mappings_SelectRuleError"><value>同期ルールを選択してください。</value></data><data name="Mappings_Saved"><value>テーブル／列マッピングとコンフリクトポリシーを保存しました。</value></data>
+  <data name="Mappings_SystemMissing"><value>システム '{0}' が存在しません。</value></data><data name="Mappings_ConnectionMissing"><value>システム '{0}' のDB接続情報が未設定です。システム管理から設定してください。</value></data>
+  <data name="ConflictDetail_SourceMessageId"><value>送信元MessageId</value></data>
+  <data name="ConflictDetail_DeliveryMessageId"><value>配信MessageId</value></data>
+  <data name="ConflictDetail_Incoming"><value>受信値</value></data>
+  <data name="ConflictDetail_Current"><value>現在値</value></data>
+  <data name="DatabaseSetup_ResultApplyVerified"><value>{0}への反映を確認しました。すべてのDBを反映後に全体確認してください。</value></data>
+  <data name="DatabaseSetup_ResultApplyUnverified"><value>{0}へSQLを実行しましたが、必要なオブジェクトを確認できませんでした。</value></data>
+  <data name="DatabaseSetup_ResultObjectsMissing"><value>{0}に必要な同期用オブジェクトが揃っていません。</value></data>
+  <data name="DatabaseSetup_ResultAllVerified"><value>すべての業務DBで同期用オブジェクトを検証しました。基本設定からルールを有効化できます。</value></data>
+  <data name="DatabaseSetup_ResultRuleEnabled"><value>同期ルールを有効化しました。</value></data>
+  <data name="DatabaseSetup_ResultRuleDisabled"><value>同期ルールを無効化しました。</value></data>
+  <data name="DatabaseSetup_ReviewBeforeApply"><value>反映前に確認してください</value></data>
+  <data name="DatabaseSetup_WarningDdl"><value>業務DBには、同期用テーブル、トリガー、権限設定などが追加または更新されます。本番環境では、事前にDBAがSQLの内容を確認してください。</value></data>
+  <data name="DatabaseSetup_WarningDeleteEnabled"><value>削除同期は有効です。削除はレコード単位で同期し、送信先に変更がある場合は通常のコンフリクト判定を行います。</value></data>
+  <data name="DatabaseSetup_WarningDeleteDisabled"><value>削除同期は無効です。物理DELETEは同期されません。論理削除列の変更は通常の更新として扱われます。</value></data>
+  <data name="DatabaseSetup_WarningConnector"><value>DBへの反映だけでは同期は開始されません。保存したマッピングに対応するコネクターも配備してください。</value></data>
+  <data name="DatabaseSetup_WarningCompositeKey"><value>複合キーはJSON形式のEntityIdとして扱われます。連結後の値が256文字以内に収まることを確認してください。</value></data>
+  <data name="DatabaseSetup_SourceDirection"><value>送信元（{0} → {1}）</value></data>
+  <data name="DatabaseSetup_DestinationReverseDirection"><value>送信先・戻り方向（{0} → {1}）</value></data>
+  <data name="DatabaseSetup_DestinationDirection"><value>送信先（{0}）</value></data>
+  <data name="DatabaseSetup_ChangeCreateQueue"><value>SyncChangeQueueを未作成の場合に作成</value></data>
+  <data name="DatabaseSetup_ChangeCreateAppliedMessage"><value>SyncAppliedMessageを未作成の場合に作成</value></data>
+  <data name="DatabaseSetup_ChangeCreateEntityOrigin"><value>SyncEntityOriginを未作成の場合に作成</value></data>
+  <data name="DatabaseSetup_ChangeCreateDeleteTombstone"><value>SyncDeleteTombstoneを未作成の場合に作成</value></data>
+  <data name="DatabaseSetup_ChangeRecordDeployment"><value>SyncCoordinatorDeploymentへこのSQLの反映識別子を記録</value></data>
+  <data name="DatabaseSetup_ChangeSqlServerPermissions"><value>実行権限: CREATE TABLE、CREATE/ALTER TRIGGER（または同等のDDL権限）</value></data>
+  <data name="DatabaseSetup_ChangeMySqlPermissions"><value>実行権限: CREATE、TRIGGER、DROP（作成済みTrigger更新時）</value></data>
+  <data name="DatabaseSetup_ChangePostgreSqlPermissions"><value>実行権限: publicスキーマと対象スキーマへのCREATE、対象テーブルへのTRIGGER権限</value></data>
+  <data name="DatabaseSetup_ChangeTrigger"><value>{0}.{1}の変更検知Triggerを作成または更新</value></data>
+  <data name="DatabaseSetup_ChangePhysicalDelete"><value>物理DELETEをTombstoneへ保存してDeleteとして検知</value></data>
+  <data name="DatabaseSetup_ChangeLogicalDelete"><value>{0}が指定値になった更新をDeleteとして検知</value></data>
+  <data name="ConflictDetail_MergeUnavailableHeld"><value>マージ不可のため保留</value></data>
+  <data name="ConflictDetail_RecordHeld"><value>レコード全体を保留</value></data>
+  <data name="ConflictDetail_DeleteApplied"><value>送信元の削除を適用</value></data>
+  <data name="ConflictDetail_DeleteKeptCurrent"><value>送信先を維持（削除しない）</value></data>
+  <data name="ConflictDetail_DeleteHeld"><value>削除を保留</value></data>
+  <data name="ConflictDetail_DeleteMergeUnavailableHeld"><value>削除はマージ不可のため保留</value></data>
+  <data name="Common_Completed"><value>完了</value></data>
+  <data name="Common_OperationFailed"><value>処理に失敗しました</value></data>
+  <data name="Nav_Webhooks"><value>通知</value></data>
+  <data name="Webhooks_PageTitle"><value>通知 | SyncCoordinator</value></data>
+  <data name="Webhooks_Title"><value>通知</value></data>
+  <data name="Webhooks_Description"><value>通知先、通知する同期イベント、送信結果を管理します。通知先の障害は同期処理を停止させません。</value></data>
+  <data name="Notifications_TabEndpoints"><value>通知先</value></data>
+  <data name="Notifications_TabHistory"><value>通知履歴</value></data>
+  <data name="Webhooks_New"><value>新しい通知先</value></data>
+  <data name="Webhooks_Endpoints"><value>通知先</value></data>
+  <data name="Webhooks_NoEndpoints"><value>Webhook通知先はありません。</value></data>
+  <data name="Webhooks_Name"><value>名前</value></data>
+  <data name="Webhooks_Signature"><value>署名</value></data>
+  <data name="Webhooks_Test"><value>テスト</value></data>
+  <data name="Webhooks_Create"><value>通知先の新規登録</value></data>
+  <data name="Webhooks_Edit"><value>通知先の編集</value></data>
+  <data name="Webhooks_HttpWarning"><value>HTTPでは通信内容と署名が暗号化されません。閉域LAN以外ではHTTPSを使用してください。</value></data>
+  <data name="Webhooks_NoSignatureWarning"><value>署名なしでは受信側が送信元を確認できません。</value></data>
+  <data name="Webhooks_EnableSignature"><value>HMAC-SHA256署名を使用</value></data>
+  <data name="Webhooks_RegenerateSecret"><value>保存時に署名秘密鍵を再生成</value></data>
+  <data name="Webhooks_Events"><value>通知イベント</value></data>
+  <data name="Webhooks_Settings"><value>送信設定</value></data>
+  <data name="Webhooks_EnableEndpoint"><value>この通知先を有効にする</value></data>
+  <data name="Webhooks_GroupSync"><value>同期結果</value></data>
+  <data name="Webhooks_GroupAttention"><value>要確認</value></data>
+  <data name="Webhooks_GroupSystem"><value>システム状態</value></data>
+  <data name="Webhooks_GroupTest"><value>動作確認</value></data>
+  <data name="Webhooks_NewSecret"><value>署名鍵を今コピーしてください</value></data>
+  <data name="Webhooks_SecretOnce"><value>この画面で一度だけ表示します。クリックすると全体を選択できます。受信側へ設定してから保管してください。</value></data>
+  <data name="Webhooks_DeliveryHistory"><value>通知履歴</value></data>
+  <data name="Webhooks_NoDeliveries"><value>配送履歴はありません。</value></data>
+  <data name="Webhooks_Endpoint"><value>通知先</value></data>
+  <data name="Webhooks_Saved"><value>Webhook通知先を保存しました。</value></data>
+  <data name="Webhooks_TestQueued"><value>テストイベントをOutboxへ登録しました。</value></data>
+  <data name="Webhooks_EventUpserted"><value>同期適用（作成・更新）</value></data>
+  <data name="Webhooks_EventDeleted"><value>削除同期</value></data>
+  <data name="Webhooks_EventConflict"><value>コンフリクト検出</value></data>
+  <data name="Webhooks_EventFailed"><value>同期失敗</value></data>
+  <data name="Webhooks_EventPaused"><value>システム一時停止</value></data>
+  <data name="Webhooks_EventResumed"><value>システム再開</value></data>
+  <data name="Webhooks_EventTest"><value>テスト</value></data>
+  <data name="Webhooks_StatePending"><value>送信待ち</value></data>
+  <data name="Webhooks_StateProcessing"><value>送信中</value></data>
+  <data name="Webhooks_StateRetry"><value>再試行待ち</value></data>
+  <data name="Webhooks_StateDelivered"><value>送信済み</value></data>
+  <data name="Webhooks_StateFailed"><value>送信失敗</value></data>
+  <data name="Webhooks_ErrorName"><value>名前は必須で、200文字以内で入力してください。</value></data>
+  <data name="Webhooks_ErrorUrl"><value>URLはユーザー情報とフラグメントを含まないHTTPまたはHTTPSの絶対URLを指定してください。</value></data>
+  <data name="Webhooks_ErrorEvents"><value>対応するイベントを1件以上選択してください。</value></data>
+  <data name="Webhooks_ErrorNotFound"><value>指定されたWebhook通知先は存在しません。</value></data>
+</root>

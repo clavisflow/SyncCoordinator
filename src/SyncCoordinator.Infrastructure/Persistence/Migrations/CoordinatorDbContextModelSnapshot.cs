@@ -22,6 +22,39 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("SyncCoordinator.Infrastructure.Persistence.AdminAccountEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<int>("SessionVersion")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("UserName")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserName")
+                        .IsUnique();
+
+                    b.ToTable("AdminAccount", (string)null);
+                });
+
             modelBuilder.Entity("SyncCoordinator.Infrastructure.Persistence.ConfigurationAuditEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -133,6 +166,10 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("ConflictPolicy")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
                     b.Property<string>("DestinationColumn")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -160,56 +197,78 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
                     b.ToTable("RouteColumnMapping", (string)null);
                 });
 
-            modelBuilder.Entity("SyncCoordinator.Infrastructure.Persistence.RouteFieldPolicyEntity", b =>
+            modelBuilder.Entity("SyncCoordinator.Infrastructure.Persistence.RouteFixedValueMappingEntity", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("FieldName")
+                    b.Property<string>("Direction")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<Guid>("TableMappingId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("TargetColumn")
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
 
-                    b.Property<string>("Policy")
+                    b.Property<string>("Value")
                         .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("nvarchar(40)");
-
-                    b.Property<Guid>("RouteId")
-                        .HasColumnType("uniqueidentifier");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("RouteId", "FieldName")
+                    b.HasIndex("TableMappingId", "Direction", "TargetColumn")
                         .IsUnique();
 
-                    b.ToTable("RouteFieldPolicy", (string)null);
+                    b.ToTable("RouteFixedValueMapping", (string)null);
                 });
 
             modelBuilder.Entity("SyncCoordinator.Infrastructure.Persistence.RouteTableMappingEntity", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
+                    b.Property<Guid>("RouteId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DestinationDeletionMode")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("DestinationLogicalDeleteColumn")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("DestinationLogicalDeleteValue")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<string>("DestinationSchema")
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
 
-                    b.Property<string>("DestinationSystem")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
-
                     b.Property<string>("DestinationTable")
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
 
-                    b.Property<Guid>("RouteId")
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<string>("SourceDeletionMode")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("SourceLogicalDeleteColumn")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("SourceLogicalDeleteValue")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<string>("SourceSchema")
                         .IsRequired()
@@ -221,10 +280,10 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
 
-                    b.HasKey("Id");
+                    b.Property<bool>("SyncDeletes")
+                        .HasColumnType("bit");
 
-                    b.HasIndex("RouteId", "DestinationSystem")
-                        .IsUnique();
+                    b.HasKey("RouteId");
 
                     b.ToTable("RouteTableMapping", (string)null);
                 });
@@ -304,14 +363,18 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)");
 
-                    b.Property<string>("DestinationMode")
+                    b.Property<string>("DeploymentState")
                         .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
 
-                    b.Property<string>("DestinationSystem")
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
+                    b.Property<Guid>("DestinationSystemId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Direction")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
 
                     b.Property<bool>("Enabled")
                         .HasColumnType("bit");
@@ -326,14 +389,14 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
-                    b.Property<string>("SourceSystem")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
+                    b.Property<Guid>("SourceSystemId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("SourceSystem", "EntityType", "Enabled");
+                    b.HasIndex("SourceSystemId", "EntityType", "Enabled");
+
+                    b.HasIndex("DestinationSystemId", "EntityType", "Direction", "Enabled");
 
                     b.ToTable("SyncRoute", (string)null);
                 });
@@ -355,8 +418,10 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
 
-                    b.Property<string>("PayloadJson")
-                        .IsRequired()
+                    b.Property<string>("DestinationPayloadJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SourcePayloadJson")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTimeOffset>("UpdatedAtUtc")
@@ -389,13 +454,16 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
                     b.Property<bool>("Enabled")
                         .HasColumnType("bit");
 
+                    b.Property<DateTimeOffset?>("PausedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("ProtectedConnectionString")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Provider")
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("nvarchar(32)");
-
-                    b.Property<string>("ProtectedConnectionString")
-                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
@@ -405,15 +473,120 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
                     b.ToTable("SystemDefinition", (string)null);
                 });
 
-            modelBuilder.Entity("SyncCoordinator.Infrastructure.Persistence.RouteFieldPolicyEntity", b =>
+            modelBuilder.Entity("SyncCoordinator.Infrastructure.Persistence.WebhookDeliveryEntity", b =>
                 {
-                    b.HasOne("SyncCoordinator.Infrastructure.Persistence.SyncRouteEntity", "Route")
-                        .WithMany("FieldPolicies")
-                        .HasForeignKey("RouteId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
 
-                    b.Navigation("Route");
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("DeliveredAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("EndpointId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("HttpStatusCode")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("LastAttemptAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTimeOffset?>("LockedUntilUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("NextAttemptAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EndpointId");
+
+                    b.HasIndex("EventId", "EndpointId")
+                        .IsUnique();
+
+                    b.HasIndex("State", "NextAttemptAtUtc");
+
+                    b.ToTable("WebhookDelivery", (string)null);
+                });
+
+            modelBuilder.Entity("SyncCoordinator.Infrastructure.Persistence.WebhookEndpointEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("EventTypesJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ProtectedSecret")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("SignatureEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("nvarchar(2048)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("WebhookEndpoint", (string)null);
+                });
+
+            modelBuilder.Entity("SyncCoordinator.Infrastructure.Persistence.WebhookEventEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTimeOffset>("OccurredAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OccurredAtUtc");
+
+                    b.ToTable("WebhookEvent", (string)null);
                 });
 
             modelBuilder.Entity("SyncCoordinator.Infrastructure.Persistence.RouteColumnMappingEntity", b =>
@@ -427,11 +600,22 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
                     b.Navigation("TableMapping");
                 });
 
+            modelBuilder.Entity("SyncCoordinator.Infrastructure.Persistence.RouteFixedValueMappingEntity", b =>
+                {
+                    b.HasOne("SyncCoordinator.Infrastructure.Persistence.RouteTableMappingEntity", "TableMapping")
+                        .WithMany("FixedValues")
+                        .HasForeignKey("TableMappingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("TableMapping");
+                });
+
             modelBuilder.Entity("SyncCoordinator.Infrastructure.Persistence.RouteTableMappingEntity", b =>
                 {
                     b.HasOne("SyncCoordinator.Infrastructure.Persistence.SyncRouteEntity", "Route")
-                        .WithMany("TableMappings")
-                        .HasForeignKey("RouteId")
+                        .WithOne("TableMapping")
+                        .HasForeignKey("SyncCoordinator.Infrastructure.Persistence.RouteTableMappingEntity", "RouteId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -451,14 +635,62 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("SyncCoordinator.Infrastructure.Persistence.SyncRouteEntity", b =>
                 {
-                    b.Navigation("FieldPolicies");
+                    b.HasOne("SyncCoordinator.Infrastructure.Persistence.SystemDefinitionEntity", "DestinationSystem")
+                        .WithMany()
+                        .HasForeignKey("DestinationSystemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
-                    b.Navigation("TableMappings");
+                    b.HasOne("SyncCoordinator.Infrastructure.Persistence.SystemDefinitionEntity", "SourceSystem")
+                        .WithMany()
+                        .HasForeignKey("SourceSystemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("DestinationSystem");
+
+                    b.Navigation("SourceSystem");
+                });
+
+            modelBuilder.Entity("SyncCoordinator.Infrastructure.Persistence.WebhookDeliveryEntity", b =>
+                {
+                    b.HasOne("SyncCoordinator.Infrastructure.Persistence.WebhookEndpointEntity", "Endpoint")
+                        .WithMany("Deliveries")
+                        .HasForeignKey("EndpointId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SyncCoordinator.Infrastructure.Persistence.WebhookEventEntity", "Event")
+                        .WithMany("Deliveries")
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Endpoint");
+
+                    b.Navigation("Event");
                 });
 
             modelBuilder.Entity("SyncCoordinator.Infrastructure.Persistence.RouteTableMappingEntity", b =>
                 {
                     b.Navigation("Columns");
+
+                    b.Navigation("FixedValues");
+                });
+
+            modelBuilder.Entity("SyncCoordinator.Infrastructure.Persistence.SyncRouteEntity", b =>
+                {
+                    b.Navigation("TableMapping");
+                });
+
+            modelBuilder.Entity("SyncCoordinator.Infrastructure.Persistence.WebhookEndpointEntity", b =>
+                {
+                    b.Navigation("Deliveries");
+                });
+
+            modelBuilder.Entity("SyncCoordinator.Infrastructure.Persistence.WebhookEventEntity", b =>
+                {
+                    b.Navigation("Deliveries");
                 });
 #pragma warning restore 612, 618
         }

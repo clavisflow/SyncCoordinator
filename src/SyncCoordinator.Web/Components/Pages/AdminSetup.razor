@@ -1,0 +1,71 @@
+@page "/account/setup"
+@attribute [AllowAnonymous]
+@layout AuthLayout
+@inject AdminAccountService Accounts
+@inject IHttpContextAccessor HttpContextAccessor
+@inject IStringLocalizer<SharedResource> L
+
+<PageTitle>@L["Auth_SetupPageTitle"]</PageTitle>
+
+<section class="auth-card">
+    <p class="kicker">LOCAL SETUP</p>
+    <h1>@L["Auth_SetupTitle"]</h1>
+    <p>@L["Auth_SetupDescription"]</p>
+
+    @if (!loaded)
+    {
+        <p class="auth-muted">@L["Auth_Loading"]</p>
+    }
+    else if (!isLocal)
+    {
+        <div class="message-box error" role="alert">@L["Auth_LocalOnly"]</div>
+    }
+    else if (initialized)
+    {
+        <div class="message-box success">@L["Auth_AlreadyInitialized"]</div>
+        <p class="auth-footer"><a href="/login">@L["Auth_BackToLogin"]</a></p>
+    }
+    else
+    {
+        @if (!string.IsNullOrEmpty(Error))
+        {
+            <div class="message-box error" role="alert">@ErrorText(Error)</div>
+        }
+        <form method="post" action="/auth/setup" class="auth-form">
+            <AntiforgeryToken />
+            <div class="form-field">
+                <label for="setup-password">@L["Auth_NewPassword"]</label>
+                <input id="setup-password" class="auth-input" name="password" type="password" minlength="12" maxlength="128" autocomplete="new-password" required autofocus />
+                <small>@L["Auth_PasswordRule"]</small>
+            </div>
+            <div class="form-field">
+                <label for="setup-confirmation">@L["Auth_ConfirmPassword"]</label>
+                <input id="setup-confirmation" class="auth-input" name="confirmation" type="password" minlength="12" maxlength="128" autocomplete="new-password" required />
+            </div>
+            <button class="auth-primary" type="submit">@L["Auth_SetupAction"]</button>
+        </form>
+    }
+</section>
+
+@code {
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    private bool loaded;
+    private bool initialized;
+    private bool isLocal;
+
+    protected override async Task OnInitializedAsync()
+    {
+        initialized = await Accounts.IsInitializedAsync(CancellationToken.None);
+        isLocal = HttpContextAccessor.HttpContext is { } context && LocalRequestGuard.IsLocal(context);
+        loaded = true;
+    }
+
+    private string ErrorText(string code) => code switch
+    {
+        "password_mismatch" => L["Auth_ErrorMismatch"],
+        "password_too_short" => L["Auth_ErrorTooShort"],
+        "password_too_long" => L["Auth_ErrorTooLong"],
+        "already_initialized" => L["Auth_AlreadyInitialized"],
+        _ => L["Auth_ErrorGeneric"]
+    };
+}

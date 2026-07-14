@@ -1,89 +1,108 @@
 @page "/mappings"
+@page "/routes/{RouteId:guid}/mappings"
+@attribute [Authorize]
+@using SyncCoordinator.Contracts
 @using SyncCoordinator.Core
 @inject ICoordinatorAdminService AdminService
 @inject ICoordinatorReadService ReadService
 @inject IDatabaseMetadataService MetadataService
+@inject NavigationManager Navigation
+@inject NotificationService NotificationService
+@inject IStringLocalizer<SharedResource> L
 
-<PageTitle>テーブルマッピング | SyncCoordinator</PageTitle>
+<PageTitle>@L["Mappings_PageTitle"]</PageTitle>
 
-<section class="page-heading">
+<section class="page-heading compact">
     <div>
         <p class="kicker">SCHEMA MAPPING</p>
-        <h1>テーブルマッピング</h1>
-        <p>登録済みDBへ接続し、同期元と同期先のテーブル・列を対応付けます。業務項目はCoordinator側で推測しません。</p>
+        <h1>@L["Mappings_Title"]</h1>
+        @if (SelectedRoute is not null) { <p>@SelectedRoute.Name</p> }
     </div>
+    <RadzenButton Text="@L["Common_BackToList"]" Icon="arrow_back" ButtonStyle="ButtonStyle.Primary" Variant="Variant.Text" Click="@BackToList" />
 </section>
 
+@if (RouteId is { } routeId)
+{
+    <RouteDetailTabs RouteId="@routeId" Active="mappings" />
+}
+
+@if (loadingPage)
+{
+    <div class="loading-state"><RadzenProgressBar Mode="ProgressBarMode.Indeterminate" ShowValue="false" Style="width: 8rem" /><span>@L["Mappings_LoadingTables"]</span></div>
+}
+else if (SelectedRoute is null)
+{
+    <div class="empty-state">@L["Mappings_SelectRuleError"]</div>
+}
+else
+{
 <div class="content-stack">
     <RadzenCard>
-        <div class="panel-title"><h2>登録済みマッピング</h2><span>@savedMappings.Count 件</span></div>
-        <RadzenDataGrid Data="@savedMappings" TItem="TableMappingListItem" AllowSorting="true" AllowFiltering="true" FilterMode="FilterMode.Simple" EmptyText="登録済みのマッピングはありません。" Density="Density.Compact">
+        <div class="panel-title"><h2>@L["Mappings_Registered"]</h2><span>@L["Common_Count", savedMappings.Count]</span></div>
+        <RadzenDataGrid Data="@savedMappings" TItem="TableMappingListItem" AllowSorting="true" EmptyText="@L["Mappings_Empty"]" Density="Density.Compact">
             <Columns>
-                <RadzenDataGridColumn TItem="TableMappingListItem" Property="RouteName" Title="ルート" />
-                <RadzenDataGridColumn TItem="TableMappingListItem" Title="システム" Sortable="false" Filterable="false">
-                    <Template Context="item"><code>@item.SourceSystem → @item.DestinationSystem</code></Template>
+                <RadzenDataGridColumn TItem="TableMappingListItem" Title="@L["Common_System"]" Sortable="false" Filterable="false">
+                    <Template Context="item"><code>@item.SourceSystemName @DirectionMark(item.RouteId) @item.DestinationSystemName</code></Template>
                 </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="TableMappingListItem" Property="SourceTable" Title="同期元テーブル" />
-                <RadzenDataGridColumn TItem="TableMappingListItem" Property="DestinationTable" Title="同期先テーブル" />
-                <RadzenDataGridColumn TItem="TableMappingListItem" Property="ColumnCount" Title="列数" Width="80px" />
-                <RadzenDataGridColumn TItem="TableMappingListItem" Title="" Sortable="false" Filterable="false" Width="72px" TextAlign="TextAlign.Right">
-                    <Template Context="item"><RadzenButton Icon="edit" title="編集" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => EditMappingAsync(item))" /></Template>
+                <RadzenDataGridColumn TItem="TableMappingListItem" Property="SourceTable" Title="@L["Mappings_SourceTable"]" />
+                <RadzenDataGridColumn TItem="TableMappingListItem" Property="DestinationTable" Title="@L["Mappings_DestinationTable"]" />
+                <RadzenDataGridColumn TItem="TableMappingListItem" Property="ColumnCount" Title="@L["Mappings_ColumnCount"]" Width="80px" />
+                <RadzenDataGridColumn TItem="TableMappingListItem" Title="" Sortable="false" Filterable="false" Width="70px" TextAlign="TextAlign.Right">
+                    <Template Context="item">
+                        <RadzenButton Icon="edit" title="@L["Common_Edit"]" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => EditMappingAsync(item))" />
+                    </Template>
                 </RadzenDataGridColumn>
             </Columns>
         </RadzenDataGrid>
     </RadzenCard>
 
     <RadzenCard>
-        <div class="panel-title"><h2>マッピング編集</h2><span>接続設定済みシステムのみ参照可能</span></div>
-        @if (errors.Count > 0)
+        <div class="panel-title"><div class="caption-title"><h2>@L["Mappings_Edit"]</h2><HelpTip Text="@L["Mappings_EditHelp"]" /></div></div>
+        @if (loadingTables)
         {
-            <div class="message-box error" role="alert">
-                @foreach (var error in errors) { <div>@error</div> }
-            </div>
+            <small class="inline-loading">@L["Mappings_LoadingTables"]</small>
         }
-        @if (!string.IsNullOrWhiteSpace(successMessage))
-        {
-            <div class="message-box success">@successMessage</div>
-        }
-
-        <div class="form-grid mapping-selector">
-            <div class="form-field">
-                <label>同期ルート</label>
-                <RadzenDropDown TValue="Guid?" @bind-Value="selectedRouteId" Data="@routes" TextProperty="Name" ValueProperty="Id" Placeholder="ルートを選択" AllowClear="true" class="form-control" />
-            </div>
-            <div class="form-field">
-                <label>宛先システム</label>
-                <RadzenDropDown TValue="string" @bind-Value="selectedDestinationSystem" Data="@systems" TextProperty="DisplayName" ValueProperty="Code" Placeholder="宛先を選択" AllowClear="true" class="form-control" />
-            </div>
-            <div class="form-actions wide">
-                <RadzenButton Text="テーブル一覧を読み込む" Icon="database" Click="@LoadTablesAsync" Disabled="@(loadingTables || selectedRouteId is null)" />
-            </div>
-        </div>
 
         @if (sourceTables.Count > 0 || destinationTables.Count > 0)
         {
             <div class="mapping-table-picker">
                 <div class="form-field">
-                    <label>同期元テーブル（@SelectedRoute?.SourceSystem）</label>
-                    <RadzenDropDown TValue="DatabaseTableInfo" @bind-Value="selectedSourceTable" Data="@sourceTables" TextProperty="DisplayName" Placeholder="テーブルを選択" AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive" class="form-control" />
+                <label>@L["Mappings_SourceTableFor", SelectedRoute?.SourceSystemName ?? string.Empty]</label>
+                <RadzenDropDown TValue="DatabaseTableInfo" Value="@selectedSourceTable" Change="@OnSourceTableChangedAsync" Data="@sourceTables" TextProperty="DisplayName" Placeholder="@L["Mappings_SelectTable"]" AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive" Disabled="@loadingColumns" class="form-control" />
                 </div>
-                <RadzenIcon Icon="arrow_forward" class="mapping-arrow" />
+                <RadzenIcon Icon="@(SelectedRoute?.Direction == SyncDirection.Bidirectional ? "sync_alt" : "arrow_forward")" class="mapping-arrow" />
                 <div class="form-field">
-                    <label>同期先テーブル（@selectedDestinationSystem）</label>
-                    <RadzenDropDown TValue="DatabaseTableInfo" @bind-Value="selectedDestinationTable" Data="@destinationTables" TextProperty="DisplayName" Placeholder="テーブルを選択" AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive" class="form-control" />
+                <label>@L["Mappings_DestinationTableFor", SelectedDestinationSystemName]</label>
+                <RadzenDropDown TValue="DatabaseTableInfo" Value="@selectedDestinationTable" Change="@OnDestinationTableChangedAsync" Data="@destinationTables" TextProperty="DisplayName" Placeholder="@L["Mappings_SelectTable"]" AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive" Disabled="@loadingColumns" class="form-control" />
                 </div>
-                <RadzenButton Text="列一覧を読み込む" Icon="view_column" ButtonStyle="ButtonStyle.Light" Click="@LoadColumnsAsync" Disabled="@(selectedSourceTable is null || selectedDestinationTable is null || loadingColumns)" />
             </div>
+            @if (loadingColumns)
+            {
+            <small class="inline-loading">@L["Mappings_LoadingColumns"]</small>
+            }
         }
 
         @if (columnRows.Count > 0)
         {
             <div class="column-mapping-header">
-                <div><strong>同期対象</strong><small>チェックした列だけを保存します。同名列は自動候補です。</small></div>
-                <span>@columnRows.Count(x => x.Included) / @columnRows.Count 列</span>
+                <div>
+                    <div class="caption-title"><strong>@L["Mappings_ColumnsAndPolicies"]</strong><HelpTip Text="@L["Mappings_ColumnsHelp"]" /></div>
+                    <small>@L["Mappings_SelectedColumns", columnRows.Count(x => x.Included), columnRows.Count]</small>
+                </div>
+                <div class="column-mapping-tools">
+                    <input type="search" @bind="columnFilter" @bind:event="oninput" placeholder="@L["Mappings_FilterColumns"]" aria-label="@L["Mappings_FilterColumns"]" class="form-control column-filter" />
+                    <label class="check-row"><RadzenCheckBox TValue="bool" @bind-Value="showUnmappedOnly" /><span>@L["Mappings_ShowUnmappedOnly"]</span></label>
+                </div>
             </div>
             <div class="column-mapping-list">
-                @foreach (var row in columnRows)
+                <div class="column-mapping-row column-mapping-labels" aria-hidden="true">
+                    <span>@L["Common_Target"]</span><span>@L["Mappings_SourceColumn"]</span><span></span><span>@L["Mappings_DestinationColumn"]</span><span>@L["Mappings_Key"]</span><span>@L["Mappings_OnConflict"]</span>
+                </div>
+                @if (!VisibleColumnRows.Any())
+                {
+                    <div class="column-mapping-empty">@L["Mappings_NoMatchingColumns"]</div>
+                }
+                @foreach (var row in VisibleColumnRows)
                 {
                     <div class="column-mapping-row" @key="row.Source.Name">
                         <RadzenCheckBox TValue="bool" @bind-Value="row.Included" />
@@ -92,71 +111,245 @@
                             <small>@row.Source.DataType @(row.Source.IsNullable ? "NULL" : "NOT NULL")</small>
                         </div>
                         <RadzenIcon Icon="arrow_forward" />
-                        <RadzenDropDown TValue="string" @bind-Value="row.DestinationColumn" Data="@destinationColumns" TextProperty="DisplayName" ValueProperty="Name" Placeholder="同期先列を選択" AllowClear="true" AllowFiltering="true" class="form-control" />
+                            <RadzenDropDown TValue="string" @bind-Value="row.DestinationColumn" Data="@destinationColumns" TextProperty="DisplayName" ValueProperty="Name" Placeholder="@L["Mappings_SelectDestinationColumn"]" AllowClear="true" AllowFiltering="true" class="form-control" />
                         <div class="check-row key-check">
                             <RadzenCheckBox TValue="bool" @bind-Value="row.IsKey" Disabled="@(!row.Included)" />
-                            <span>キー</span>
+                                <span>@L["Mappings_Key"]</span>
                         </div>
+                        <RadzenDropDown TValue="ConflictPolicy?" @bind-Value="row.ConflictPolicy" Data="@columnConflictPolicies" TextProperty="Text" ValueProperty="Value" Disabled="@(!row.Included)" class="form-control compact-control" />
                     </div>
                 }
             </div>
+
+            <div class="fixed-value-header">
+                <div class="caption-title"><strong>@L["Mappings_FixedValues"]</strong><HelpTip Text="@L["Mappings_FixedValuesHelp"]" /></div>
+                <RadzenButton Text="@L["Mappings_AddFixedValue"]" Icon="add" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" Click="@AddFixedValue" />
+            </div>
+            @if (fixedValueRows.Count > 0)
+            {
+                <div class="fixed-value-list">
+                    <div class="fixed-value-row fixed-value-labels @(SelectedRoute?.Direction == SyncDirection.Bidirectional ? "bidirectional" : null)" aria-hidden="true">
+                        @if (SelectedRoute?.Direction == SyncDirection.Bidirectional) { <span>@L["Mappings_ApplyDirection"]</span> }
+                        <span>@L["Mappings_TargetColumn"]</span><span>@L["Mappings_FixedValue"]</span><span></span>
+                    </div>
+                    @foreach (var fixedValue in fixedValueRows)
+                    {
+                        <div class="fixed-value-row @(SelectedRoute?.Direction == SyncDirection.Bidirectional ? "bidirectional" : null)" @key="fixedValue">
+                            @if (SelectedRoute?.Direction == SyncDirection.Bidirectional)
+                            {
+                                <RadzenDropDown TValue="MappingWriteDirection" Value="@fixedValue.Direction" Change="@(value => ChangeFixedValueDirection(fixedValue, value))" Data="@writeDirections" TextProperty="Text" ValueProperty="Value" class="form-control compact-control" />
+                            }
+                            <RadzenDropDown TValue="string" @bind-Value="fixedValue.TargetColumn" Data="@FixedTargetColumns(fixedValue)" TextProperty="DisplayName" ValueProperty="Name" Placeholder="@L["Mappings_SelectColumn"]" AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive" class="form-control compact-control" />
+                            <RadzenTextBox @bind-Value="fixedValue.Value" Placeholder="@L["Mappings_FixedValueExample"]" MaxLength="4000" class="form-control compact-control" />
+                            <RadzenButton Icon="delete" title="@L["Common_Delete"]" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => RemoveFixedValue(fixedValue))" />
+                        </div>
+                    }
+                </div>
+            }
+            <div class="fixed-value-header deletion-header">
+                <div class="caption-title">
+                    <strong>@L["Mappings_DeleteSync"]</strong>
+                    <HelpTip Text="@L["Mappings_DeleteSyncHelp"]" />
+                </div>
+                <div class="check-row">
+                    <RadzenCheckBox TValue="bool" @bind-Value="syncDeletes" />
+                    <span>@L["Mappings_SyncDeletes"]</span>
+                </div>
+            </div>
+            @if (syncDeletes)
+            {
+                <div class="deletion-mode-grid">
+                    <div class="deletion-mode-panel">
+                        <strong>@L["Mappings_SourceFor", SelectedRoute?.SourceSystemName ?? string.Empty]</strong>
+                        <div class="form-field">
+                            <label>@L["Mappings_DeletionMode"]</label>
+                            <RadzenDropDown TValue="DeletionMode" @bind-Value="sourceDeletionMode" Data="@deletionModes" TextProperty="Text" ValueProperty="Value" class="form-control compact-control" />
+                        </div>
+                        @if (sourceDeletionMode == DeletionMode.Logical)
+                        {
+                            <div class="form-field">
+                            <label>@L["Mappings_LogicalDeleteColumn"]</label>
+                            <RadzenDropDown TValue="string" @bind-Value="sourceLogicalDeleteColumn" Data="@sourceColumns" TextProperty="DisplayName" ValueProperty="Name" Placeholder="@L["Mappings_SelectColumn"]" AllowFiltering="true" class="form-control compact-control" />
+                            </div>
+                            <div class="form-field">
+                            <label>@L["Mappings_DeleteValue"]</label>
+                            <RadzenTextBox @bind-Value="sourceLogicalDeleteValue" Placeholder="@L["Mappings_DeleteValueExample"]" MaxLength="4000" class="form-control compact-control" />
+                            </div>
+                        }
+                    </div>
+                    <div class="deletion-mode-panel">
+                        <strong>@L["Mappings_DestinationFor", SelectedDestinationSystemName]</strong>
+                        <div class="form-field">
+                            <label>@L["Mappings_DeletionMode"]</label>
+                            <RadzenDropDown TValue="DeletionMode" @bind-Value="destinationDeletionMode" Data="@deletionModes" TextProperty="Text" ValueProperty="Value" class="form-control compact-control" />
+                        </div>
+                        @if (destinationDeletionMode == DeletionMode.Logical)
+                        {
+                            <div class="form-field">
+                            <label>@L["Mappings_LogicalDeleteColumn"]</label>
+                            <RadzenDropDown TValue="string" @bind-Value="destinationLogicalDeleteColumn" Data="@destinationColumns" TextProperty="DisplayName" ValueProperty="Name" Placeholder="@L["Mappings_SelectColumn"]" AllowFiltering="true" class="form-control compact-control" />
+                            </div>
+                            <div class="form-field">
+                            <label>@L["Mappings_DeleteValue"]</label>
+                            <RadzenTextBox @bind-Value="destinationLogicalDeleteValue" Placeholder="@L["Mappings_DeleteValueExample"]" MaxLength="4000" class="form-control compact-control" />
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
             <div class="form-actions page-actions">
-                <RadzenButton Text="@(saving ? "保存中…" : "マッピングを保存")" Icon="save" Click="@SaveMappingAsync" Disabled="@saving" />
+                <RadzenButton Text="@(saving ? L["Common_Saving"] : L["Mappings_Save"])" Icon="save" Click="@SaveMappingAsync" Disabled="@saving" />
             </div>
         }
     </RadzenCard>
 </div>
+}
 
 @code {
+    [Parameter] public Guid? RouteId { get; set; }
+
     private IReadOnlyList<RouteListItem> routes = [];
     private IReadOnlyList<SystemListItem> systems = [];
     private IReadOnlyList<TableMappingListItem> savedMappings = [];
     private IReadOnlyList<DatabaseTableInfo> sourceTables = [];
     private IReadOnlyList<DatabaseTableInfo> destinationTables = [];
+    private IReadOnlyList<DatabaseColumnInfo> sourceColumns = [];
     private IReadOnlyList<DatabaseColumnInfo> destinationColumns = [];
     private List<ColumnMappingRow> columnRows = [];
+    private List<FixedValueRow> fixedValueRows = [];
+    private bool syncDeletes;
+    private DeletionMode sourceDeletionMode = DeletionMode.Physical;
+    private string sourceLogicalDeleteColumn = string.Empty;
+    private string sourceLogicalDeleteValue = string.Empty;
+    private DeletionMode destinationDeletionMode = DeletionMode.Physical;
+    private string destinationLogicalDeleteColumn = string.Empty;
+    private string destinationLogicalDeleteValue = string.Empty;
     private Guid? selectedRouteId;
     private string selectedDestinationSystem = string.Empty;
     private DatabaseTableInfo? selectedSourceTable;
     private DatabaseTableInfo? selectedDestinationTable;
     private TableMappingInput? existingMapping;
-    private IReadOnlyList<string> errors = [];
-    private string? successMessage;
     private bool loadingTables;
     private bool loadingColumns;
+    private bool loadingPage = true;
     private bool saving;
+    private string columnFilter = string.Empty;
+    private bool showUnmappedOnly;
+
+    private ColumnPolicyOption[] columnConflictPolicies =>
+    [
+        new(null, L["Mappings_RuleDefault"]),
+        new(ConflictPolicy.HoldAndNotify, L["Common_Hold"]),
+        new(ConflictPolicy.ApplyIncomingAndNotify, L["Common_UseSource"]),
+        new(ConflictPolicy.KeepCurrentAndNotify, L["Common_KeepDestination"]),
+        new(ConflictPolicy.MergeAndNotify, L["Common_Merge"])
+    ];
+    private WriteDirectionOption[] writeDirections =>
+    [
+        new(MappingWriteDirection.Forward, L["Mappings_WriteDestination"]),
+        new(MappingWriteDirection.Reverse, L["Mappings_WriteSource"])
+    ];
+    private DeletionModeOption[] deletionModes =>
+    [
+        new(DeletionMode.Physical, L["Mappings_PhysicalDelete"]),
+        new(DeletionMode.Logical, L["Mappings_LogicalDelete"])
+    ];
 
     private RouteListItem? SelectedRoute => routes.SingleOrDefault(x => x.Id == selectedRouteId);
+    private string SelectedDestinationSystemName =>
+        systems.SingleOrDefault(x => x.Code == selectedDestinationSystem)?.DisplayName ?? selectedDestinationSystem;
 
-    protected override async Task OnInitializedAsync()
+    private string DirectionMark(Guid routeId) =>
+        routes.SingleOrDefault(x => x.Id == routeId)?.Direction == SyncDirection.Bidirectional ? "⇄" : "→";
+
+    private IEnumerable<ColumnMappingRow> VisibleColumnRows => columnRows.Where(row =>
+        (!showUnmappedOnly || !row.Included || string.IsNullOrWhiteSpace(row.DestinationColumn)) &&
+        (string.IsNullOrWhiteSpace(columnFilter) ||
+         row.Source.Name.Contains(columnFilter, StringComparison.OrdinalIgnoreCase) ||
+         row.DestinationColumn.Contains(columnFilter, StringComparison.OrdinalIgnoreCase)));
+
+    protected override async Task OnParametersSetAsync()
     {
+        if (RouteId is null)
+        {
+            Navigation.NavigateTo("/routes", replace: true);
+            return;
+        }
+
+        loadingPage = true;
         routes = await ReadService.GetRoutesAsync(CancellationToken.None);
         systems = await AdminService.GetSystemsAsync(CancellationToken.None);
-        savedMappings = await AdminService.GetTableMappingsAsync(CancellationToken.None);
+        if (routes.All(x => x.Id != RouteId.Value))
+        {
+            Navigation.NavigateTo("/routes", replace: true);
+            return;
+        }
+
+        var mappings = await AdminService.GetTableMappingsAsync(CancellationToken.None);
+        savedMappings = mappings.Where(x => x.RouteId == RouteId.Value).ToArray();
+        await OnRouteChangedAsync(RouteId.Value);
+        loadingPage = false;
+    }
+
+    private async Task OnRouteChangedAsync(object? value)
+    {
+        var routeId = value is Guid id ? id : (Guid?)null;
+        selectedRouteId = routeId;
+        sourceTables = [];
+        destinationTables = [];
+        sourceColumns = [];
+        destinationColumns = [];
+        selectedSourceTable = null;
+        selectedDestinationTable = null;
+        existingMapping = null;
+        columnRows = [];
+        fixedValueRows = [];
+        columnFilter = string.Empty;
+        showUnmappedOnly = false;
+        ResetDeletionSettings();
+        if (routeId is not null)
+        {
+            await LoadTablesAsync();
+        }
+    }
+
+    private async Task OnSourceTableChangedAsync(object? value)
+    {
+        selectedSourceTable = value as DatabaseTableInfo;
+        await LoadColumnsWhenReadyAsync();
+    }
+
+    private async Task OnDestinationTableChangedAsync(object? value)
+    {
+        selectedDestinationTable = value as DatabaseTableInfo;
+        await LoadColumnsWhenReadyAsync();
+    }
+
+    private async Task LoadColumnsWhenReadyAsync()
+    {
+        columnRows = [];
+        fixedValueRows = [];
+        ResetDeletionSettings();
+        if (selectedSourceTable is not null && selectedDestinationTable is not null)
+        {
+            await LoadColumnsAsync();
+        }
     }
 
     private async Task LoadTablesAsync()
     {
-        errors = [];
-        successMessage = null;
         columnRows = [];
+        fixedValueRows = [];
         loadingTables = true;
         try
         {
-            var route = SelectedRoute ?? throw new ConfigurationValidationException(["同期ルートを選択してください。"]);
-            if (route.Destination != DestinationMode.OriginSystem.ToString())
-            {
-                selectedDestinationSystem = route.Destination;
-            }
-            if (string.IsNullOrWhiteSpace(selectedDestinationSystem))
-            {
-                throw new ConfigurationValidationException(["宛先システムを選択してください。"]);
-            }
+            var route = SelectedRoute ?? throw new ConfigurationValidationException([L["Mappings_SelectRuleError"]]);
+            selectedDestinationSystem = route.DestinationSystem;
             var source = GetConfiguredSystem(route.SourceSystem);
             var destination = GetConfiguredSystem(selectedDestinationSystem);
             sourceTables = await MetadataService.GetTablesAsync(source.Id, CancellationToken.None);
             destinationTables = await MetadataService.GetTablesAsync(destination.Id, CancellationToken.None);
-            existingMapping = await AdminService.GetTableMappingAsync(route.Id, selectedDestinationSystem, CancellationToken.None);
+            existingMapping = await AdminService.GetTableMappingAsync(route.Id, CancellationToken.None);
             selectedSourceTable = FindTable(sourceTables, existingMapping?.SourceSchema, existingMapping?.SourceTable);
             selectedDestinationTable = FindTable(destinationTables, existingMapping?.DestinationSchema, existingMapping?.DestinationTable);
             if (selectedSourceTable is not null && selectedDestinationTable is not null)
@@ -166,11 +359,11 @@
         }
         catch (ConfigurationValidationException exception)
         {
-            errors = exception.Errors;
+            NotificationService.ShowError(exception.Errors, L["Common_OperationFailed"]);
         }
         catch (Exception exception)
         {
-            errors = [exception.Message];
+            NotificationService.ShowError([exception.Message], L["Common_OperationFailed"]);
         }
         finally
         {
@@ -180,17 +373,22 @@
 
     private async Task LoadColumnsAsync()
     {
-        errors = [];
-        successMessage = null;
         loadingColumns = true;
         try
         {
-            var route = SelectedRoute ?? throw new InvalidOperationException("同期ルートを選択してください。");
+            var route = SelectedRoute ?? throw new InvalidOperationException(L["Mappings_SelectRuleError"]);
             var source = GetConfiguredSystem(route.SourceSystem);
             var destination = GetConfiguredSystem(selectedDestinationSystem);
-            var sourceColumns = await MetadataService.GetColumnsAsync(source.Id, selectedSourceTable!.Schema, selectedSourceTable.Name, CancellationToken.None);
+            sourceColumns = await MetadataService.GetColumnsAsync(source.Id, selectedSourceTable!.Schema, selectedSourceTable.Name, CancellationToken.None);
             destinationColumns = await MetadataService.GetColumnsAsync(destination.Id, selectedDestinationTable!.Schema, selectedDestinationTable.Name, CancellationToken.None);
-            var saved = existingMapping?.Columns.ToDictionary(x => x.SourceColumn, StringComparer.OrdinalIgnoreCase) ?? [];
+            var mappingApplies = existingMapping is not null &&
+                                 string.Equals(existingMapping.SourceSchema, selectedSourceTable.Schema, StringComparison.OrdinalIgnoreCase) &&
+                                 string.Equals(existingMapping.SourceTable, selectedSourceTable.Name, StringComparison.OrdinalIgnoreCase) &&
+                                 string.Equals(existingMapping.DestinationSchema, selectedDestinationTable.Schema, StringComparison.OrdinalIgnoreCase) &&
+                                 string.Equals(existingMapping.DestinationTable, selectedDestinationTable.Name, StringComparison.OrdinalIgnoreCase);
+            var saved = mappingApplies
+                ? existingMapping!.Columns.ToDictionary(x => x.SourceColumn, StringComparer.OrdinalIgnoreCase)
+                : [];
             columnRows = sourceColumns.Select(sourceColumn =>
             {
                 saved.TryGetValue(sourceColumn.Name, out var savedColumn);
@@ -200,13 +398,28 @@
                     Source = sourceColumn,
                     Included = savedColumn is not null || sameName is not null,
                     DestinationColumn = savedColumn?.DestinationColumn ?? sameName?.Name ?? string.Empty,
-                    IsKey = savedColumn?.IsKey ?? sourceColumn.IsPrimaryKey
+                    IsKey = savedColumn?.IsKey ?? sourceColumn.IsPrimaryKey,
+                    ConflictPolicy = savedColumn?.ConflictPolicy
                 };
             }).ToList();
+            fixedValueRows = mappingApplies ? existingMapping!.FixedValues
+                .Select(x => new FixedValueRow
+                {
+                    Direction = x.Direction,
+                    TargetColumn = x.TargetColumn,
+                    Value = x.Value
+                }).ToList() : [];
+            syncDeletes = mappingApplies && existingMapping!.SyncDeletes;
+            sourceDeletionMode = mappingApplies ? existingMapping!.SourceDeletionMode : DeletionMode.Physical;
+            sourceLogicalDeleteColumn = mappingApplies ? existingMapping!.SourceLogicalDeleteColumn : string.Empty;
+            sourceLogicalDeleteValue = mappingApplies ? existingMapping!.SourceLogicalDeleteValue : string.Empty;
+            destinationDeletionMode = mappingApplies ? existingMapping!.DestinationDeletionMode : DeletionMode.Physical;
+            destinationLogicalDeleteColumn = mappingApplies ? existingMapping!.DestinationLogicalDeleteColumn : string.Empty;
+            destinationLogicalDeleteValue = mappingApplies ? existingMapping!.DestinationLogicalDeleteValue : string.Empty;
         }
         catch (Exception exception)
         {
-            errors = [exception.Message];
+            NotificationService.ShowError([exception.Message], L["Common_OperationFailed"]);
         }
         finally
         {
@@ -217,38 +430,51 @@
     private async Task SaveMappingAsync()
     {
         saving = true;
-        errors = [];
-        successMessage = null;
         try
         {
             var model = new TableMappingInput
             {
-                Id = existingMapping?.Id,
                 RouteId = selectedRouteId!.Value,
-                DestinationSystem = selectedDestinationSystem,
                 SourceSchema = selectedSourceTable!.Schema,
                 SourceTable = selectedSourceTable.Name,
                 DestinationSchema = selectedDestinationTable!.Schema,
                 DestinationTable = selectedDestinationTable.Name,
+                SyncDeletes = syncDeletes,
+                SourceDeletionMode = sourceDeletionMode,
+                SourceLogicalDeleteColumn = sourceLogicalDeleteColumn,
+                SourceLogicalDeleteValue = sourceLogicalDeleteValue,
+                DestinationDeletionMode = destinationDeletionMode,
+                DestinationLogicalDeleteColumn = destinationLogicalDeleteColumn,
+                DestinationLogicalDeleteValue = destinationLogicalDeleteValue,
                 Columns = columnRows.Where(x => x.Included).Select(x => new ColumnMappingInput
                 {
                     SourceColumn = x.Source.Name,
                     DestinationColumn = x.DestinationColumn,
-                    IsKey = x.IsKey
+                    IsKey = x.IsKey,
+                    ConflictPolicy = x.ConflictPolicy
+                }).ToList(),
+                FixedValues = fixedValueRows.Select(x => new FixedValueMappingInput
+                {
+                    Direction = SelectedRoute?.Direction == SyncDirection.Bidirectional
+                        ? x.Direction
+                        : MappingWriteDirection.Forward,
+                    TargetColumn = x.TargetColumn,
+                    Value = x.Value
                 }).ToList()
             };
             await AdminService.SaveTableMappingAsync(model, CancellationToken.None);
-            existingMapping = await AdminService.GetTableMappingAsync(model.RouteId, model.DestinationSystem, CancellationToken.None);
-            savedMappings = await AdminService.GetTableMappingsAsync(CancellationToken.None);
-            successMessage = "テーブル／列マッピングを保存しました。";
+            existingMapping = await AdminService.GetTableMappingAsync(model.RouteId, CancellationToken.None);
+            var mappings = await AdminService.GetTableMappingsAsync(CancellationToken.None);
+            savedMappings = mappings.Where(x => x.RouteId == model.RouteId).ToArray();
+            NotificationService.ShowSuccess(L["Mappings_Saved"], L["Common_Completed"]);
         }
         catch (ConfigurationValidationException exception)
         {
-            errors = exception.Errors;
+            NotificationService.ShowError(exception.Errors, L["Common_OperationFailed"]);
         }
         catch (Exception exception)
         {
-            errors = [exception.Message];
+            NotificationService.ShowError([exception.Message], L["Common_OperationFailed"]);
         }
         finally
         {
@@ -258,18 +484,58 @@
 
     private async Task EditMappingAsync(TableMappingListItem item)
     {
-        selectedRouteId = item.RouteId;
-        selectedDestinationSystem = item.DestinationSystem;
-        await LoadTablesAsync();
+        await OnRouteChangedAsync(item.RouteId);
+    }
+
+    private void BackToList() => Navigation.NavigateTo("/routes");
+
+    private void AddFixedValue() => fixedValueRows.Add(new FixedValueRow());
+
+    private void RemoveFixedValue(FixedValueRow row) => fixedValueRows.Remove(row);
+
+    private void ChangeFixedValueDirection(FixedValueRow row, object value)
+    {
+        row.Direction = (MappingWriteDirection)value;
+        row.TargetColumn = string.Empty;
+    }
+
+    private void ResetDeletionSettings()
+    {
+        syncDeletes = false;
+        sourceDeletionMode = DeletionMode.Physical;
+        sourceLogicalDeleteColumn = string.Empty;
+        sourceLogicalDeleteValue = string.Empty;
+        destinationDeletionMode = DeletionMode.Physical;
+        destinationLogicalDeleteColumn = string.Empty;
+        destinationLogicalDeleteValue = string.Empty;
+    }
+
+    private IReadOnlyList<DatabaseColumnInfo> FixedTargetColumns(FixedValueRow row)
+    {
+        var candidates = row.Direction == MappingWriteDirection.Forward
+            ? destinationColumns
+            : sourceColumns;
+        var normallyMapped = row.Direction == MappingWriteDirection.Forward
+            ? columnRows.Where(x => x.Included).Select(x => x.DestinationColumn)
+            : columnRows.Where(x => x.Included).Select(x => x.Source.Name);
+        var usedByOtherFixedValues = fixedValueRows
+            .Where(x => !ReferenceEquals(x, row) && x.Direction == row.Direction)
+            .Select(x => x.TargetColumn);
+        var unavailable = normallyMapped.Concat(usedByOtherFixedValues)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return candidates.Where(x =>
+                string.Equals(x.Name, row.TargetColumn, StringComparison.OrdinalIgnoreCase) ||
+                !unavailable.Contains(x.Name))
+            .ToArray();
     }
 
     private SystemListItem GetConfiguredSystem(string code)
     {
         var system = systems.SingleOrDefault(x => string.Equals(x.Code, code, StringComparison.OrdinalIgnoreCase)) ??
-                     throw new InvalidOperationException($"システム '{code}' が存在しません。");
+                     throw new InvalidOperationException(L["Mappings_SystemMissing", code]);
         if (!system.ConnectionConfigured)
         {
-            throw new ConfigurationValidationException([$"システム '{code}' のDB接続情報が未設定です。システム管理から設定してください。"]);
+            throw new ConfigurationValidationException([L["Mappings_ConnectionMissing", code]]);
         }
         return system;
     }
@@ -283,5 +549,17 @@
         public bool Included { get; set; }
         public string DestinationColumn { get; set; } = string.Empty;
         public bool IsKey { get; set; }
+        public ConflictPolicy? ConflictPolicy { get; set; }
     }
+
+    private sealed class FixedValueRow
+    {
+        public MappingWriteDirection Direction { get; set; }
+        public string TargetColumn { get; set; } = string.Empty;
+        public string Value { get; set; } = string.Empty;
+    }
+
+    private sealed record ColumnPolicyOption(ConflictPolicy? Value, string Text);
+    private sealed record WriteDirectionOption(MappingWriteDirection Value, string Text);
+    private sealed record DeletionModeOption(DeletionMode Value, string Text);
 }

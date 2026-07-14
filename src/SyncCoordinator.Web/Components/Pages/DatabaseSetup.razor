@@ -1,0 +1,206 @@
+@page "/routes/{RouteId:guid}/database-setup"
+@attribute [Authorize]
+@using SyncCoordinator.Core
+@inject IDatabaseDeploymentService DeploymentService
+@inject NavigationManager Navigation
+@inject NotificationService NotificationService
+@inject IStringLocalizer<SharedResource> L
+
+<PageTitle>@L["DatabaseSetup_PageTitle"]</PageTitle>
+
+<section class="page-heading compact">
+    <div>
+        <p class="kicker">DATABASE PREPARATION</p>
+        <h1>@L["DatabaseSetup_Title"]</h1>
+        @if (plan is not null) { <p>@plan.RouteName</p> }
+    </div>
+    <RadzenButton Text="@L["Common_BackToList"]" Icon="arrow_back" ButtonStyle="ButtonStyle.Primary" Variant="Variant.Text" Click="@BackToList" />
+</section>
+
+<RouteDetailTabs RouteId="@RouteId" Active="database" />
+
+@if (loading)
+{
+    <div class="loading-state"><RadzenProgressBar Mode="ProgressBarMode.Indeterminate" ShowValue="false" Style="width: 8rem" /><span>@L["DatabaseSetup_Loading"]</span></div>
+}
+else if (plan is null)
+{
+    <div class="empty-state">@L["DatabaseSetup_Empty"]</div>
+}
+else if (plan is not null)
+{
+    <div class="content-stack">
+        <RadzenCard>
+            <div class="deployment-summary">
+                <div><span>@L["DatabaseSetup_DbPreparation"]</span><strong>@(plan.State == DatabaseDeploymentState.Prepared ? L["DatabaseSetup_Verified"] : L["DatabaseSetup_Unverified"])</strong></div>
+            </div>
+            <div class="deployment-actions">
+                <RadzenButton Text="@(verifying ? L["DatabaseSetup_Verifying"] : L["DatabaseSetup_VerifyAll"])" Icon="fact_check" ButtonStyle="ButtonStyle.Light" Click="@VerifyAsync" Disabled="@verifying" />
+            </div>
+            <p class="deployment-action-help">@L["DatabaseSetup_VerifyHelp"]</p>
+        </RadzenCard>
+
+        @if (plan.Warnings.Count > 0 || !plan.DirectApplyAllowed)
+        {
+            <div class="info-note deployment-warning deployment-review" role="note">
+                <div class="deployment-review-heading">
+                    <RadzenIcon Icon="warning_amber" />
+                    <strong>@L["DatabaseSetup_ReviewBeforeApply"]</strong>
+                </div>
+                <ul class="deployment-review-list">
+                    @foreach (var warning in plan.Warnings) { <li>@Display(warning)</li> }
+                    @if (!plan.DirectApplyAllowed) { <li>@L["DatabaseSetup_DirectDisabled"]</li> }
+                </ul>
+            </div>
+        }
+
+        @foreach (var item in targets)
+        {
+            <RadzenCard class="deployment-target" @key="item.Target.SystemCode">
+                <div class="panel-title">
+                    <div><h2>@item.Target.SystemName</h2><span>@Display(item.Target.DirectionLabel) ・ @item.Target.Provider ・ @item.Target.DatabaseName</span></div>
+                    <a class="deployment-download" href="@DownloadUrl(item.Target)" download>@L["DatabaseSetup_DownloadSql"]</a>
+                </div>
+
+                <div class="deployment-preview-list">
+                    <details class="deployment-preview">
+                        <summary><span>@L["DatabaseSetup_ViewChanges"]</span><small>@L["Common_Count", item.Target.Changes.Count]</small></summary>
+                        <ul class="deployment-change-list">
+                            @foreach (var change in item.Target.Changes) { <li>@Display(change)</li> }
+                        </ul>
+                    </details>
+                    <details class="deployment-preview sql-preview">
+                        <summary>@L["DatabaseSetup_ViewSql"]</summary>
+                        <pre>@item.Target.Script</pre>
+                    </details>
+                </div>
+
+                <div class="deployment-confirmation">
+                    <div class="form-field">
+                        <label>@L["DatabaseSetup_ConfirmDatabaseName", item.Target.DatabaseName]</label>
+                        <RadzenTextBox @bind-Value="item.DatabaseNameConfirmation" class="form-control" />
+                    </div>
+                    <div class="check-row">
+                        <RadzenCheckBox TValue="bool" @bind-Value="item.Confirmed" />
+                        <span>@L["DatabaseSetup_ConfirmedSql"]</span>
+                    </div>
+                    <RadzenButton Text="@(applyingSystem == item.Target.SystemCode ? L["DatabaseSetup_Applying"] : L["DatabaseSetup_ApplyDatabase"])" Icon="database" ButtonStyle="ButtonStyle.Danger" Disabled="@(!CanApply(item))" Click="@(() => ApplyAsync(item))" />
+                </div>
+            </RadzenCard>
+        }
+
+        <div class="info-note deployment-warning">
+            <div>@L["DatabaseSetup_DbaNote"]</div>
+            <div>@L["DatabaseSetup_TriggerNote"]</div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid RouteId { get; set; }
+
+    private DatabaseDeploymentPlan? plan;
+    private List<TargetInput> targets = [];
+    private string? applyingSystem;
+    private bool loading = true;
+    private bool verifying;
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            plan = await DeploymentService.GetPlanAsync(RouteId, CancellationToken.None);
+            targets = plan.Targets.Select(x => new TargetInput(x)).ToList();
+        }
+        catch (ConfigurationValidationException exception)
+        {
+            NotificationService.ShowError(exception.Errors, L["DatabaseSetup_PlanFailed"]);
+        }
+        catch (Exception exception)
+        {
+            NotificationService.ShowError([exception.Message], L["DatabaseSetup_PlanFailed"]);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task ApplyAsync(TargetInput item)
+    {
+        if (!item.Confirmed)
+        {
+            NotificationService.ShowError([L["DatabaseSetup_ConfirmationRequired"]], L["Common_OperationFailed"]);
+            return;
+        }
+        applyingSystem = item.Target.SystemCode;
+        try
+        {
+            var result = await DeploymentService.ApplyTargetAsync(
+                RouteId,
+                item.Target.SystemCode,
+                item.DatabaseNameConfirmation,
+                CancellationToken.None);
+            NotificationService.ShowSuccess(Display(result.Message), L["DatabaseSetup_ApplyComplete"]);
+            item.Confirmed = false;
+            item.DatabaseNameConfirmation = string.Empty;
+        }
+        catch (ConfigurationValidationException exception)
+        {
+            NotificationService.ShowError(exception.Errors, L["DatabaseSetup_ApplyFailed"]);
+        }
+        catch (Exception exception)
+        {
+            NotificationService.ShowError([exception.Message], L["DatabaseSetup_ApplyFailed"]);
+        }
+        finally
+        {
+            applyingSystem = null;
+        }
+    }
+
+    private async Task VerifyAsync()
+    {
+        verifying = true;
+        try
+        {
+            var result = await DeploymentService.VerifyAsync(RouteId, CancellationToken.None);
+            NotificationService.ShowSuccess(Display(result.Message), L["DatabaseSetup_VerifyComplete"]);
+            plan = plan! with { State = result.State, Enabled = result.Enabled };
+        }
+        catch (Exception exception)
+        {
+            NotificationService.ShowError(
+                exception is ConfigurationValidationException validation ? validation.Errors : [exception.Message],
+                L["DatabaseSetup_VerifyFailed"]);
+        }
+        finally
+        {
+            verifying = false;
+        }
+    }
+
+    private string DownloadUrl(DatabaseDeploymentTarget target) =>
+        $"/api/routes/{RouteId}/database-setup/{Uri.EscapeDataString(target.SystemCode)}/script";
+
+    private bool CanApply(TargetInput item) =>
+        plan?.DirectApplyAllowed == true &&
+        item.Confirmed &&
+        applyingSystem is null &&
+        string.Equals(item.DatabaseNameConfirmation, item.Target.DatabaseName, StringComparison.Ordinal);
+
+    private string Display(DisplayText text) =>
+        L[text.ResourceKey, text.Arguments.Select(value => (object)value).ToArray()];
+
+    private void BackToList() => Navigation.NavigateTo("/routes");
+
+    private sealed class TargetInput(DatabaseDeploymentTarget target)
+    {
+        public DatabaseDeploymentTarget Target { get; } = target;
+        public string DatabaseNameConfirmation { get; set; } = string.Empty;
+        public bool Confirmed { get; set; }
+    }
+}

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using MySqlConnector;
+using Npgsql;
 using SyncCoordinator.Core;
 
 namespace SyncCoordinator.Infrastructure.Persistence;
@@ -49,6 +50,23 @@ internal static class ManagedConnectionStringFactory
                 Password = password,
                 SslMode = input.Encrypt ? MySqlSslMode.Preferred : MySqlSslMode.Disabled,
                 GuidFormat = MySqlGuidFormat.Char36,
+                AllowUserVariables = true,
+                ApplicationName = "SyncCoordinator"
+            }.ConnectionString;
+        }
+
+        if (string.Equals(provider, "PostgreSql", StringComparison.OrdinalIgnoreCase))
+        {
+            return new NpgsqlConnectionStringBuilder
+            {
+                Host = input.Server,
+                Port = input.Port ?? 5432,
+                Database = input.Database,
+                Username = input.UserName,
+                Password = password,
+                SslMode = !input.Encrypt
+                    ? SslMode.Disable
+                    : input.TrustServerCertificate ? SslMode.Require : SslMode.VerifyFull,
                 ApplicationName = "SyncCoordinator"
             }.ConnectionString;
         }
@@ -76,23 +94,47 @@ internal static class ManagedConnectionStringFactory
             };
         }
 
-        var mySql = new MySqlConnectionStringBuilder(connectionString);
-        return new DatabaseConnectionInput
+        if (string.Equals(provider, "MySql", StringComparison.OrdinalIgnoreCase))
         {
-            SystemId = systemId,
-            Server = mySql.Server,
-            Port = (int)mySql.Port,
-            Database = mySql.Database,
-            UserName = mySql.UserID,
-            Encrypt = mySql.SslMode != MySqlSslMode.Disabled,
-            HasStoredPassword = !string.IsNullOrEmpty(mySql.Password)
-        };
+            var mySql = new MySqlConnectionStringBuilder(connectionString);
+            return new DatabaseConnectionInput
+            {
+                SystemId = systemId,
+                Server = mySql.Server,
+                Port = (int)mySql.Port,
+                Database = mySql.Database,
+                UserName = mySql.UserID,
+                Encrypt = mySql.SslMode != MySqlSslMode.Disabled,
+                HasStoredPassword = !string.IsNullOrEmpty(mySql.Password)
+            };
+        }
+
+        if (string.Equals(provider, "PostgreSql", StringComparison.OrdinalIgnoreCase))
+        {
+            var postgreSql = new NpgsqlConnectionStringBuilder(connectionString);
+            return new DatabaseConnectionInput
+            {
+                SystemId = systemId,
+                Server = postgreSql.Host ?? string.Empty,
+                Port = postgreSql.Port,
+                Database = postgreSql.Database ?? string.Empty,
+                UserName = postgreSql.Username ?? string.Empty,
+                Encrypt = postgreSql.SslMode != SslMode.Disable,
+                TrustServerCertificate = postgreSql.SslMode == SslMode.Require,
+                HasStoredPassword = !string.IsNullOrEmpty(postgreSql.Password)
+            };
+        }
+
+        throw new ConfigurationValidationException([$"未対応のProviderです: {provider}"]);
     }
 
-    public static string GetPassword(string provider, string connectionString) =>
-        string.Equals(provider, "SqlServer", StringComparison.OrdinalIgnoreCase)
-            ? new SqlConnectionStringBuilder(connectionString).Password
-            : new MySqlConnectionStringBuilder(connectionString).Password;
+    public static string GetPassword(string provider, string connectionString) => provider.ToUpperInvariant() switch
+    {
+        "SQLSERVER" => new SqlConnectionStringBuilder(connectionString).Password,
+        "MYSQL" => new MySqlConnectionStringBuilder(connectionString).Password,
+        "POSTGRESQL" => new NpgsqlConnectionStringBuilder(connectionString).Password ?? string.Empty,
+        _ => throw new ConfigurationValidationException([$"未対応のProviderです: {provider}"])
+    };
 
     private static (string Server, int? Port) SplitSqlServerDataSource(string dataSource)
     {
@@ -107,18 +149,45 @@ public sealed class DatabaseMetadataService(
     CoordinatorDbContext dbContext,
     ProtectedConnectionStringService protector) : IDatabaseMetadataService
 {
-    public async Task<ConnectionTestResult> TestConnectionAsync(Guid systemId, CancellationToken cancellationToken)
+    public async Task<ConnectionTestResult> TestConnectionAsync(
+        string provider,
+        DatabaseConnectionInput input,
+        CancellationToken cancellationToken)
     {
         try
         {
-            var connection = await CreateConnectionAsync(systemId, cancellationToken);
+            SystemDefinitionEntity? system = null;
+            if (input.SystemId != Guid.Empty)
+            {
+                system = await dbContext.Systems
+                    .AsNoTracking()
+                    .SingleOrDefaultAsync(x => x.Id == input.SystemId, cancellationToken);
+            }
+
+            ConfigurationValidator.ValidateConnection(input, provider);
+
+            var password = input.Password;
+            if (string.IsNullOrWhiteSpace(password)
+                && input.HasStoredPassword
+                && !string.IsNullOrWhiteSpace(system?.ProtectedConnectionString))
+            {
+                var storedConnectionString = protector.Unprotect(system.ProtectedConnectionString);
+                password = ManagedConnectionStringFactory.GetPassword(system.Provider, storedConnectionString);
+            }
+
+            var connectionString = ManagedConnectionStringFactory.Build(provider, input, password);
+            var connection = CreateConnection(provider, connectionString);
             await using (connection)
             {
                 await connection.OpenAsync(cancellationToken);
             }
             return new ConnectionTestResult(true, "接続に成功しました。");
         }
-        catch (Exception exception) when (exception is SqlException or MySqlException or InvalidOperationException)
+        catch (ConfigurationValidationException exception)
+        {
+            return new ConnectionTestResult(false, string.Join(" ", exception.Errors));
+        }
+        catch (Exception exception) when (exception is SqlException or MySqlException or NpgsqlException or InvalidOperationException)
         {
             return new ConnectionTestResult(false, $"接続に失敗しました: {exception.Message}");
         }
@@ -130,16 +199,22 @@ public sealed class DatabaseMetadataService(
         await using (connection)
         {
             await connection.OpenAsync(cancellationToken);
-            const string sql = """
+            const string sqlServerSql = """
                 SELECT TABLE_SCHEMA AS [Schema], TABLE_NAME AS [Name]
                 FROM INFORMATION_SCHEMA.TABLES
                 WHERE TABLE_TYPE = 'BASE TABLE'
-                  AND TABLE_NAME NOT IN ('SyncChangeQueue', 'SyncAppliedMessage')
+                  AND TABLE_NAME NOT IN ('SyncChangeQueue', 'SyncAppliedMessage', 'SyncEntityOrigin', 'SyncDeleteTombstone', 'SyncCoordinatorDeployment')
                 ORDER BY TABLE_SCHEMA, TABLE_NAME
                 """;
-            var mysqlSql = sql.Replace(" AS [Schema]", " AS `Schema`").Replace(" AS [Name]", " AS `Name`");
+            var sql = system.Provider.ToUpperInvariant() switch
+            {
+                "SQLSERVER" => sqlServerSql,
+                "MYSQL" => sqlServerSql.Replace(" AS [Schema]", " AS `Schema`").Replace(" AS [Name]", " AS `Name`"),
+                "POSTGRESQL" => sqlServerSql.Replace(" AS [Schema]", " AS \"Schema\"").Replace(" AS [Name]", " AS \"Name\""),
+                _ => throw new InvalidOperationException($"未対応のProviderです: {system.Provider}")
+            };
             var rows = await connection.QueryAsync<DatabaseTableInfo>(
-                new CommandDefinition(system.Provider == "MySql" ? mysqlSql : sql, cancellationToken: cancellationToken));
+                new CommandDefinition(sql, cancellationToken: cancellationToken));
             return rows.AsList();
         }
     }
@@ -154,8 +229,9 @@ public sealed class DatabaseMetadataService(
         await using (connection)
         {
             await connection.OpenAsync(cancellationToken);
-            var sql = system.Provider == "MySql"
-                ? """
+            var sql = system.Provider.ToUpperInvariant() switch
+            {
+                "MYSQL" => """
                   SELECT c.COLUMN_NAME AS Name, c.DATA_TYPE AS DataType,
                          CASE WHEN c.IS_NULLABLE = 'YES' THEN 1 ELSE 0 END AS IsNullable,
                          c.ORDINAL_POSITION AS Ordinal,
@@ -166,8 +242,26 @@ public sealed class DatabaseMetadataService(
                    AND k.COLUMN_NAME = c.COLUMN_NAME AND k.CONSTRAINT_NAME = 'PRIMARY'
                   WHERE c.TABLE_SCHEMA = @schema AND c.TABLE_NAME = @table
                   ORDER BY c.ORDINAL_POSITION
-                  """
-                : """
+                  """,
+                "POSTGRESQL" => """
+                  SELECT c.column_name AS "Name", c.data_type AS "DataType",
+                         (c.is_nullable = 'YES') AS "IsNullable",
+                         c.ordinal_position AS "Ordinal",
+                         (k.column_name IS NOT NULL) AS "IsPrimaryKey"
+                  FROM information_schema.columns c
+                  LEFT JOIN (
+                      SELECT ku.table_schema, ku.table_name, ku.column_name
+                      FROM information_schema.table_constraints tc
+                      JOIN information_schema.key_column_usage ku
+                        ON ku.constraint_catalog = tc.constraint_catalog
+                       AND ku.constraint_schema = tc.constraint_schema
+                       AND ku.constraint_name = tc.constraint_name
+                      WHERE tc.constraint_type = 'PRIMARY KEY'
+                  ) k ON k.table_schema = c.table_schema AND k.table_name = c.table_name AND k.column_name = c.column_name
+                  WHERE c.table_schema = @schema AND c.table_name = @table
+                  ORDER BY c.ordinal_position
+                  """,
+                "SQLSERVER" => """
                   SELECT c.COLUMN_NAME AS Name, c.DATA_TYPE AS DataType,
                          CAST(CASE WHEN c.IS_NULLABLE = 'YES' THEN 1 ELSE 0 END AS bit) AS IsNullable,
                          c.ORDINAL_POSITION AS Ordinal,
@@ -182,15 +276,14 @@ public sealed class DatabaseMetadataService(
                   ) k ON k.TABLE_SCHEMA = c.TABLE_SCHEMA AND k.TABLE_NAME = c.TABLE_NAME AND k.COLUMN_NAME = c.COLUMN_NAME
                   WHERE c.TABLE_SCHEMA = @schema AND c.TABLE_NAME = @table
                   ORDER BY c.ORDINAL_POSITION
-                  """;
+                  """,
+                _ => throw new InvalidOperationException($"未対応のProviderです: {system.Provider}")
+            };
             var rows = await connection.QueryAsync<DatabaseColumnInfo>(
                 new CommandDefinition(sql, new { schema, table }, cancellationToken: cancellationToken));
             return rows.AsList();
         }
     }
-
-    private async Task<System.Data.Common.DbConnection> CreateConnectionAsync(Guid systemId, CancellationToken cancellationToken) =>
-        (await GetSystemAndConnectionAsync(systemId, cancellationToken)).Connection;
 
     private async Task<(SystemDefinitionEntity System, System.Data.Common.DbConnection Connection)> GetSystemAndConnectionAsync(
         Guid systemId,
@@ -203,11 +296,17 @@ public sealed class DatabaseMetadataService(
             throw new InvalidOperationException("接続情報が設定されていません。");
         }
         var value = protector.Unprotect(system.ProtectedConnectionString);
-        System.Data.Common.DbConnection connection = string.Equals(system.Provider, "SqlServer", StringComparison.OrdinalIgnoreCase)
-            ? new SqlConnection(value)
-            : string.Equals(system.Provider, "MySql", StringComparison.OrdinalIgnoreCase)
-                ? new MySqlConnection(value)
-                : throw new InvalidOperationException($"未対応のProviderです: {system.Provider}");
-        return (system, connection);
+        return (system, CreateConnection(system.Provider, value));
+    }
+
+    private static System.Data.Common.DbConnection CreateConnection(string provider, string connectionString)
+    {
+        return string.Equals(provider, "SqlServer", StringComparison.OrdinalIgnoreCase)
+            ? new SqlConnection(connectionString)
+            : string.Equals(provider, "MySql", StringComparison.OrdinalIgnoreCase)
+                ? new MySqlConnection(connectionString)
+                : string.Equals(provider, "PostgreSql", StringComparison.OrdinalIgnoreCase)
+                    ? new NpgsqlConnection(connectionString)
+                    : throw new InvalidOperationException($"未対応のProviderです: {provider}");
     }
 }

@@ -1,0 +1,179 @@
+.notification-tabs {
+    border-bottom: 1px solid var(--ledger-line);
+    display: flex;
+    gap: .25rem;
+    margin: -0.35rem 0 1.25rem;
+}
+
+.notification-tabs button {
+    background: transparent;
+    border: 0;
+    border-bottom: 3px solid transparent;
+    color: var(--ledger-muted);
+    cursor: pointer;
+    font: inherit;
+    font-weight: 600;
+    padding: .7rem 1.1rem .65rem;
+}
+
+.notification-tabs button:hover {
+    background: var(--ledger-paper-muted);
+    color: var(--ledger-ink);
+}
+
+.notification-tabs button.active {
+    border-bottom-color: var(--ledger-accent);
+    color: var(--ledger-accent);
+}
+
+.notification-tab-content {
+    margin-top: 0;
+}
+
+.webhook-form {
+    display: grid;
+    gap: 1.15rem;
+    padding-top: .15rem;
+}
+
+.webhook-address-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(12rem, 15rem) minmax(22rem, 1fr);
+}
+
+.webhook-name-field {
+    max-width: 15rem;
+}
+
+.webhook-form-section {
+    border-top: 1px solid var(--ledger-line);
+    margin: 0;
+    min-width: 0;
+    padding: .9rem 0 0;
+}
+
+.webhook-section-title {
+    color: var(--ledger-muted);
+    font-size: .78rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    margin: 0 0 .7rem;
+    text-transform: uppercase;
+}
+
+.webhook-switches {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .65rem 1.5rem;
+}
+
+.webhook-event-groups {
+    display: grid;
+    gap: .75rem;
+    grid-template-columns: repeat(4, minmax(10.5rem, 1fr));
+    max-width: 64rem;
+}
+
+.webhook-event-group {
+    border-left: 2px solid var(--ledger-line);
+    min-width: 0;
+    padding: .15rem 0 .15rem .75rem;
+}
+
+.webhook-event-group h3 {
+    color: var(--ledger-ink);
+    font-size: .88rem;
+    margin: 0 0 .35rem;
+}
+
+.webhook-event-group > div {
+    display: grid;
+    gap: .2rem;
+}
+
+.webhook-event-option {
+    border-radius: 2px;
+    cursor: pointer;
+    min-height: 2rem;
+    padding: .3rem .4rem;
+}
+
+.webhook-event-option.selected {
+    background: var(--ledger-accent-light);
+}
+
+.webhook-secret-alert {
+    background: #fff8e7;
+    border: 2px solid var(--ledger-warning);
+    box-shadow: 4px 4px 0 rgb(164 119 37 / 14%);
+    display: grid;
+    gap: .85rem;
+    margin: .25rem 0 1.1rem;
+    max-width: 58rem;
+    padding: 1rem 1.1rem;
+}
+
+.webhook-secret-heading {
+    align-items: flex-start;
+    color: #55451f;
+    display: flex;
+    gap: .75rem;
+}
+
+.webhook-secret-heading ::deep .rz-icon {
+    color: var(--ledger-warning);
+    font-size: 1.65rem;
+}
+
+.webhook-secret-heading strong {
+    display: block;
+    font-size: 1.05rem;
+}
+
+.webhook-secret-heading p {
+    margin: .2rem 0 0;
+}
+
+.webhook-secret-value {
+    background: #fffef9;
+    border: 1px solid #b99a54;
+    color: var(--ledger-ink);
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: .95rem;
+    padding: .7rem .8rem;
+    width: 100%;
+}
+
+.webhook-secret-value:focus {
+    border-color: var(--ledger-warning);
+    box-shadow: 0 0 0 3px rgb(164 119 37 / 18%);
+    outline: none;
+}
+
+.webhook-form-actions {
+    border-top: 1px solid var(--ledger-line);
+    justify-content: flex-end;
+    padding-top: 1rem;
+}
+
+@media (max-width: 760px) {
+    .webhook-address-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .webhook-name-field {
+        max-width: none;
+    }
+
+    .webhook-event-groups {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 480px) {
+    .webhook-event-groups {
+        grid-template-columns: 1fr;
+    }
+}

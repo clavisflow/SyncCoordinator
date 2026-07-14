@@ -5,19 +5,32 @@ namespace SyncCoordinator.Infrastructure.Persistence;
 public sealed class CoordinatorDbContext(DbContextOptions<CoordinatorDbContext> options)
     : DbContext(options)
 {
+    public DbSet<AdminAccountEntity> AdminAccounts => Set<AdminAccountEntity>();
     public DbSet<SystemDefinitionEntity> Systems => Set<SystemDefinitionEntity>();
     public DbSet<SyncRouteEntity> Routes => Set<SyncRouteEntity>();
-    public DbSet<RouteFieldPolicyEntity> RouteFieldPolicies => Set<RouteFieldPolicyEntity>();
     public DbSet<RouteTableMappingEntity> RouteTableMappings => Set<RouteTableMappingEntity>();
     public DbSet<RouteColumnMappingEntity> RouteColumnMappings => Set<RouteColumnMappingEntity>();
+    public DbSet<RouteFixedValueMappingEntity> RouteFixedValueMappings => Set<RouteFixedValueMappingEntity>();
     public DbSet<InboxMessageEntity> InboxMessages => Set<InboxMessageEntity>();
     public DbSet<QueueCheckpointEntity> QueueCheckpoints => Set<QueueCheckpointEntity>();
     public DbSet<SyncSnapshotEntity> SyncSnapshots => Set<SyncSnapshotEntity>();
     public DbSet<SyncConflictEntity> SyncConflicts => Set<SyncConflictEntity>();
     public DbSet<ConfigurationAuditEntity> ConfigurationAudits => Set<ConfigurationAuditEntity>();
+    public DbSet<WebhookEndpointEntity> WebhookEndpoints => Set<WebhookEndpointEntity>();
+    public DbSet<WebhookEventEntity> WebhookEvents => Set<WebhookEventEntity>();
+    public DbSet<WebhookDeliveryEntity> WebhookDeliveries => Set<WebhookDeliveryEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<AdminAccountEntity>(entity =>
+        {
+            entity.ToTable("AdminAccount");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => x.UserName).IsUnique();
+            entity.Property(x => x.UserName).HasMaxLength(64);
+            entity.Property(x => x.PasswordHash).HasMaxLength(512);
+        });
+
         modelBuilder.Entity<SystemDefinitionEntity>(entity =>
         {
             entity.ToTable("SystemDefinition");
@@ -33,37 +46,33 @@ public sealed class CoordinatorDbContext(DbContextOptions<CoordinatorDbContext> 
         {
             entity.ToTable("SyncRoute");
             entity.HasKey(x => x.Id);
-            entity.HasIndex(x => new { x.SourceSystem, x.EntityType, x.Enabled });
+            entity.HasIndex(x => new { x.SourceSystemId, x.EntityType, x.Enabled });
+            entity.HasIndex(x => new { x.DestinationSystemId, x.EntityType, x.Direction, x.Enabled });
             entity.Property(x => x.Name).HasMaxLength(200);
-            entity.Property(x => x.SourceSystem).HasMaxLength(64);
             entity.Property(x => x.EntityType).HasMaxLength(128);
-            entity.Property(x => x.DestinationSystem).HasMaxLength(64);
-            entity.Property(x => x.DestinationMode).HasConversion<string>().HasMaxLength(32);
+            entity.Property(x => x.Direction).HasConversion<string>().HasMaxLength(16);
+            entity.Property(x => x.DeploymentState).HasConversion<string>().HasMaxLength(16);
             entity.Property(x => x.ConflictScope).HasConversion<string>().HasMaxLength(16);
             entity.Property(x => x.DefaultConflictPolicy).HasConversion<string>().HasMaxLength(40);
-        });
-
-        modelBuilder.Entity<RouteFieldPolicyEntity>(entity =>
-        {
-            entity.ToTable("RouteFieldPolicy");
-            entity.HasKey(x => x.Id);
-            entity.HasIndex(x => new { x.RouteId, x.FieldName }).IsUnique();
-            entity.Property(x => x.FieldName).HasMaxLength(128);
-            entity.Property(x => x.Policy).HasConversion<string>().HasMaxLength(40);
-            entity.HasOne(x => x.Route).WithMany(x => x.FieldPolicies).HasForeignKey(x => x.RouteId);
+            entity.HasOne(x => x.SourceSystem).WithMany().HasForeignKey(x => x.SourceSystemId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.DestinationSystem).WithMany().HasForeignKey(x => x.DestinationSystemId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<RouteTableMappingEntity>(entity =>
         {
             entity.ToTable("RouteTableMapping");
-            entity.HasKey(x => x.Id);
-            entity.HasIndex(x => new { x.RouteId, x.DestinationSystem }).IsUnique();
-            entity.Property(x => x.DestinationSystem).HasMaxLength(64);
+            entity.HasKey(x => x.RouteId);
             entity.Property(x => x.SourceSchema).HasMaxLength(128);
             entity.Property(x => x.SourceTable).HasMaxLength(128);
             entity.Property(x => x.DestinationSchema).HasMaxLength(128);
             entity.Property(x => x.DestinationTable).HasMaxLength(128);
-            entity.HasOne(x => x.Route).WithMany(x => x.TableMappings).HasForeignKey(x => x.RouteId);
+            entity.Property(x => x.SourceDeletionMode).HasConversion<string>().HasMaxLength(16);
+            entity.Property(x => x.SourceLogicalDeleteColumn).HasMaxLength(128);
+            entity.Property(x => x.SourceLogicalDeleteValue).HasMaxLength(4000);
+            entity.Property(x => x.DestinationDeletionMode).HasConversion<string>().HasMaxLength(16);
+            entity.Property(x => x.DestinationLogicalDeleteColumn).HasMaxLength(128);
+            entity.Property(x => x.DestinationLogicalDeleteValue).HasMaxLength(4000);
+            entity.HasOne(x => x.Route).WithOne(x => x.TableMapping).HasForeignKey<RouteTableMappingEntity>(x => x.RouteId);
         });
 
         modelBuilder.Entity<RouteColumnMappingEntity>(entity =>
@@ -74,7 +83,19 @@ public sealed class CoordinatorDbContext(DbContextOptions<CoordinatorDbContext> 
             entity.HasIndex(x => new { x.TableMappingId, x.DestinationColumn }).IsUnique();
             entity.Property(x => x.SourceColumn).HasMaxLength(128);
             entity.Property(x => x.DestinationColumn).HasMaxLength(128);
+            entity.Property(x => x.ConflictPolicy).HasConversion<string>().HasMaxLength(40);
             entity.HasOne(x => x.TableMapping).WithMany(x => x.Columns).HasForeignKey(x => x.TableMappingId);
+        });
+
+        modelBuilder.Entity<RouteFixedValueMappingEntity>(entity =>
+        {
+            entity.ToTable("RouteFixedValueMapping");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => new { x.TableMappingId, x.Direction, x.TargetColumn }).IsUnique();
+            entity.Property(x => x.Direction).HasConversion<string>().HasMaxLength(16);
+            entity.Property(x => x.TargetColumn).HasMaxLength(128);
+            entity.Property(x => x.Value).HasMaxLength(4000);
+            entity.HasOne(x => x.TableMapping).WithMany(x => x.FixedValues).HasForeignKey(x => x.TableMappingId);
         });
 
         modelBuilder.Entity<InboxMessageEntity>(entity =>
@@ -101,7 +122,8 @@ public sealed class CoordinatorDbContext(DbContextOptions<CoordinatorDbContext> 
             entity.Property(x => x.DestinationSystem).HasMaxLength(64);
             entity.Property(x => x.EntityType).HasMaxLength(128);
             entity.Property(x => x.EntityId).HasMaxLength(256);
-            entity.Property(x => x.PayloadJson).HasColumnType("nvarchar(max)");
+            entity.Property(x => x.SourcePayloadJson).HasColumnType("nvarchar(max)");
+            entity.Property(x => x.DestinationPayloadJson).HasColumnType("nvarchar(max)");
         });
 
         modelBuilder.Entity<SyncConflictEntity>(entity =>
@@ -130,6 +152,37 @@ public sealed class CoordinatorDbContext(DbContextOptions<CoordinatorDbContext> 
             entity.Property(x => x.BeforeJson).HasColumnType("nvarchar(max)");
             entity.Property(x => x.AfterJson).HasColumnType("nvarchar(max)");
             entity.Property(x => x.ChangedBy).HasMaxLength(200);
+        });
+
+        modelBuilder.Entity<WebhookEndpointEntity>(entity =>
+        {
+            entity.ToTable("WebhookEndpoint");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Name).HasMaxLength(200);
+            entity.Property(x => x.Url).HasMaxLength(2048);
+            entity.Property(x => x.ProtectedSecret).HasColumnType("nvarchar(max)");
+            entity.Property(x => x.EventTypesJson).HasColumnType("nvarchar(max)");
+        });
+
+        modelBuilder.Entity<WebhookEventEntity>(entity =>
+        {
+            entity.ToTable("WebhookEvent");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => x.OccurredAtUtc);
+            entity.Property(x => x.EventType).HasMaxLength(64);
+            entity.Property(x => x.PayloadJson).HasColumnType("nvarchar(max)");
+        });
+
+        modelBuilder.Entity<WebhookDeliveryEntity>(entity =>
+        {
+            entity.ToTable("WebhookDelivery");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => new { x.State, x.NextAttemptAtUtc });
+            entity.HasIndex(x => new { x.EventId, x.EndpointId }).IsUnique();
+            entity.Property(x => x.State).HasMaxLength(16);
+            entity.Property(x => x.LastError).HasMaxLength(2000);
+            entity.HasOne(x => x.Event).WithMany(x => x.Deliveries).HasForeignKey(x => x.EventId);
+            entity.HasOne(x => x.Endpoint).WithMany(x => x.Deliveries).HasForeignKey(x => x.EndpointId);
         });
     }
 }

@@ -1,3 +1,4 @@
+using SyncCoordinator.Contracts;
 using SyncCoordinator.Core;
 
 namespace SyncCoordinator.Tests;
@@ -20,30 +21,12 @@ public sealed class ConfigurationValidatorTests
     }
 
     [Fact]
-    public void OriginSystemRouteFromCIsAllowed()
+    public void BidirectionalRouteBetweenAAndCIsAllowed()
     {
         var input = ValidRoute();
-        input.SourceSystem = "C";
-        input.DestinationMode = DestinationMode.OriginSystem;
-        input.DestinationSystem = null;
+        input.Direction = SyncDirection.Bidirectional;
 
         ConfigurationValidator.ValidateRoute(input, ["A", "B", "C"]);
-    }
-
-    [Fact]
-    public void DuplicateFieldPoliciesAreRejected()
-    {
-        var input = ValidRoute();
-        input.FieldPolicies =
-        [
-            new FieldPolicyInput { FieldName = "Status" },
-            new FieldPolicyInput { FieldName = "Status" }
-        ];
-
-        var exception = Assert.Throws<ConfigurationValidationException>(() =>
-            ConfigurationValidator.ValidateRoute(input, ["A", "B", "C"]));
-
-        Assert.Contains(exception.Errors, x => x.Contains("重複", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -82,7 +65,6 @@ public sealed class ConfigurationValidatorTests
         var input = new TableMappingInput
         {
             RouteId = Guid.NewGuid(),
-            DestinationSystem = "C",
             SourceSchema = "dbo",
             SourceTable = "Source",
             DestinationSchema = "dbo",
@@ -96,13 +78,122 @@ public sealed class ConfigurationValidatorTests
         Assert.Contains(exception.Errors, x => x.Contains("キー列", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void DirectionalFixedValuesAreAllowedForBidirectionalRule()
+    {
+        var route = ValidRoute();
+        route.Direction = SyncDirection.Bidirectional;
+        var input = ValidTableMapping();
+        input.FixedValues =
+        [
+            new FixedValueMappingInput
+            {
+                Direction = MappingWriteDirection.Forward,
+                TargetColumn = "UpdatedUserId",
+                Value = "0"
+            },
+            new FixedValueMappingInput
+            {
+                Direction = MappingWriteDirection.Reverse,
+                TargetColumn = "UpdatedUserId",
+                Value = "SYNC_COORDINATOR"
+            }
+        ];
+
+        ConfigurationValidator.ValidateTableMapping(input, route);
+    }
+
+    [Fact]
+    public void ReverseFixedValueIsRejectedForOneWayRule()
+    {
+        var input = ValidTableMapping();
+        input.FixedValues =
+        [
+            new FixedValueMappingInput
+            {
+                Direction = MappingWriteDirection.Reverse,
+                TargetColumn = "UpdatedUserId",
+                Value = "SYNC_COORDINATOR"
+            }
+        ];
+
+        var exception = Assert.Throws<ConfigurationValidationException>(() =>
+            ConfigurationValidator.ValidateTableMapping(input, ValidRoute()));
+
+        Assert.Contains(exception.Errors, x => x.Contains("片方向", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void FixedValueCannotOverwriteNormallyMappedColumn()
+    {
+        var input = ValidTableMapping();
+        input.FixedValues =
+        [
+            new FixedValueMappingInput
+            {
+                Direction = MappingWriteDirection.Forward,
+                TargetColumn = "Id",
+                Value = "0"
+            }
+        ];
+
+        var exception = Assert.Throws<ConfigurationValidationException>(() =>
+            ConfigurationValidator.ValidateTableMapping(input, ValidRoute()));
+
+        Assert.Contains(exception.Errors, x => x.Contains("通常の列マッピング", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void LogicalDeletionRequiresColumnAndValue()
+    {
+        var input = ValidTableMapping();
+        input.SyncDeletes = true;
+        input.SourceDeletionMode = DeletionMode.Logical;
+
+        var exception = Assert.Throws<ConfigurationValidationException>(() =>
+            ConfigurationValidator.ValidateTableMapping(input, ValidRoute()));
+
+        Assert.Contains(exception.Errors, x => x.Contains("論理削除列", StringComparison.Ordinal));
+        Assert.Contains(exception.Errors, x => x.Contains("削除時の値", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void PhysicalAndLogicalDeletionCanBeCombined()
+    {
+        var input = ValidTableMapping();
+        input.SyncDeletes = true;
+        input.SourceDeletionMode = DeletionMode.Physical;
+        input.DestinationDeletionMode = DeletionMode.Logical;
+        input.DestinationLogicalDeleteColumn = "IsDeleted";
+        input.DestinationLogicalDeleteValue = "1";
+
+        ConfigurationValidator.ValidateTableMapping(input, ValidRoute());
+    }
+
+    private static TableMappingInput ValidTableMapping() => new()
+    {
+        RouteId = Guid.NewGuid(),
+        SourceSchema = "dbo",
+        SourceTable = "Source",
+        DestinationSchema = "dbo",
+        DestinationTable = "Destination",
+        Columns =
+        [
+            new ColumnMappingInput
+            {
+                SourceColumn = "Id",
+                DestinationColumn = "Id",
+                IsKey = true
+            }
+        ]
+    };
+
     private static RouteConfigurationInput ValidRoute() => new()
     {
         Name = "A to C",
         SourceSystem = "A",
-        EntityType = "SampleWorkRequest",
-        DestinationMode = DestinationMode.FixedSystem,
         DestinationSystem = "C",
+        Direction = SyncDirection.OneWay,
         ConflictScope = ConflictScope.Field,
         DefaultConflictPolicy = ConflictPolicy.HoldAndNotify,
         Enabled = true

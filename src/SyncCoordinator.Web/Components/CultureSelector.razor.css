@@ -1,0 +1,5 @@
+.culture-form { align-items: center; display: flex; gap: .35rem; margin: 0; }
+.culture-form label { color: inherit; font-size: .72rem; }
+.culture-form select { background: transparent; border: 1px solid currentColor; border-radius: 3px; color: inherit; cursor: pointer; font: inherit; font-size: .72rem; min-height: 1.8rem; }
+.culture-form select { padding: .1rem .35rem; }
+.culture-form option { background: #fff; color: #252a26; }

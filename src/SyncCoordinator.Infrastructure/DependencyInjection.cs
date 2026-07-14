@@ -27,11 +27,20 @@ public static class DependencyInjection
         }
         services.Configure<CoordinatorDatabaseOptions>(configuration.GetSection("CoordinatorDatabase"));
         services.Configure<RelationalConnectorOptions>(configuration.GetSection("SyncCoordinator:Connectors"));
+        services.Configure<DatabaseDeploymentOptions>(configuration.GetSection("DatabaseDeployment"));
 
         services.AddScoped<ICoordinatorStore, EfCoordinatorStore>();
         services.AddScoped<ICoordinatorReadService, EfCoordinatorReadService>();
         services.AddScoped<ICoordinatorAdminService, EfCoordinatorAdminService>();
         services.AddScoped<IDatabaseMetadataService, DatabaseMetadataService>();
+        services.AddScoped<IDatabaseDeploymentService, DatabaseDeploymentService>();
+        services.AddScoped<IWebhookAdminService, WebhookAdminService>();
+        services.AddScoped<IWebhookDeliveryService, WebhookDeliveryService>();
+        services.AddScoped<WebhookOutboxWriter>();
+        services.AddScoped<ProtectedWebhookSecretService>();
+        services.AddHttpClient(WebhookDeliveryService.HttpClientName, client =>
+            client.Timeout = TimeSpan.FromSeconds(10))
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
         services.AddScoped<ProtectedConnectionStringService>();
         services.AddScoped<CoordinatorDatabaseInitializer>();
         services.AddScoped<ConflictResolver>();
