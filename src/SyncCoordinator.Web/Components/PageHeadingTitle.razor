@@ -1,0 +1,9 @@
+<div class="page-heading-title">
+    <span class="page-heading-icon" aria-hidden="true"><RadzenIcon Icon="@Icon" /></span>
+    <h1>@ChildContent</h1>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Icon { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public RenderFragment ChildContent { get; set; } = null!;
+}

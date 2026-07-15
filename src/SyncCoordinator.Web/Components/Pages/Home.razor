@@ -2,14 +2,15 @@
 @attribute [Authorize]
 @using SyncCoordinator.Core
 @inject ICoordinatorReadService ReadService
+@inject IManagementSettingsService SettingsService
 @inject IStringLocalizer<SharedResource> L
 
 <PageTitle>@L["Home_PageTitle"]</PageTitle>
 
-<section class="page-heading">
+<section class="page-heading dashboard-heading">
     <div>
         <p class="kicker">SYNC OVERVIEW</p>
-        <h1>@L["Home_Title"]</h1>
+        <PageHeadingTitle Icon="dashboard">@L["Home_Title"]</PageHeadingTitle>
         <p>@L["Home_Description"]</p>
     </div>
     <RadzenButton Text="@(loading ? L["Action_Refreshing"] : L["Action_Reload"])" Icon="refresh" Click="@LoadAsync" Disabled="@loading" />
@@ -23,7 +24,12 @@ else
 {
     <section class="sync-board" aria-labelledby="sync-board-title">
         <div class="sync-board-header">
-            <div class="caption-title"><h2 id="sync-board-title">@L["Home_SyncStatus"]</h2><HelpTip Text="@L["Home_SyncStatusHelp"]" /></div>
+            <h2 id="sync-board-title">@L["Home_SyncStatus"]</h2>
+            <ul class="sync-board-legend" aria-label="@L["Common_Legend"]">
+                <li><span class="sync-legend-line enabled" aria-hidden="true"></span>@L["Home_Syncing"]</li>
+                <li><span class="sync-legend-line held" aria-hidden="true"></span>@L["Home_Paused"]</li>
+                <li><span class="sync-legend-line disabled" aria-hidden="true"></span>@L["Common_Excluded"]</li>
+            </ul>
         </div>
         @if (routes.Count == 0)
         {
@@ -32,20 +38,26 @@ else
         else
         {
             <div class="sync-wire-list">
-                @foreach (var route in routes.Take(6))
+                @foreach (var route in routes)
                 {
                     <div class="sync-wire-row">
                         <div class="sync-terminal" title="@L["Home_SourceTitle", route.SourceSystemName]">
-                            <small>@L["Home_Source"]</small>
-                            <strong>@route.SourceSystemName</strong>
+                            <span class="sync-terminal-icon"><RadzenIcon Icon="dns" aria-hidden="true" /></span>
+                            <span class="sync-terminal-copy">
+                                <small>@L["Home_Source"]</small>
+                                <a class="sync-terminal-link" href="@SystemLink(route.SourceSystem)">@route.SourceSystemName</a>
+                            </span>
                         </div>
                         <div class="sync-wire-track @WireClass(route)" title="@route.Name">
                             <i aria-hidden="true"></i>
-                            <span class="sync-wire-label">@route.Name</span>
+                            <a class="sync-wire-label" href="/routes/@route.Id">@route.Name</a>
                         </div>
                         <div class="sync-terminal destination" title="@L["Home_DestinationTitle", route.DestinationSystemName]">
-                            <small>@L["Home_Destination"]</small>
-                            <strong>@route.DestinationSystemName</strong>
+                            <span class="sync-terminal-icon"><RadzenIcon Icon="dns" aria-hidden="true" /></span>
+                            <span class="sync-terminal-copy">
+                                <small>@L["Home_Destination"]</small>
+                                <a class="sync-terminal-link" href="@SystemLink(route.DestinationSystem)">@route.DestinationSystemName</a>
+                            </span>
                         </div>
                     </div>
                 }
@@ -53,57 +65,46 @@ else
         }
     </section>
 
-    <section class="metric-grid" aria-label="@L["Metric_Aria"]">
-        <RadzenCard class="metric-card"><span>@L["Metric_EnabledSystems"]</span><strong>@summary.EnabledSystems</strong></RadzenCard>
-        <RadzenCard class="metric-card"><span>@L["Metric_EnabledRoutes"]</span><strong>@summary.EnabledRoutes</strong></RadzenCard>
-        <RadzenCard class="metric-card"><span>@L["Metric_Processing"]</span><strong>@summary.ProcessingMessages</strong></RadzenCard>
-        <RadzenCard class="metric-card"><span>@L["Metric_Held"]</span><strong>@summary.HeldMessages</strong></RadzenCard>
-        <RadzenCard class="metric-card"><span>@L["Metric_Failed"]</span><strong>@summary.FailedMessages</strong></RadzenCard>
-        <RadzenCard class="metric-card"><span>@L["Metric_UnresolvedConflicts"]</span><strong>@summary.UnresolvedConflicts</strong></RadzenCard>
+    <section class="dashboard-metrics" aria-label="@L["Metric_Aria"]">
+        <div class="dashboard-metric-group">
+            <h2>@L["Metric_Targets"]</h2>
+            <div class="dashboard-metric-grid targets">
+                <RadzenCard class="metric-card target"><span>@L["Metric_EnabledSystems"]</span><strong>@summary.EnabledSystems</strong></RadzenCard>
+                <RadzenCard class="metric-card target"><span>@L["Metric_EnabledRoutes"]</span><strong>@summary.EnabledRoutes</strong></RadzenCard>
+            </div>
+        </div>
+        <div class="dashboard-metric-group">
+            <h2>@L["Metric_ProcessingStatus"]</h2>
+            <div class="dashboard-metric-grid processing">
+                <RadzenCard class="metric-card processing"><span>@L["Metric_Processing"]</span><strong>@summary.ProcessingMessages</strong></RadzenCard>
+                <RadzenCard class="metric-card retrying"><span>@L["Metric_Failed"]</span><strong>@summary.FailedMessages</strong></RadzenCard>
+                <RadzenCard class="metric-card attention">
+                    <div class="caption-title"><span>@L["Metric_Held"]</span><HelpTip Text="@L["Metric_HeldHelp"]" /></div>
+                    <strong>@summary.HeldMessages</strong>
+                </RadzenCard>
+            </div>
+        </div>
     </section>
 
     <div class="content-stack">
-        <RadzenCard>
-            <div class="panel-title"><h2>@L["Home_Rules"]</h2><RadzenButton Text="@L["Home_OpenManagement"]" Icon="arrow_forward" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Click="@OpenRoutes" /></div>
-            <RadzenDataGrid Data="@routes" TItem="RouteListItem" AllowSorting="true" AllowPaging="true" PageSize="10" EmptyText="@L["Home_NoRoutes"]" Density="Density.Compact">
-                <Columns>
-                    <RadzenDataGridColumn TItem="RouteListItem" Property="Name" Title="@L["Home_Rule"]">
-                        <Template Context="route"><a href="/routes/@route.Id">@route.Name</a></Template>
-                    </RadzenDataGridColumn>
-                    <RadzenDataGridColumn TItem="RouteListItem" Title="@L["Home_Direction"]" Sortable="false" Filterable="false">
-                        <Template Context="route"><code class="direction">@route.SourceSystemName @(route.Direction == SyncDirection.Bidirectional ? "⇄" : "→") @route.DestinationSystemName</code></Template>
-                    </RadzenDataGridColumn>
-                    <RadzenDataGridColumn TItem="RouteListItem" Property="Direction" Title="@L["Home_SyncDirection"]">
-                        <Template Context="route">@(route.Direction == SyncDirection.Bidirectional ? L["Home_Bidirectional"] : L["Home_OneWay"])</Template>
-                    </RadzenDataGridColumn>
-                    <RadzenDataGridColumn TItem="RouteListItem" Title="@L["Home_Conflict"]" Sortable="false" Filterable="false">
-                        <Template Context="route">@ConflictScopeText(route.ConflictScope) / @ConflictPolicyText(route.ConflictPolicy)</Template>
-                    </RadzenDataGridColumn>
-                    <RadzenDataGridColumn TItem="RouteListItem" Property="Enabled" Title="@L["Home_Status"]" Width="110px">
-                        <Template Context="route"><span class="status-pill @StatusClass(route)">@StatusText(route)</span></Template>
-                    </RadzenDataGridColumn>
-                </Columns>
-            </RadzenDataGrid>
-        </RadzenCard>
-
-        <RadzenCard>
-            <div class="panel-title"><h2>@L["Home_RecentConflicts"]</h2><RadzenButton Text="@L["Home_OpenHistory"]" Icon="arrow_forward" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Click="@OpenConflicts" /></div>
+        <RadzenCard class="dashboard-conflicts">
+            <div class="panel-title">
+                <div class="dashboard-section-title"><RadzenIcon Icon="history" aria-hidden="true" /><h2>@L["Home_RecentConflicts"]</h2></div>
+                <RadzenButton Text="@L["Home_OpenHistory"]" Icon="arrow_forward" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Click="@OpenConflicts" />
+            </div>
             <RadzenDataGrid Data="@conflicts" TItem="ConflictListItem" AllowSorting="true" AllowPaging="true" PageSize="10" EmptyText="@L["Home_NoConflicts"]" Density="Density.Compact">
                 <Columns>
                     <RadzenDataGridColumn TItem="ConflictListItem" Property="DetectedAtUtc" Title="@L["Home_DetectedAt"]">
                         <Template Context="conflict">@UiFormat.LocalDateTime(conflict.DetectedAtUtc)</Template>
                     </RadzenDataGridColumn>
                     <RadzenDataGridColumn TItem="ConflictListItem" Property="RouteName" Title="@L["Home_Rule"]">
-                        <Template Context="conflict"><a href="/conflicts/@conflict.Id">@conflict.RouteName</a></Template>
+                        <Template Context="conflict">@conflict.RouteName</Template>
                     </RadzenDataGridColumn>
                     <RadzenDataGridColumn TItem="ConflictListItem" Title="@L["Home_Direction"]" Sortable="false">
                         <Template Context="conflict"><code class="direction">@conflict.SourceSystemName → @conflict.DestinationSystemName</code></Template>
                     </RadzenDataGridColumn>
                     <RadzenDataGridColumn TItem="ConflictListItem" Title="@L["Home_Target"]" Sortable="false">
-                        <Template Context="conflict">@conflict.EntityId</Template>
-                    </RadzenDataGridColumn>
-                    <RadzenDataGridColumn TItem="ConflictListItem" Property="Resolved" Title="@L["Home_Status"]" Width="100px">
-                        <Template Context="conflict"><span class="status-pill @(conflict.Resolved ? "enabled" : "held")">@(conflict.Resolved ? L["Home_Resolved"] : L["Home_Unresolved"])</span></Template>
+                        <Template Context="conflict"><a href="/conflicts/@conflict.Id">@conflict.EntityId</a></Template>
                     </RadzenDataGridColumn>
                 </Columns>
             </RadzenDataGrid>
@@ -118,38 +119,22 @@ else
     private IReadOnlyList<RouteListItem> routes = [];
     private IReadOnlyList<ConflictListItem> conflicts = [];
     private bool loading;
+    private bool globalPaused;
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
-    private void OpenRoutes() => Navigation.NavigateTo("/routes");
     private void OpenConflicts() => Navigation.NavigateTo("/conflicts");
 
-    private string StatusText(RouteListItem route) => route.MappingMaintenance
-        ? L["Common_MappingMaintenance"]
-        : route.Enabled
-            ? route.OperationallyPaused ? L["Home_Paused"] : L["Home_Enabled"]
-            : route.DeploymentState == DatabaseDeploymentState.Prepared ? L["Home_Prepared"] : L["Home_Draft"];
-
-    private static string StatusClass(RouteListItem route) => route.MappingMaintenance
+    private string StatusClass(RouteListItem route) => route.MappingMaintenance
         ? "held"
         : route.Enabled
-            ? route.OperationallyPaused ? "held" : "enabled"
-            : route.DeploymentState == DatabaseDeploymentState.Prepared ? "prepared" : "disabled";
+            ? globalPaused || route.OperationallyPaused ? "held" : "enabled"
+            : "disabled";
 
-    private static string WireClass(RouteListItem route) =>
+    private string WireClass(RouteListItem route) =>
         $"{(route.Direction == SyncDirection.Bidirectional ? "bidirectional" : "one-way")} {StatusClass(route)}";
 
-    private string ConflictScopeText(ConflictScope scope) =>
-        scope == ConflictScope.Field ? L["Conflict_FieldScope"] : L["Conflict_RecordScope"];
-
-    private string ConflictPolicyText(ConflictPolicy policy) => policy switch
-    {
-        ConflictPolicy.HoldAndNotify => L["Conflict_Hold"],
-        ConflictPolicy.ApplyIncomingAndNotify => L["Conflict_ApplyIncoming"],
-        ConflictPolicy.KeepCurrentAndNotify => L["Conflict_KeepCurrent"],
-        ConflictPolicy.MergeAndNotify => L["Conflict_Merge"],
-        _ => policy.ToString()
-    };
+    private static string SystemLink(string code) => $"/systems?code={Uri.EscapeDataString(code)}";
 
     private async Task LoadAsync()
     {
@@ -159,6 +144,7 @@ else
             summary = await ReadService.GetSummaryAsync(CancellationToken.None);
             routes = await ReadService.GetRoutesAsync(CancellationToken.None);
             conflicts = await ReadService.GetRecentConflictsAsync(20, CancellationToken.None);
+            globalPaused = (await SettingsService.GetAsync(CancellationToken.None)).GlobalPaused;
         }
         finally
         {

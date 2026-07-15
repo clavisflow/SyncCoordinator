@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @using SyncCoordinator.Core
 @inject ICoordinatorReadService ReadService
+@inject IManagementSettingsService SettingsService
 @inject NavigationManager Navigation
 @inject IStringLocalizer<SharedResource> L
 
@@ -10,7 +11,7 @@
 <section class="page-heading">
     <div>
         <p class="kicker">CONFIGURATION</p>
-        <h1>@L["Routes_Title"]</h1>
+        <PageHeadingTitle Icon="account_tree">@L["Routes_Title"]</PageHeadingTitle>
         <p>@L["Routes_Description"]</p>
     </div>
     <RadzenButton Text="@L["Routes_New"]" Icon="add" Click="@CreateRoute" />
@@ -21,21 +22,21 @@
     <RadzenDataGrid Data="@routes" TItem="RouteListItem" AllowSorting="true" AllowPaging="true" PageSize="20" EmptyText="@L["Routes_Empty"]" Density="Density.Compact">
         <Columns>
             <RadzenDataGridColumn TItem="RouteListItem" Property="Name" Title="@L["Common_Rule"]" />
-            <RadzenDataGridColumn TItem="RouteListItem" Title="@L["Common_Direction"]" Sortable="false" Filterable="false">
-                <Template Context="route"><code class="direction">@route.SourceSystemName @(route.Direction == SyncDirection.Bidirectional ? "⇄" : "→") @route.DestinationSystemName</code></Template>
-            </RadzenDataGridColumn>
-            <RadzenDataGridColumn TItem="RouteListItem" Property="Direction" Title="@L["Routes_SyncDirection"]" Width="110px">
-                <Template Context="route">@(route.Direction == SyncDirection.Bidirectional ? L["Common_Bidirectional"] : L["Common_OneWay"])</Template>
+            <RadzenDataGridColumn TItem="RouteListItem" Title="@L["Common_SyncPath"]" Sortable="false" Filterable="false">
+                <Template Context="route"><code class="direction">@route.SourceSystemName @(route.Direction == SyncDirection.Bidirectional ? "⇄" : "→") @route.DestinationSystemName</code><br /><small>@(route.Direction == SyncDirection.Bidirectional ? L["Common_Bidirectional"] : L["Common_OneWay"])</small></Template>
             </RadzenDataGridColumn>
             <RadzenDataGridColumn TItem="RouteListItem" Title="@L["Routes_ConflictSettings"]" Sortable="false" Filterable="false">
                 <Template Context="route">@ConflictScopeText(route.ConflictScope) / @ConflictPolicyText(route.ConflictPolicy)</Template>
             </RadzenDataGridColumn>
-            <RadzenDataGridColumn TItem="RouteListItem" Property="Enabled" Title="@L["Common_Status"]" Width="180px">
+            <RadzenDataGridColumn TItem="RouteListItem" Property="Enabled" Title="@L["Common_SyncStatus"]" Width="150px">
                 <Template Context="route"><span class="status-pill @StatusClass(route)">@StatusText(route)</span></Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="RouteListItem" Property="DeploymentState" Title="@L["Common_DatabaseStatus"]" Width="160px">
+                <Template Context="route"><span class="status-pill @DatabaseStatusClass(route)">@DatabaseStatusText(route)</span></Template>
             </RadzenDataGridColumn>
             <RadzenDataGridColumn TItem="RouteListItem" Title="" Sortable="false" Filterable="false" Width="70px" TextAlign="TextAlign.Right">
                 <Template Context="route">
-                    <RadzenButton Icon="edit" title="@L["Common_Edit"]" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => EditRoute(route.Id))" />
+                    <RadzenButton Icon="edit" title="@L["Common_Edit"]" aria-label="@L["Common_Edit"]" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => EditRoute(route.Id))" />
                 </Template>
             </RadzenDataGridColumn>
         </Columns>
@@ -44,8 +45,13 @@
 
 @code {
     private IReadOnlyList<RouteListItem> routes = [];
+    private bool globalPaused;
 
-    protected override async Task OnInitializedAsync() => routes = await ReadService.GetRoutesAsync(CancellationToken.None);
+    protected override async Task OnInitializedAsync()
+    {
+        routes = await ReadService.GetRoutesAsync(CancellationToken.None);
+        globalPaused = (await SettingsService.GetAsync(CancellationToken.None)).GlobalPaused;
+    }
 
     private void CreateRoute() => Navigation.NavigateTo("/routes/new");
     private void EditRoute(Guid id) => Navigation.NavigateTo($"/routes/{id}");
@@ -53,14 +59,21 @@
     private string StatusText(RouteListItem route) => route.MappingMaintenance
         ? L["Common_MappingMaintenance"]
         : route.Enabled
-            ? route.OperationallyPaused ? L["Common_Paused"] : L["Common_Enabled"]
-            : route.DeploymentState == DatabaseDeploymentState.Prepared ? L["Common_DbPrepared"] : L["Common_Draft"];
+            ? globalPaused || route.OperationallyPaused ? L["Common_Paused"] : L["Common_SyncTarget"]
+            : L["Common_Excluded"];
 
-    private static string StatusClass(RouteListItem route) => route.MappingMaintenance
+    private string StatusClass(RouteListItem route) => route.MappingMaintenance
         ? "held"
         : route.Enabled
-            ? route.OperationallyPaused ? "held" : "enabled"
-            : route.DeploymentState == DatabaseDeploymentState.Prepared ? "prepared" : "disabled";
+            ? globalPaused || route.OperationallyPaused ? "held" : "enabled"
+            : "disabled";
+
+    private string DatabaseStatusText(RouteListItem route) => route.DeploymentState == DatabaseDeploymentState.Prepared
+        ? L["Common_DbPrepared"]
+        : L["Common_Draft"];
+
+    private static string DatabaseStatusClass(RouteListItem route) =>
+        route.DeploymentState == DatabaseDeploymentState.Prepared ? "prepared" : "disabled";
 
     private string ConflictScopeText(ConflictScope scope) =>
         scope == ConflictScope.Field ? L["Common_FieldScope"] : L["Common_RecordScope"];

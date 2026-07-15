@@ -229,7 +229,6 @@ public sealed class WebhookDeliveryService(
             await dbContext.SaveChangesAsync(cancellationToken);
             await DeliverAsync(delivery, cancellationToken);
         }
-        await CleanupAsync(now, cancellationToken);
         return deliveries.Count;
     }
 
@@ -295,15 +294,6 @@ public sealed class WebhookDeliveryService(
                 delivery.Endpoint.Name,
                 delivery.LastError), CancellationToken.None);
         }
-    }
-
-    private async Task CleanupAsync(DateTimeOffset now, CancellationToken cancellationToken)
-    {
-        await dbContext.WebhookDeliveries
-            .Where(x => x.State == "Delivered" && x.DeliveredAtUtc < now.AddDays(-30) ||
-                        x.State == "Failed" && x.LastAttemptAtUtc < now.AddDays(-90))
-            .ExecuteDeleteAsync(cancellationToken);
-        await dbContext.WebhookEvents.Where(x => !x.Deliveries.Any()).ExecuteDeleteAsync(cancellationToken);
     }
 
     internal static string CreateSignature(string base64Secret, string timestamp, string payload)

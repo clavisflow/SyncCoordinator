@@ -13,6 +13,23 @@ public sealed class AdminAccountEntity
     public DateTimeOffset UpdatedAtUtc { get; set; }
 }
 
+public sealed class ManagementSettingsEntity
+{
+    public int Id { get; set; }
+    public bool GlobalPaused { get; set; }
+    public int PollingIntervalSeconds { get; set; } = 5;
+    public int BatchSize { get; set; } = 100;
+    public int CompletedInboxRetentionDays { get; set; } = 90;
+    public int DeliveredWebhookRetentionDays { get; set; } = 30;
+    public int FailedWebhookRetentionDays { get; set; } = 90;
+    public int AcknowledgedOperationalEventRetentionDays { get; set; } = 90;
+    public int ConfigurationAuditRetentionDays { get; set; } = 365;
+    public DateTimeOffset? LastAutomaticCleanupAtUtc { get; set; }
+    public DateTimeOffset? LastManualCleanupAtUtc { get; set; }
+    public DateTimeOffset? AutomaticCleanupLeaseUntilUtc { get; set; }
+    public DateTimeOffset UpdatedAtUtc { get; set; }
+}
+
 public sealed class SystemDefinitionEntity
 {
     public Guid Id { get; set; }

@@ -215,7 +215,6 @@ public sealed class DatabaseDeploymentService(
         warnings.Add(mapping.SyncDeletes
             ? DisplayText.Create("DatabaseSetup_WarningDeleteEnabled")
             : DisplayText.Create("DatabaseSetup_WarningDeleteDisabled"));
-        warnings.Add(DisplayText.Create("DatabaseSetup_WarningConnector"));
         if (keys.Length > 1)
         {
             warnings.Add(DisplayText.Create("DatabaseSetup_WarningCompositeKey"));

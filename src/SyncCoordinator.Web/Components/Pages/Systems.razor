@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @using SyncCoordinator.Core
 @inject ICoordinatorAdminService AdminService
+@inject IManagementSettingsService SettingsService
 @inject IDatabaseMetadataService MetadataService
 @inject NotificationService NotificationService
 @inject UiErrorReporter ErrorReporter
@@ -12,7 +13,7 @@
 <section class="page-heading">
     <div>
         <p class="kicker">CONFIGURATION</p>
-        <h1>@L["Systems_Title"]</h1>
+        <PageHeadingTitle Icon="dns">@L["Systems_Title"]</PageHeadingTitle>
         <p>@L["Systems_Description"]</p>
     </div>
     <RadzenButton Text="@L["Systems_New"]" Icon="add" Click="@StartCreate" />
@@ -21,14 +22,32 @@
 <div class="split-layout">
     <RadzenCard>
         <div class="panel-title"><h2>@L["Systems_Registered"]</h2><span>@L["Common_Count", systems.Count]</span></div>
-        <p class="info-note">@L["Systems_PauseNote"]</p>
+        <div class="@("systems-global-control" + (globalPaused ? " paused" : string.Empty))">
+            <div class="systems-global-state">
+                <div class="caption-title">
+                    <strong>@L["Systems_AllSynchronization"]</strong>
+                    @if (globalPaused)
+                    {
+                        <HelpTip Text="@L["Systems_GlobalPauseHelp"]" />
+                    }
+                </div>
+                <span class="status-pill @(globalPaused ? "held" : "enabled")">@(globalPaused ? L["Systems_GlobalPaused"] : L["Systems_IndividualControl"])</span>
+            </div>
+            <RadzenButton Text="@(globalPaused ? L["Systems_ResumeAll"] : L["Systems_PauseAll"])"
+                          Icon="@(globalPaused ? "play_circle" : "pause_circle")"
+                          ButtonStyle="@(globalPaused ? ButtonStyle.Success : ButtonStyle.Warning)"
+                          Variant="Variant.Outlined"
+                          Size="ButtonSize.Small"
+                          Disabled="@changingGlobalPause"
+                          Click="@SetGlobalPausedAsync" />
+        </div>
         <RadzenDataGrid Data="@systems" TItem="SystemListItem" AllowSorting="true" AllowPaging="true" PageSize="15" EmptyText="@L["Systems_Empty"]" Density="Density.Compact">
             <Columns>
                 <RadzenDataGridColumn TItem="SystemListItem" Property="Code" Title="@L["Systems_Code"]" Width="110px">
                     <Template Context="system"><code>@system.Code</code></Template>
                 </RadzenDataGridColumn>
                 <RadzenDataGridColumn TItem="SystemListItem" Property="DisplayName" Title="@L["Systems_DisplayName"]" />
-                <RadzenDataGridColumn TItem="SystemListItem" Property="Provider" Title="Provider" Width="130px">
+                <RadzenDataGridColumn TItem="SystemListItem" Property="Provider" Title="@L["Systems_DatabaseType"]" Width="130px">
                     <Template Context="system">@ProviderDisplayName(system.Provider)</Template>
                 </RadzenDataGridColumn>
                 <RadzenDataGridColumn TItem="SystemListItem" Property="Enabled" Title="@L["Common_Status"]" Width="110px">
@@ -41,12 +60,13 @@
                     <Template Context="system">
                         <RadzenButton Icon="@(system.IsPaused ? "play_circle" : "pause_circle")"
                                       title="@(system.IsPaused ? L["Systems_Resume"] : L["Systems_Pause"])"
+                                      aria-label="@(system.IsPaused ? L["Systems_Resume"] : L["Systems_Pause"])"
                                       ButtonStyle="@(system.IsPaused ? ButtonStyle.Success : ButtonStyle.Warning)"
                                       Variant="Variant.Text"
                                       Size="ButtonSize.Small"
-                                      Disabled="@(!system.Enabled || pausingSystemId is not null)"
+                                      Disabled="@(globalPaused || !system.Enabled || pausingSystemId is not null)"
                                       Click="@(() => SetPausedAsync(system))" />
-                        <RadzenButton Icon="edit" title="@L["Common_Edit"]" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => StartEditAsync(system.Id))" />
+                        <RadzenButton Icon="edit" title="@L["Common_Edit"]" aria-label="@L["Common_Edit"]" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => StartEditAsync(system.Id))" />
                     </Template>
                 </RadzenDataGridColumn>
             </Columns>
@@ -65,14 +85,16 @@
                 <RadzenTextBox Name="DisplayName" @bind-Value="editModel.DisplayName" MaxLength="200" class="form-control" />
             </div>
             <div class="form-field">
-                <label for="Provider">Provider</label>
+                <label for="Provider">@L["Systems_DatabaseType"]</label>
                 <RadzenDropDown Name="Provider" TValue="string" @bind-Value="editModel.Provider" Data="@providers" TextProperty="Text" ValueProperty="Value" Change="@OnProviderChanged" class="form-control" />
             </div>
             <div class="check-row">
                 <RadzenCheckBox Name="Enabled" TValue="bool" @bind-Value="editModel.Enabled" />
-                <RadzenLabel Text="@L["Common_Enabled"]" Component="Enabled" />
+                <div class="caption-title">
+                    <RadzenLabel Text="@L["Common_Enabled"]" Component="Enabled" />
+                    <HelpTip Text="@L["Systems_DisableHelp"]" />
+                </div>
             </div>
-            <small>@L["Systems_DisableHelp"]</small>
             <div class="section-divider"></div>
             <div class="panel-title"><div class="caption-title"><h2>@L["Systems_DbConnection"]</h2><HelpTip Text="@L["Systems_DbConnectionHelp"]" /></div></div>
             <div class="form-field">
@@ -81,7 +103,7 @@
             </div>
             <div class="form-field">
                 <label for="DbPort">@L["Systems_Port"]</label>
-                <RadzenNumeric Name="DbPort" TValue="int?" @bind-Value="connectionModel.Port" Min="1" Max="65535" class="form-control" />
+                <RadzenNumeric Name="DbPort" TValue="int?" @bind-Value="connectionModel.Port" Min="1" Max="65535" class="form-control system-port-input" />
             </div>
             <div class="form-field">
                 <label for="DbName">@L["Systems_Database"]</label>
@@ -126,6 +148,8 @@
 </div>
 
 @code {
+    [Parameter, SupplyParameterFromQuery(Name = "code")] public string? RequestedSystemCode { get; set; }
+
     private static readonly ProviderOption[] providers =
     [
         new("SqlServer", "SQL Server"),
@@ -137,11 +161,49 @@
     private DatabaseConnectionInput connectionModel = NewConnectionModel("SqlServer");
     private bool saving;
     private bool testingConnection;
+    private bool globalPaused;
+    private bool changingGlobalPause;
     private Guid? pausingSystemId;
 
-    protected override Task OnInitializedAsync() => LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        var requestedSystem = systems.FirstOrDefault(system =>
+            string.Equals(system.Code, RequestedSystemCode, StringComparison.OrdinalIgnoreCase));
+        if (requestedSystem is not null)
+        {
+            await StartEditAsync(requestedSystem.Id);
+        }
+    }
 
-    private async Task LoadAsync() => systems = await AdminService.GetSystemsAsync(CancellationToken.None);
+    private async Task LoadAsync()
+    {
+        systems = await AdminService.GetSystemsAsync(CancellationToken.None);
+        globalPaused = (await SettingsService.GetAsync(CancellationToken.None)).GlobalPaused;
+    }
+
+    private async Task SetGlobalPausedAsync()
+    {
+        changingGlobalPause = true;
+        var pause = !globalPaused;
+        try
+        {
+            await SettingsService.SetGlobalPausedAsync(pause, CancellationToken.None);
+            globalPaused = pause;
+            NotificationService.ShowSuccess(
+                pause ? L["Systems_AllPausedMessage"] : L["Systems_AllResumedMessage"],
+                L["Common_Completed"]);
+        }
+        catch (Exception exception)
+        {
+            await ErrorReporter.ReportAsync(exception, "Systems.SetGlobalPaused");
+            NotificationService.ShowError([exception.Message], L["Common_OperationFailed"]);
+        }
+        finally
+        {
+            changingGlobalPause = false;
+        }
+    }
 
     private void StartCreate()
     {
@@ -271,10 +333,16 @@
     private static SystemConfigurationInput NewModel() => new() { Provider = "SqlServer", Enabled = true };
 
     private string SystemStatusText(SystemListItem system) =>
-        !system.Enabled ? L["Common_Disabled"] : system.IsPaused ? L["Common_Paused"] : L["Common_Running"];
+        !system.Enabled
+            ? L["Common_Disabled"]
+            : globalPaused
+                ? L["Systems_PausedByGlobal"]
+                : system.IsPaused
+                    ? L["Common_Paused"]
+                    : L["Common_Running"];
 
-    private static string SystemStatusClass(SystemListItem system) =>
-        !system.Enabled ? "disabled" : system.IsPaused ? "held" : "enabled";
+    private string SystemStatusClass(SystemListItem system) =>
+        !system.Enabled ? "disabled" : globalPaused || system.IsPaused ? "held" : "enabled";
 
     private static DatabaseConnectionInput NewConnectionModel(string provider, Guid systemId = default) => new()
     {

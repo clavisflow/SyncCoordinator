@@ -14,7 +14,10 @@
         <RadzenText TextStyle="TextStyle.Body1">@L["Error_Description"]</RadzenText>
         @if (ShowRequestId)
         {
-            <div>Request ID: <code>@RequestId</code></div>
+            <details class="technical-details compact">
+                <summary>@L["Common_TechnicalDetails"]</summary>
+                <div>Request ID: <code>@RequestId</code></div>
+            </details>
         }
     </RadzenStack>
 </RadzenCard>

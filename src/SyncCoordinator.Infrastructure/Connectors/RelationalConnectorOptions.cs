@@ -6,16 +6,3 @@ public enum RelationalProvider
     MySql = 1,
     PostgreSql = 2
 }
-
-public sealed class RelationalConnectorOptions
-{
-    public List<RelationalSystemOptions> Systems { get; set; } = [];
-}
-
-public sealed class RelationalSystemOptions
-{
-    public required string SystemCode { get; set; }
-    public RelationalProvider Provider { get; set; }
-    public required string ConnectionStringName { get; set; }
-    public bool Enabled { get; set; }
-}

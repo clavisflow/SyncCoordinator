@@ -14,7 +14,7 @@
 <section class="page-heading compact">
     <div>
         <p class="kicker">CONFIGURATION</p>
-        <h1>@(Id is null ? L["RouteEdit_CreateTitle"] : L["RouteEdit_EditTitle"])</h1>
+        <PageHeadingTitle Icon="account_tree">@(Id is null ? L["RouteEdit_CreateTitle"] : L["RouteEdit_EditTitle"])</PageHeadingTitle>
         @if (Id is not null && !string.IsNullOrWhiteSpace(model.Name)) { <p>@model.Name</p> }
     </div>
     <RadzenButton Text="@L["Common_BackToList"]" Icon="arrow_back" ButtonStyle="ButtonStyle.Primary" Variant="Variant.Text" Click="@BackToList" />
@@ -34,7 +34,7 @@ else
     <EditForm Model="model" OnSubmit="SaveAsync">
         <div class="content-stack">
             <RadzenCard>
-                <div class="panel-title"><div class="caption-title"><h2>@L["RouteEdit_BasicSettings"]</h2><HelpTip Text="@L["RouteEdit_BasicHelp"]" /></div></div>
+                <div class="panel-title"><h2>@L["RouteEdit_BasicSettings"]</h2></div>
                 <div class="form-grid">
                     <div class="form-field wide">
                         <label for="RouteName">@L["RouteEdit_RuleName"]</label>
@@ -79,10 +79,10 @@ else
                     <section class="route-activation">
                         <div class="route-activation-status">
                             <span>@L["RouteEdit_RuleStatus"]</span>
-                            <strong class="status-pill @(model.Enabled ? "enabled" : "disabled")">@(model.Enabled ? L["Common_Enabled"] : L["Common_Disabled"])</strong>
+                            <strong class="status-pill @(model.Enabled ? "enabled" : "disabled")">@(model.Enabled ? L["Common_SyncTarget"] : L["RouteEdit_Excluded"])</strong>
                         </div>
                         <RadzenButton Text="@(changingEnabled ? L["Common_Processing"] : model.Enabled ? L["RouteEdit_DisableRule"] : L["RouteEdit_EnableRule"])"
-                                      Icon="@(model.Enabled ? "pause_circle" : "play_circle")"
+                                      Icon="@(model.Enabled ? "toggle_off" : "toggle_on")"
                                       ButtonStyle="@(model.Enabled ? ButtonStyle.Warning : ButtonStyle.Primary)"
                                       ButtonType="ButtonType.Button"
                                       Disabled="@(changingEnabled || (!model.Enabled && model.DeploymentState != DatabaseDeploymentState.Prepared))"

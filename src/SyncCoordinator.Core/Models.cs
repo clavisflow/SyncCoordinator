@@ -137,8 +137,41 @@ public sealed record DashboardSummary(
     int EnabledRoutes,
     int ProcessingMessages,
     int HeldMessages,
-    int FailedMessages,
-    int UnresolvedConflicts);
+    int FailedMessages);
+
+public sealed class ManagementSettings
+{
+    public bool GlobalPaused { get; set; }
+    public int PollingIntervalSeconds { get; set; } = 5;
+    public int BatchSize { get; set; } = 100;
+    public int CompletedInboxRetentionDays { get; set; } = 90;
+    public int DeliveredWebhookRetentionDays { get; set; } = 30;
+    public int FailedWebhookRetentionDays { get; set; } = 90;
+    public int AcknowledgedOperationalEventRetentionDays { get; set; } = 90;
+    public int ConfigurationAuditRetentionDays { get; set; } = 365;
+    public DateTimeOffset? LastAutomaticCleanupAtUtc { get; set; }
+    public DateTimeOffset? LastManualCleanupAtUtc { get; set; }
+}
+
+public sealed record ManagementCleanupCounts(
+    long CompletedInbox,
+    long DeliveredWebhooks,
+    long FailedWebhooks,
+    long AcknowledgedOperationalEvents,
+    long ConfigurationAudits)
+{
+    public long Total => CompletedInbox + DeliveredWebhooks + FailedWebhooks +
+                         AcknowledgedOperationalEvents + ConfigurationAudits;
+}
+
+public sealed record ManagementCleanupPreview(
+    ManagementCleanupCounts Counts,
+    DateTimeOffset CalculatedAtUtc);
+
+public sealed record ManagementCleanupResult(
+    ManagementCleanupCounts Deleted,
+    DateTimeOffset CompletedAtUtc,
+    bool Automatic);
 
 public sealed record ConflictListItem(
     Guid Id,
@@ -149,8 +182,7 @@ public sealed record ConflictListItem(
     string DestinationSystemName,
     string EntityType,
     string EntityId,
-    DateTimeOffset DetectedAtUtc,
-    bool Resolved);
+    DateTimeOffset DetectedAtUtc);
 
 public sealed record RouteListItem(
     Guid Id,
@@ -490,8 +522,7 @@ public sealed record ConflictDetails(
     string EntityId,
     ConflictScope Scope,
     IReadOnlyList<FieldConflict> Fields,
-    DateTimeOffset DetectedAtUtc,
-    DateTimeOffset? ResolvedAtUtc);
+    DateTimeOffset DetectedAtUtc);
 
 public sealed record ConfigurationAuditListItem(
     Guid Id,

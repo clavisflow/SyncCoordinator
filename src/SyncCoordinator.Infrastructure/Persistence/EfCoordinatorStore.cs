@@ -13,6 +13,12 @@ public sealed class EfCoordinatorStore(
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    public Task<bool> IsGloballyPausedAsync(CancellationToken cancellationToken) =>
+        dbContext.ManagementSettings.AsNoTracking()
+            .Where(x => x.Id == 1)
+            .Select(x => x.GlobalPaused)
+            .SingleOrDefaultAsync(cancellationToken);
+
     public Task<bool> IsSystemPausedAsync(string systemCode, CancellationToken cancellationToken) =>
         dbContext.Systems.AsNoTracking()
             .AnyAsync(x => x.Code == systemCode && x.PausedAtUtc != null, cancellationToken);

@@ -14,8 +14,7 @@ public sealed class EfCoordinatorReadService(CoordinatorDbContext dbContext) : I
             cancellationToken);
         var held = await dbContext.InboxMessages.CountAsync(x => x.State == InboxState.Held, cancellationToken);
         var failed = await dbContext.InboxMessages.CountAsync(x => x.State == InboxState.Failed, cancellationToken);
-        var conflicts = await dbContext.SyncConflicts.CountAsync(x => x.ResolvedAtUtc == null, cancellationToken);
-        return new DashboardSummary(systems, routes, processing, held, failed, conflicts);
+        return new DashboardSummary(systems, routes, processing, held, failed);
     }
 
     public async Task<IReadOnlyList<RouteListItem>> GetRoutesAsync(CancellationToken cancellationToken) =>
@@ -55,7 +54,6 @@ public sealed class EfCoordinatorReadService(CoordinatorDbContext dbContext) : I
                     .Select(system => system.DisplayName).FirstOrDefault() ?? x.DestinationSystem,
                 x.EntityType,
                 x.EntityId,
-                x.DetectedAtUtc,
-                x.ResolvedAtUtc != null))
+                x.DetectedAtUtc))
             .ToListAsync(cancellationToken);
 }

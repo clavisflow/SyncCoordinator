@@ -7,6 +7,25 @@ namespace SyncCoordinator.Tests;
 public sealed class SynchronizationCoordinatorTests
 {
     [Fact]
+    public async Task GlobalPauseLeavesAllQueuesUntouched()
+    {
+        var connector = new FakeConnector();
+        var store = new RecordingStore(Route(), null) { GlobalPaused = true };
+        var coordinator = new SynchronizationCoordinator(
+            new ConnectorCatalog([connector]),
+            store,
+            new ConflictResolver(new NoOpConflictValueMerger()),
+            TimeProvider.System,
+            NullLogger<SynchronizationCoordinator>.Instance);
+
+        var processed = await coordinator.RunOnceAsync(10, CancellationToken.None);
+
+        Assert.Equal(0, processed);
+        Assert.Equal(0, connector.ReadChangesCalls);
+        Assert.Equal(0, store.Checkpoint);
+    }
+
+    [Fact]
     public async Task RunOnceSkipsAppliedMessageAndAdvancesCheckpoint()
     {
         var connector = new FakeConnector { AppliedMessage = true };
@@ -428,11 +447,15 @@ public sealed class SynchronizationCoordinatorTests
         public int FailedDeliveries { get; private set; }
         public int HeldDeliveries { get; private set; }
         public InboxAcquireResult AcquireResult { get; init; } = InboxAcquireResult.Acquired;
+        public bool GlobalPaused { get; init; }
         public bool SystemPaused { get; init; }
         public bool RoutePaused { get; set; }
         public List<SyncSnapshot> SavedSnapshots { get; } = [];
         public WebhookEventNotification? CompletedWebhook { get; private set; }
         public WebhookEventNotification? FailedWebhook { get; private set; }
+
+        public Task<bool> IsGloballyPausedAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(GlobalPaused);
 
         public Task<bool> IsSystemPausedAsync(string systemCode, CancellationToken cancellationToken) =>
             Task.FromResult(SystemPaused);
@@ -495,6 +518,7 @@ public sealed class SynchronizationCoordinatorTests
     private sealed class FakeStore : ICoordinatorStore
     {
         public long Checkpoint { get; private set; }
+        public Task<bool> IsGloballyPausedAsync(CancellationToken cancellationToken) => Task.FromResult(false);
         public Task<bool> IsSystemPausedAsync(string systemCode, CancellationToken cancellationToken) => Task.FromResult(false);
         public Task<long> GetCheckpointAsync(string systemCode, CancellationToken cancellationToken) => Task.FromResult(Checkpoint);
         public Task AdvanceCheckpointAsync(string systemCode, long queueId, CancellationToken cancellationToken)
@@ -514,6 +538,7 @@ public sealed class SynchronizationCoordinatorTests
 
     private sealed class DeleteFlowStore(SyncRouteDefinition route, EntityPayload snapshot) : ICoordinatorStore
     {
+        public Task<bool> IsGloballyPausedAsync(CancellationToken cancellationToken) => Task.FromResult(false);
         public Task<bool> IsSystemPausedAsync(string systemCode, CancellationToken cancellationToken) => Task.FromResult(false);
         public Task<long> GetCheckpointAsync(string systemCode, CancellationToken cancellationToken) => Task.FromResult(0L);
         public Task AdvanceCheckpointAsync(string systemCode, long queueId, CancellationToken cancellationToken) => Task.CompletedTask;

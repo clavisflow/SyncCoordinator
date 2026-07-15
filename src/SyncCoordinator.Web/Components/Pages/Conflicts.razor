@@ -10,7 +10,7 @@
 <section class="page-heading">
     <div>
         <p class="kicker">HISTORY</p>
-        <h1>@L["Conflicts_Title"]</h1>
+        <PageHeadingTitle Icon="rule">@L["Conflicts_Title"]</PageHeadingTitle>
         <p>@L["Conflicts_Description"]</p>
     </div>
     <RadzenButton Text="@(loading ? L["Action_Refreshing"] : L["Action_Reload"])" Icon="refresh" Click="@LoadAsync" Disabled="@loading" />
@@ -28,11 +28,8 @@
                 <Template Context="conflict"><code class="direction">@conflict.SourceSystemName → @conflict.DestinationSystemName</code></Template>
             </RadzenDataGridColumn>
             <RadzenDataGridColumn TItem="ConflictListItem" Property="EntityId" Title="@L["Common_TargetId"]" />
-            <RadzenDataGridColumn TItem="ConflictListItem" Property="Resolved" Title="@L["Common_Status"]" Width="100px">
-                <Template Context="conflict"><span class="status-pill @(conflict.Resolved ? "enabled" : "held")">@(conflict.Resolved ? L["Common_Resolved"] : L["Common_Unresolved"])</span></Template>
-            </RadzenDataGridColumn>
             <RadzenDataGridColumn TItem="ConflictListItem" Title="" Sortable="false" Filterable="false" Width="72px" TextAlign="TextAlign.Right">
-                <Template Context="conflict"><RadzenButton Icon="open_in_new" title="@L["Common_Details"]" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => OpenDetails(conflict.Id))" /></Template>
+                <Template Context="conflict"><RadzenButton Icon="chevron_right" title="@L["Common_Details"]" aria-label="@L["Common_Details"]" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => OpenDetails(conflict.Id))" /></Template>
             </RadzenDataGridColumn>
         </Columns>
     </RadzenDataGrid>

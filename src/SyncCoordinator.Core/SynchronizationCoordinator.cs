@@ -13,8 +13,14 @@ public sealed class SynchronizationCoordinator(
 {
     public async Task<int> RunOnceAsync(int batchSize, CancellationToken cancellationToken)
     {
+        if (await store.IsGloballyPausedAsync(cancellationToken))
+        {
+            CoordinatorLog.GlobalPauseSkipped(logger);
+            return 0;
+        }
+
         var processed = 0;
-        foreach (var source in connectors.All)
+        foreach (var source in await connectors.GetAllAsync(cancellationToken))
         {
             processed += await ProcessSourceAsync(source, batchSize, cancellationToken);
         }
@@ -149,7 +155,7 @@ public sealed class SynchronizationCoordinator(
 
         try
         {
-            var destination = connectors.GetRequired(destinationSystem);
+            var destination = await connectors.GetRequiredAsync(destinationSystem, cancellationToken);
             var incoming = NormalizeToCanonical(message.Payload, route, message.SourceSystem);
             var destinationPayload = await destination.ReadCurrentAsync(
                 message.EntityType,
@@ -363,6 +369,9 @@ public sealed class SynchronizationCoordinator(
 
 internal static partial class CoordinatorLog
 {
+    [LoggerMessage(LogLevel.Debug, "Synchronization is globally paused; all queues and checkpoints were left untouched")]
+    public static partial void GlobalPauseSkipped(ILogger logger);
+
     [LoggerMessage(LogLevel.Debug, "Applied message {messageId} from {systemCode} was skipped to prevent a sync loop")]
     public static partial void AppliedMessageSkipped(ILogger logger, Guid messageId, string systemCode);
 

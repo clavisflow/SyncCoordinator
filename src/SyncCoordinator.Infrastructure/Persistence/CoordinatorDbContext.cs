@@ -6,6 +6,7 @@ public sealed class CoordinatorDbContext(DbContextOptions<CoordinatorDbContext> 
     : DbContext(options)
 {
     public DbSet<AdminAccountEntity> AdminAccounts => Set<AdminAccountEntity>();
+    public DbSet<ManagementSettingsEntity> ManagementSettings => Set<ManagementSettingsEntity>();
     public DbSet<SystemDefinitionEntity> Systems => Set<SystemDefinitionEntity>();
     public DbSet<SyncRouteEntity> Routes => Set<SyncRouteEntity>();
     public DbSet<RouteTableMappingEntity> RouteTableMappings => Set<RouteTableMappingEntity>();
@@ -30,6 +31,13 @@ public sealed class CoordinatorDbContext(DbContextOptions<CoordinatorDbContext> 
             entity.HasIndex(x => x.UserName).IsUnique();
             entity.Property(x => x.UserName).HasMaxLength(64);
             entity.Property(x => x.PasswordHash).HasMaxLength(512);
+        });
+
+        modelBuilder.Entity<ManagementSettingsEntity>(entity =>
+        {
+            entity.ToTable("ManagementSettings");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).ValueGeneratedNever();
         });
 
         modelBuilder.Entity<SystemDefinitionEntity>(entity =>
@@ -109,7 +117,7 @@ public sealed class CoordinatorDbContext(DbContextOptions<CoordinatorDbContext> 
         {
             entity.ToTable("InboxMessage");
             entity.HasKey(x => new { x.SourceMessageId, x.RouteId, x.DestinationSystem });
-            entity.HasIndex(x => x.State);
+            entity.HasIndex(x => new { x.State, x.UpdatedAtUtc });
             entity.Property(x => x.DestinationSystem).HasMaxLength(64);
             entity.Property(x => x.State).HasConversion<string>().HasMaxLength(16);
             entity.Property(x => x.LastError).HasMaxLength(4000);
@@ -201,6 +209,8 @@ public sealed class CoordinatorDbContext(DbContextOptions<CoordinatorDbContext> 
             entity.ToTable("WebhookDelivery");
             entity.HasKey(x => x.Id);
             entity.HasIndex(x => new { x.State, x.NextAttemptAtUtc });
+            entity.HasIndex(x => new { x.State, x.DeliveredAtUtc });
+            entity.HasIndex(x => new { x.State, x.LastAttemptAtUtc });
             entity.HasIndex(x => new { x.EventId, x.EndpointId }).IsUnique();
             entity.Property(x => x.State).HasMaxLength(16);
             entity.Property(x => x.LastError).HasMaxLength(2000);

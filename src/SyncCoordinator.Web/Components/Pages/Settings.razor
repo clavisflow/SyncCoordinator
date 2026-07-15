@@ -1,0 +1,211 @@
+@page "/settings"
+@attribute [Authorize]
+@using SyncCoordinator.Core
+@inject IManagementSettingsService SettingsService
+@inject NotificationService NotificationService
+@inject DialogService DialogService
+@inject UiErrorReporter ErrorReporter
+@inject NavigationManager Navigation
+@inject IStringLocalizer<SharedResource> L
+
+<PageTitle>@L["Settings_PageTitle"]</PageTitle>
+
+<section class="page-heading">
+    <div>
+        <p class="kicker">SETTINGS</p>
+        <PageHeadingTitle Icon="settings">@L["Settings_Title"]</PageHeadingTitle>
+        <p>@L["Settings_Description"]</p>
+    </div>
+</section>
+
+<div class="content-stack">
+    <RadzenCard>
+        <div class="panel-title"><h2>@L["Settings_DisplayAndAccount"]</h2></div>
+        <div class="settings-account-grid">
+            <section class="settings-account-item">
+                <strong>@L["Settings_Language"]</strong>
+                <div class="settings-account-control">
+                    <CultureSelector Id="settings-culture-selector" PanelStyle="true" ShowLabel="false" />
+                </div>
+            </section>
+            <section class="settings-account-item">
+                <strong>@L["Settings_Password"]</strong>
+                <RadzenButton Text="@L["Account_ChangePassword"]" Icon="password" ButtonStyle="ButtonStyle.Light" Click="@OpenPasswordChange" />
+            </section>
+        </div>
+    </RadzenCard>
+
+    <RadzenCard>
+        <div class="panel-title"><h2>@L["Settings_Configuration"]</h2></div>
+        <section class="settings-subsection">
+            <h3>@L["Settings_Synchronization"]</h3>
+            <div class="settings-compact-grid">
+                <div class="settings-compact-field">
+                    <div class="caption-title"><label for="PollingIntervalSeconds">@L["Settings_PollingInterval"]</label><HelpTip Text="@L["Settings_PollingIntervalHelp"]" /></div>
+                    <RadzenNumeric Name="PollingIntervalSeconds" TValue="int" @bind-Value="model.PollingIntervalSeconds" Min="1" Max="300" class="form-control settings-numeric" />
+                </div>
+                <div class="settings-compact-field">
+                    <div class="caption-title"><label for="BatchSize">@L["Settings_BatchSize"]</label><HelpTip Text="@L["Settings_BatchSizeHelp"]" /></div>
+                    <RadzenNumeric Name="BatchSize" TValue="int" @bind-Value="model.BatchSize" Min="1" Max="5000" class="form-control settings-numeric" />
+                </div>
+            </div>
+        </section>
+
+        <section class="settings-subsection">
+            <div class="caption-title"><h3>@L["Settings_Retention"]</h3><HelpTip Text="@L["Settings_RetentionHelp"]" /></div>
+            <div class="settings-compact-grid">
+                <div class="settings-compact-field"><label for="CompletedInboxRetentionDays">@L["Settings_CompletedInbox"]</label><RadzenNumeric Name="CompletedInboxRetentionDays" TValue="int" @bind-Value="model.CompletedInboxRetentionDays" Min="0" Max="3650" class="form-control settings-numeric" /></div>
+                <div class="settings-compact-field"><label for="DeliveredWebhookRetentionDays">@L["Settings_DeliveredWebhook"]</label><RadzenNumeric Name="DeliveredWebhookRetentionDays" TValue="int" @bind-Value="model.DeliveredWebhookRetentionDays" Min="0" Max="3650" class="form-control settings-numeric" /></div>
+                <div class="settings-compact-field"><div class="caption-title"><label for="FailedWebhookRetentionDays">@L["Settings_FailedWebhook"]</label><HelpTip Text="@L["Settings_FailedWebhookHelp"]" /></div><RadzenNumeric Name="FailedWebhookRetentionDays" TValue="int" @bind-Value="model.FailedWebhookRetentionDays" Min="0" Max="3650" class="form-control settings-numeric" /></div>
+                <div class="settings-compact-field"><div class="caption-title"><label for="AcknowledgedOperationalEventRetentionDays">@L["Settings_AcknowledgedEvents"]</label><HelpTip Text="@L["Settings_AcknowledgedEventsHelp"]" /></div><RadzenNumeric Name="AcknowledgedOperationalEventRetentionDays" TValue="int" @bind-Value="model.AcknowledgedOperationalEventRetentionDays" Min="0" Max="3650" class="form-control settings-numeric" /></div>
+                <div class="settings-compact-field"><label for="ConfigurationAuditRetentionDays">@L["Settings_ConfigurationAudits"]</label><RadzenNumeric Name="ConfigurationAuditRetentionDays" TValue="int" @bind-Value="model.ConfigurationAuditRetentionDays" Min="0" Max="3650" class="form-control settings-numeric" /></div>
+            </div>
+        </section>
+
+        <div class="settings-save-bar">
+            <RadzenButton Text="@(saving ? L["Common_Saving"] : L["Common_Save"])" Icon="save" Click="@SaveAsync" Disabled="@saving" />
+        </div>
+    </RadzenCard>
+
+    <RadzenCard>
+        <div class="panel-title"><div class="caption-title"><h2>@L["Settings_Cleanup"]</h2><HelpTip Text="@L["Settings_CleanupHelp"]" /></div><span>@L["Settings_AutomaticDaily"]</span></div>
+        <div class="settings-cleanup-meta">
+            <span>@L["Settings_LastAutomatic"] <strong>@FormatDate(model.LastAutomaticCleanupAtUtc)</strong></span>
+            <span>@L["Settings_LastManual"] <strong>@FormatDate(model.LastManualCleanupAtUtc)</strong></span>
+        </div>
+        @if (preview is not null)
+        {
+            <RadzenDataGrid Data="@CleanupRows" TItem="CleanupRow" Density="Density.Compact" class="settings-cleanup-grid">
+                <Columns>
+                    <RadzenDataGridColumn TItem="CleanupRow" Property="Label" Title="@L["Settings_DataType"]" />
+                    <RadzenDataGridColumn TItem="CleanupRow" Property="Count" Title="@L["Settings_DeleteCandidates"]" />
+                </Columns>
+            </RadzenDataGrid>
+            <div class="settings-cleanup-total">@L["Settings_TotalCandidates"] <strong>@preview.Counts.Total</strong></div>
+        }
+        <div class="form-actions settings-cleanup-actions">
+            <RadzenButton Text="@L["Settings_Preview"]" Icon="preview" ButtonStyle="ButtonStyle.Light" Click="@PreviewAsync" Disabled="@(previewing || cleaning)" />
+            <RadzenButton Text="@(cleaning ? L["Settings_Cleaning"] : L["Settings_CleanupNow"])" Icon="delete_sweep" ButtonStyle="ButtonStyle.Danger" Click="@CleanupAsync" Disabled="@(cleaning || preview is null || preview.Counts.Total == 0)" />
+        </div>
+    </RadzenCard>
+
+</div>
+
+@code {
+    private ManagementSettings model = new();
+    private ManagementCleanupPreview? preview;
+    private bool saving;
+    private bool previewing;
+    private bool cleaning;
+
+    private void OpenPasswordChange() => Navigation.NavigateTo("/account/password");
+
+    private IReadOnlyList<CleanupRow> CleanupRows => preview is null ? [] :
+    [
+        new(L["Settings_CompletedInbox"], preview.Counts.CompletedInbox),
+        new(L["Settings_DeliveredWebhook"], preview.Counts.DeliveredWebhooks),
+        new(L["Settings_FailedWebhook"], preview.Counts.FailedWebhooks),
+        new(L["Settings_AcknowledgedEvents"], preview.Counts.AcknowledgedOperationalEvents),
+        new(L["Settings_ConfigurationAudits"], preview.Counts.ConfigurationAudits)
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        model = await SettingsService.GetAsync(CancellationToken.None);
+        await PreviewAsync();
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        try
+        {
+            await SettingsService.SaveAsync(model, CancellationToken.None);
+            model = await SettingsService.GetAsync(CancellationToken.None);
+            await PreviewAsync();
+            NotificationService.ShowSuccess(L["Settings_Saved"], L["Common_Completed"]);
+        }
+        catch (ConfigurationValidationException exception)
+        {
+            NotificationService.ShowError(exception.Errors.Select(LocalizeError), L["Common_OperationFailed"]);
+        }
+        catch (Exception exception)
+        {
+            await ErrorReporter.ReportAsync(exception, "Settings.Save");
+            NotificationService.ShowError([exception.Message], L["Common_OperationFailed"]);
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task PreviewAsync()
+    {
+        previewing = true;
+        try
+        {
+            preview = await SettingsService.PreviewCleanupAsync(CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            await ErrorReporter.ReportAsync(exception, "Settings.PreviewCleanup");
+            NotificationService.ShowError([exception.Message], L["Common_OperationFailed"]);
+        }
+        finally
+        {
+            previewing = false;
+        }
+    }
+
+    private async Task CleanupAsync()
+    {
+        if (preview is null || preview.Counts.Total == 0)
+        {
+            return;
+        }
+        var confirmed = await DialogService.Confirm(
+            L["Settings_CleanupConfirmation", preview.Counts.Total],
+            L["Settings_CleanupNow"],
+            new ConfirmOptions
+            {
+                OkButtonText = L["Settings_ExecuteCleanup"],
+                CancelButtonText = L["Common_Cancel"]
+            });
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        cleaning = true;
+        try
+        {
+            var result = await SettingsService.CleanupNowAsync(CancellationToken.None);
+            model = await SettingsService.GetAsync(CancellationToken.None);
+            preview = await SettingsService.PreviewCleanupAsync(CancellationToken.None);
+            NotificationService.ShowSuccess(
+                L["Settings_CleanupCompleted", result.Deleted.Total],
+                L["Common_Completed"]);
+        }
+        catch (Exception exception)
+        {
+            await ErrorReporter.ReportAsync(exception, "Settings.Cleanup");
+            NotificationService.ShowError([exception.Message], L["Common_OperationFailed"]);
+        }
+        finally
+        {
+            cleaning = false;
+        }
+    }
+
+    private string FormatDate(DateTimeOffset? value) =>
+        value is null ? L["Settings_NotRun"] : UiFormat.LocalDateTime(value.Value);
+
+    private string LocalizeError(string error)
+    {
+        var localized = L[error];
+        return localized.ResourceNotFound ? error : localized.Value;
+    }
+
+    private sealed record CleanupRow(string Label, long Count);
+}

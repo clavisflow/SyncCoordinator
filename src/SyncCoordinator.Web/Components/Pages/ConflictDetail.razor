@@ -8,16 +8,27 @@
 
 <PageTitle>@L["ConflictDetail_PageTitle"]</PageTitle>
 
-@if (details is null)
+@if (loading)
 {
     <div class="loading-state"><RadzenProgressBar Mode="ProgressBarMode.Indeterminate" ShowValue="false" Style="width: 8rem" /><span>@L["ConflictDetail_Loading"]</span></div>
+}
+else if (details is null)
+{
+    <section class="page-heading compact">
+        <div>
+            <p class="kicker">CONFLICT DETAIL</p>
+            <PageHeadingTitle Icon="search_off">@L["ConflictDetail_NotFoundTitle"]</PageHeadingTitle>
+            <p>@L["ConflictDetail_NotFoundDescription"]</p>
+        </div>
+        <RadzenButton Text="@L["Common_BackToList"]" Icon="arrow_back" ButtonStyle="ButtonStyle.Primary" Variant="Variant.Text" Click="@BackToList" />
+    </section>
 }
 else
 {
     <section class="page-heading compact">
         <div>
             <p class="kicker">CONFLICT DETAIL</p>
-            <h1>@L["ConflictDetail_Target", details.EntityId]</h1>
+            <PageHeadingTitle Icon="rule">@L["ConflictDetail_Target", details.EntityId]</PageHeadingTitle>
             <p>@details.RouteName</p>
         </div>
         <RadzenButton Text="@L["Common_BackToList"]" Icon="arrow_back" ButtonStyle="ButtonStyle.Primary" Variant="Variant.Text" Click="@BackToList" />
@@ -28,15 +39,15 @@ else
         <RadzenCard class="detail-card"><span>@L["Common_Direction"]</span><strong>@details.SourceSystemName → @details.DestinationSystemName</strong></RadzenCard>
         <RadzenCard class="detail-card"><span>@L["Common_Scope"]</span><strong>@ScopeText(details.Scope)</strong></RadzenCard>
         <RadzenCard class="detail-card"><span>@L["Common_DetectedAt"]</span><strong>@UiFormat.LocalDateTime(details.DetectedAtUtc)</strong></RadzenCard>
-        <RadzenCard class="detail-card"><span>@L["Common_Status"]</span><strong><span class="status-pill @(details.ResolvedAtUtc is null ? "held" : "enabled")">@(details.ResolvedAtUtc is null ? L["Common_Unresolved"] : L["Common_Resolved"])</span></strong></RadzenCard>
         </section>
 
-        <RadzenCard>
+        <details class="technical-details">
+            <summary>@L["Common_TechnicalDetails"]</summary>
             <dl class="metadata-list">
                 <dt>@L["ConflictDetail_SourceMessageId"]</dt><dd><code>@details.SourceMessageId</code></dd>
                 <dt>@L["ConflictDetail_DeliveryMessageId"]</dt><dd><code>@details.DeliveryMessageId</code></dd>
             </dl>
-        </RadzenCard>
+        </details>
 
         <RadzenCard>
         <div class="panel-title"><h2>@L["ConflictDetail_Fields"]</h2><span>@L["Common_ItemCount", details.Fields.Count]</span></div>
@@ -58,8 +69,21 @@ else
 @code {
     [Parameter] public Guid Id { get; set; }
     private ConflictDetails? details;
+    private bool loading = true;
 
-    protected override async Task OnParametersSetAsync() => details = await AdminService.GetConflictAsync(Id, CancellationToken.None);
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        details = null;
+        try
+        {
+            details = await AdminService.GetConflictAsync(Id, CancellationToken.None);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
 
     private void BackToList() => Navigation.NavigateTo("/conflicts");
     private static string Format(JsonNode? value) => value?.ToJsonString() ?? "null";

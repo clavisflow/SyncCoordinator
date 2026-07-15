@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 using SyncCoordinator.Infrastructure.Persistence;
 
 namespace SyncCoordinator.Tests;
@@ -15,7 +16,9 @@ public sealed class CoordinatorMigrationTests
             migration => Assert.EndsWith("_InitialCoordinatorSchema", migration, StringComparison.Ordinal),
             migration => Assert.EndsWith("_AddOperationalEvents", migration, StringComparison.Ordinal),
             migration => Assert.EndsWith("_AddMappingMaintenance", migration, StringComparison.Ordinal),
-            migration => Assert.EndsWith("_AddValueTransformations", migration, StringComparison.Ordinal));
+            migration => Assert.EndsWith("_AddValueTransformations", migration, StringComparison.Ordinal),
+            migration => Assert.EndsWith("_AddManagementSettings", migration, StringComparison.Ordinal),
+            migration => Assert.EndsWith("_RemoveResolvedConflictRetention", migration, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -32,6 +35,19 @@ public sealed class CoordinatorMigrationTests
             ]));
         Assert.NotNull(entity.FindProperty(nameof(OperationalEventEntity.OccurrenceCount)));
         Assert.NotNull(entity.FindProperty(nameof(OperationalEventEntity.AcknowledgedBy)));
+    }
+
+    [Fact]
+    public void ManagementSettingsUseASingleExplicitKey()
+    {
+        using var context = CreateContext();
+        var entity = context.Model.FindEntityType(typeof(ManagementSettingsEntity))!;
+
+        Assert.Equal(nameof(ManagementSettingsEntity.Id), Assert.Single(entity.FindPrimaryKey()!.Properties).Name);
+        Assert.Equal(ValueGenerated.Never, entity.FindProperty(nameof(ManagementSettingsEntity.Id))!.ValueGenerated);
+        Assert.NotNull(entity.FindProperty(nameof(ManagementSettingsEntity.LastAutomaticCleanupAtUtc)));
+        Assert.NotNull(entity.FindProperty(nameof(ManagementSettingsEntity.AutomaticCleanupLeaseUntilUtc)));
+        Assert.Null(entity.FindProperty("ResolvedConflictRetentionDays"));
     }
 
     [Fact]

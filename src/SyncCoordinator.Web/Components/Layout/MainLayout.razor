@@ -12,13 +12,14 @@
                 </a>
             </div>
             <div class="header-utility">
-                <CultureSelector />
-                <a class="header-account-link" href="/account/password">@L["Account_ChangePassword"]</a>
                 <form method="post" action="/auth/logout" class="logout-form">
                     <AntiforgeryToken />
                     <button type="submit">@L["Account_Logout"]</button>
                 </form>
-                <RadzenBadge Text="@Environment.EnvironmentName" BadgeStyle="BadgeStyle.Light" />
+                @if (!Environment.IsProduction())
+                {
+                    <RadzenBadge Text="@Environment.EnvironmentName" BadgeStyle="BadgeStyle.Light" />
+                }
             </div>
         </div>
     </RadzenHeader>
@@ -39,6 +40,7 @@
                     <RadzenPanelMenuItem Text="@L["Nav_Systems"]" Icon="dns" Path="/systems" />
                     <RadzenPanelMenuItem Text="@L["Nav_Routes"]" Icon="account_tree" Path="/routes" />
                     <RadzenPanelMenuItem Text="@L["Nav_Webhooks"]" Icon="notifications" Path="/notifications" />
+                    <RadzenPanelMenuItem Text="@L["Nav_Settings"]" Icon="settings" Path="/settings" />
                 </RadzenPanelMenu>
             </section>
         </nav>

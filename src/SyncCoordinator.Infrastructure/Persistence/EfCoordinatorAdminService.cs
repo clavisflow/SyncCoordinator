@@ -321,126 +321,156 @@ public sealed class EfCoordinatorAdminService(
                         .Include(x => x.DestinationSystem)
                         .SingleOrDefaultAsync(x => x.Id == input.RouteId, cancellationToken) ??
                     throw new KeyNotFoundException("指定された同期ルールは存在しません。");
+        RemoveUnusedReverseSettings(input, route.Direction);
         var routeInput = ToInput(route);
         ConfigurationValidator.ValidateTableMapping(input, routeInput);
         var entity = await dbContext.RouteTableMappings
             .Include(x => x.Columns)
             .Include(x => x.FixedValues)
             .SingleOrDefaultAsync(x => x.RouteId == input.RouteId, cancellationToken);
-        object? before = null;
-        var action = "Created";
-        var requiresDeployment = entity is null;
-        var requiresSnapshotReset = entity is null;
-        if (entity is null)
+        var originalRouteEnabled = route.Enabled;
+        var originalMappingMaintenanceStartedAtUtc = route.MappingMaintenanceStartedAtUtc;
+        var mappingMaintenanceMayHavePersisted = false;
+        try
         {
-            entity = new RouteTableMappingEntity
+            object? before = null;
+            var action = "Created";
+            var requiresDeployment = entity is null;
+            var requiresSnapshotReset = entity is null;
+            if (entity is null)
             {
-                RouteId = input.RouteId,
-                SourceSchema = input.SourceSchema,
-                SourceTable = input.SourceTable,
-                DestinationSchema = input.DestinationSchema,
-                DestinationTable = input.DestinationTable
-            };
-            dbContext.RouteTableMappings.Add(entity);
-        }
-        else
-        {
-            var tableChanged =
-                !string.Equals(entity.SourceSchema, input.SourceSchema, StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(entity.SourceTable, input.SourceTable, StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(entity.DestinationSchema, input.DestinationSchema, StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(entity.DestinationTable, input.DestinationTable, StringComparison.OrdinalIgnoreCase);
-            if (tableChanged && route.DeploymentState == DatabaseDeploymentState.Prepared)
-            {
-                throw new ConfigurationValidationException([
-                    "DB反映済みルールの対象テーブルは変更できません。既存Triggerの廃止フローを実施してから変更してください。"
-                ]);
+                entity = new RouteTableMappingEntity
+                {
+                    RouteId = input.RouteId,
+                    SourceSchema = input.SourceSchema,
+                    SourceTable = input.SourceTable,
+                    DestinationSchema = input.DestinationSchema,
+                    DestinationTable = input.DestinationTable
+                };
+                dbContext.RouteTableMappings.Add(entity);
             }
-            requiresDeployment = tableChanged ||
-                                 HasPhysicalColumnContractChanged(entity.Columns, input.Columns);
-            requiresSnapshotReset = requiresDeployment ||
-                                    HasValueSemanticsChanged(entity.Columns, input.Columns);
-            var deleteConfigurationChanged =
-                entity.SyncDeletes != input.SyncDeletes ||
-                entity.SourceDeletionMode != input.SourceDeletionMode ||
-                !string.Equals(entity.SourceLogicalDeleteColumn ?? string.Empty, input.SourceLogicalDeleteColumn, StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(entity.SourceLogicalDeleteValue ?? string.Empty, input.SourceLogicalDeleteValue, StringComparison.Ordinal) ||
-                entity.DestinationDeletionMode != input.DestinationDeletionMode ||
-                !string.Equals(entity.DestinationLogicalDeleteColumn ?? string.Empty, input.DestinationLogicalDeleteColumn, StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(entity.DestinationLogicalDeleteValue ?? string.Empty, input.DestinationLogicalDeleteValue, StringComparison.Ordinal);
-            requiresDeployment |= deleteConfigurationChanged;
-            requiresSnapshotReset |= deleteConfigurationChanged;
-            before = TableMappingSnapshot(entity);
-            await EnterMappingMaintenanceAsync(route, cancellationToken);
-            dbContext.RouteColumnMappings.RemoveRange(entity.Columns);
-            dbContext.RouteFixedValueMappings.RemoveRange(entity.FixedValues);
-            entity.Columns = [];
-            entity.FixedValues = [];
-            action = "Updated";
-        }
-        entity.SourceSchema = input.SourceSchema;
-        entity.SourceTable = input.SourceTable;
-        entity.DestinationSchema = input.DestinationSchema;
-        entity.DestinationTable = input.DestinationTable;
-        entity.SyncDeletes = input.SyncDeletes;
-        entity.SourceDeletionMode = input.SourceDeletionMode;
-        entity.SourceLogicalDeleteColumn = NullIfEmpty(input.SourceLogicalDeleteColumn);
-        entity.SourceLogicalDeleteValue = NullIfEmpty(input.SourceLogicalDeleteValue);
-        entity.DestinationDeletionMode = input.DestinationDeletionMode;
-        entity.DestinationLogicalDeleteColumn = NullIfEmpty(input.DestinationLogicalDeleteColumn);
-        entity.DestinationLogicalDeleteValue = NullIfEmpty(input.DestinationLogicalDeleteValue);
-        entity.Columns.AddRange(input.Columns.Select(x => new RouteColumnMappingEntity
-        {
-            Id = Guid.NewGuid(),
-            TableMappingId = entity.RouteId,
-            SourceColumn = x.SourceColumn,
-            DestinationColumn = x.DestinationColumn,
-            IsKey = x.IsKey,
-            ConflictPolicy = x.ConflictPolicy,
-            SourceDataType = x.SourceContract.DataType,
-            SourceIsNullable = x.SourceContract.IsNullable,
-            SourceMaxLength = x.SourceContract.MaxLength,
-            SourceNumericPrecision = x.SourceContract.NumericPrecision,
-            SourceNumericScale = x.SourceContract.NumericScale,
-            DestinationDataType = x.DestinationContract.DataType,
-            DestinationIsNullable = x.DestinationContract.IsNullable,
-            DestinationMaxLength = x.DestinationContract.MaxLength,
-            DestinationNumericPrecision = x.DestinationContract.NumericPrecision,
-            DestinationNumericScale = x.DestinationContract.NumericScale,
-            ForwardTransformJson = SerializeTransform(x.ForwardTransform),
-            ReverseTransformJson = SerializeTransform(x.ReverseTransform)
-        }));
-        entity.FixedValues.AddRange(input.FixedValues.Select(x => new RouteFixedValueMappingEntity
-        {
-            Id = Guid.NewGuid(),
-            TableMappingId = entity.RouteId,
-            Direction = x.Direction,
-            TargetColumn = x.TargetColumn,
-            Value = x.Value,
-            TargetDataType = x.TargetContract.DataType,
-            TargetIsNullable = x.TargetContract.IsNullable,
-            TargetMaxLength = x.TargetContract.MaxLength,
-            TargetNumericPrecision = x.TargetContract.NumericPrecision,
-            TargetNumericScale = x.TargetContract.NumericScale
-        }));
+            else
+            {
+                var tableChanged =
+                    !string.Equals(entity.SourceSchema, input.SourceSchema, StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(entity.SourceTable, input.SourceTable, StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(entity.DestinationSchema, input.DestinationSchema, StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(entity.DestinationTable, input.DestinationTable, StringComparison.OrdinalIgnoreCase);
+                if (tableChanged && route.DeploymentState == DatabaseDeploymentState.Prepared)
+                {
+                    throw new ConfigurationValidationException([
+                        "DB反映済みルールの対象テーブルは変更できません。既存Triggerの廃止フローを実施してから変更してください。"
+                    ]);
+                }
+                requiresDeployment = tableChanged ||
+                                     HasPhysicalColumnContractChanged(entity.Columns, input.Columns);
+                requiresSnapshotReset = requiresDeployment ||
+                                        HasValueSemanticsChanged(entity.Columns, input.Columns);
+                var deleteConfigurationChanged =
+                    entity.SyncDeletes != input.SyncDeletes ||
+                    entity.SourceDeletionMode != input.SourceDeletionMode ||
+                    !string.Equals(entity.SourceLogicalDeleteColumn ?? string.Empty, input.SourceLogicalDeleteColumn, StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(entity.SourceLogicalDeleteValue ?? string.Empty, input.SourceLogicalDeleteValue, StringComparison.Ordinal) ||
+                    entity.DestinationDeletionMode != input.DestinationDeletionMode ||
+                    !string.Equals(entity.DestinationLogicalDeleteColumn ?? string.Empty, input.DestinationLogicalDeleteColumn, StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(entity.DestinationLogicalDeleteValue ?? string.Empty, input.DestinationLogicalDeleteValue, StringComparison.Ordinal);
+                requiresDeployment |= deleteConfigurationChanged;
+                requiresSnapshotReset |= deleteConfigurationChanged;
+                before = TableMappingSnapshot(entity);
+                mappingMaintenanceMayHavePersisted = true;
+                await EnterMappingMaintenanceAsync(route, cancellationToken);
+                dbContext.RouteColumnMappings.RemoveRange(entity.Columns);
+                dbContext.RouteFixedValueMappings.RemoveRange(entity.FixedValues);
+                entity.Columns = [];
+                entity.FixedValues = [];
+                action = "Updated";
+            }
+            entity.SourceSchema = input.SourceSchema;
+            entity.SourceTable = input.SourceTable;
+            entity.DestinationSchema = input.DestinationSchema;
+            entity.DestinationTable = input.DestinationTable;
+            entity.SyncDeletes = input.SyncDeletes;
+            entity.SourceDeletionMode = input.SourceDeletionMode;
+            entity.SourceLogicalDeleteColumn = NullIfEmpty(input.SourceLogicalDeleteColumn);
+            entity.SourceLogicalDeleteValue = NullIfEmpty(input.SourceLogicalDeleteValue);
+            entity.DestinationDeletionMode = input.DestinationDeletionMode;
+            entity.DestinationLogicalDeleteColumn = NullIfEmpty(input.DestinationLogicalDeleteColumn);
+            entity.DestinationLogicalDeleteValue = NullIfEmpty(input.DestinationLogicalDeleteValue);
+            entity.Columns.AddRange(input.Columns.Select(x => new RouteColumnMappingEntity
+            {
+                Id = Guid.NewGuid(),
+                TableMappingId = entity.RouteId,
+                SourceColumn = x.SourceColumn,
+                DestinationColumn = x.DestinationColumn,
+                IsKey = x.IsKey,
+                ConflictPolicy = x.ConflictPolicy,
+                SourceDataType = x.SourceContract.DataType,
+                SourceIsNullable = x.SourceContract.IsNullable,
+                SourceMaxLength = x.SourceContract.MaxLength,
+                SourceNumericPrecision = x.SourceContract.NumericPrecision,
+                SourceNumericScale = x.SourceContract.NumericScale,
+                DestinationDataType = x.DestinationContract.DataType,
+                DestinationIsNullable = x.DestinationContract.IsNullable,
+                DestinationMaxLength = x.DestinationContract.MaxLength,
+                DestinationNumericPrecision = x.DestinationContract.NumericPrecision,
+                DestinationNumericScale = x.DestinationContract.NumericScale,
+                ForwardTransformJson = SerializeTransform(x.ForwardTransform),
+                ReverseTransformJson = SerializeTransform(x.ReverseTransform)
+            }));
+            dbContext.RouteColumnMappings.AddRange(entity.Columns);
+            entity.FixedValues.AddRange(input.FixedValues.Select(x => new RouteFixedValueMappingEntity
+            {
+                Id = Guid.NewGuid(),
+                TableMappingId = entity.RouteId,
+                Direction = x.Direction,
+                TargetColumn = x.TargetColumn,
+                Value = x.Value,
+                TargetDataType = x.TargetContract.DataType,
+                TargetIsNullable = x.TargetContract.IsNullable,
+                TargetMaxLength = x.TargetContract.MaxLength,
+                TargetNumericPrecision = x.TargetContract.NumericPrecision,
+                TargetNumericScale = x.TargetContract.NumericScale
+            }));
+            dbContext.RouteFixedValueMappings.AddRange(entity.FixedValues);
 
-        route.Enabled = false;
-        if (requiresSnapshotReset)
-        {
-            route.DeploymentState = DatabaseDeploymentState.Draft;
-        }
+            route.Enabled = false;
+            if (requiresDeployment)
+            {
+                route.DeploymentState = DatabaseDeploymentState.Draft;
+            }
 
-        AddAudit("TableMapping", entity.RouteId.ToString("N"), route.Name, action, before, TableMappingSnapshot(entity));
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-        if (requiresDeployment)
-        {
-            await dbContext.SyncSnapshots
-                .Where(x => x.RouteId == route.Id)
-                .ExecuteDeleteAsync(cancellationToken);
+            AddAudit("TableMapping", entity.RouteId.ToString("N"), route.Name, action, before, TableMappingSnapshot(entity));
+            await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+            if (requiresSnapshotReset)
+            {
+                await dbContext.SyncSnapshots
+                    .Where(x => x.RouteId == route.Id)
+                    .ExecuteDeleteAsync(cancellationToken);
+            }
+            await dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return entity.RouteId;
         }
-        await dbContext.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-        return entity.RouteId;
+        catch
+        {
+            if (mappingMaintenanceMayHavePersisted)
+            {
+                // EnterMappingMaintenanceAsync persists the stop before draining active deliveries.
+                // If the requested mapping never commits, resume the exact route state that existed
+                // before this attempt so an error does not leave a healthy route stopped indefinitely.
+                dbContext.ChangeTracker.Clear();
+                await dbContext.Routes
+                    .Where(x => x.Id == input.RouteId)
+                    .ExecuteUpdateAsync(setters => setters
+                        .SetProperty(x => x.Enabled, originalRouteEnabled)
+                        .SetProperty(
+                            x => x.MappingMaintenanceStartedAtUtc,
+                            originalMappingMaintenanceStartedAtUtc),
+                        CancellationToken.None);
+            }
+
+            throw;
+        }
     }
 
     private async Task EnterMappingMaintenanceAsync(
@@ -589,8 +619,7 @@ public sealed class EfCoordinatorAdminService(
             conflict.Conflict.EntityId,
             conflict.Conflict.Scope,
             fields,
-            conflict.Conflict.DetectedAtUtc,
-            conflict.Conflict.ResolvedAtUtc);
+            conflict.Conflict.DetectedAtUtc);
     }
 
     public async Task<IReadOnlyList<ConfigurationAuditListItem>> GetRecentConfigurationAuditsAsync(
@@ -681,31 +710,35 @@ public sealed class EfCoordinatorAdminService(
     };
 
     private static TableMappingInput ToInput(RouteTableMappingEntity entity) => new()
+    {
+        RouteId = entity.RouteId,
+        SourceSchema = entity.SourceSchema,
+        SourceTable = entity.SourceTable,
+        DestinationSchema = entity.DestinationSchema,
+        DestinationTable = entity.DestinationTable,
+        SyncDeletes = entity.SyncDeletes,
+        SourceDeletionMode = entity.SourceDeletionMode,
+        SourceLogicalDeleteColumn = entity.SourceLogicalDeleteColumn ?? string.Empty,
+        SourceLogicalDeleteValue = entity.SourceLogicalDeleteValue ?? string.Empty,
+        DestinationDeletionMode = entity.DestinationDeletionMode,
+        DestinationLogicalDeleteColumn = entity.DestinationLogicalDeleteColumn ?? string.Empty,
+        DestinationLogicalDeleteValue = entity.DestinationLogicalDeleteValue ?? string.Empty,
+        Columns = entity.Columns.OrderBy(x => x.SourceColumn).Select(x => new ColumnMappingInput
         {
-            RouteId = entity.RouteId,
-            SourceSchema = entity.SourceSchema,
-            SourceTable = entity.SourceTable,
-            DestinationSchema = entity.DestinationSchema,
-            DestinationTable = entity.DestinationTable,
-            SyncDeletes = entity.SyncDeletes,
-            SourceDeletionMode = entity.SourceDeletionMode,
-            SourceLogicalDeleteColumn = entity.SourceLogicalDeleteColumn ?? string.Empty,
-            SourceLogicalDeleteValue = entity.SourceLogicalDeleteValue ?? string.Empty,
-            DestinationDeletionMode = entity.DestinationDeletionMode,
-            DestinationLogicalDeleteColumn = entity.DestinationLogicalDeleteColumn ?? string.Empty,
-            DestinationLogicalDeleteValue = entity.DestinationLogicalDeleteValue ?? string.Empty,
-            Columns = entity.Columns.OrderBy(x => x.SourceColumn).Select(x => new ColumnMappingInput
-            {
-                SourceColumn = x.SourceColumn,
-                DestinationColumn = x.DestinationColumn,
-                IsKey = x.IsKey,
-                ConflictPolicy = x.ConflictPolicy,
-                SourceContract = SourceContract(x),
-                DestinationContract = DestinationContract(x),
-                ForwardTransform = DeserializeTransform(x.ForwardTransformJson),
-                ReverseTransform = DeserializeTransform(x.ReverseTransformJson)
-            }).ToList(),
-            FixedValues = entity.FixedValues
+            SourceColumn = x.SourceColumn,
+            DestinationColumn = x.DestinationColumn,
+            IsKey = x.IsKey,
+            ConflictPolicy = x.ConflictPolicy,
+            SourceContract = SourceContract(x),
+            DestinationContract = DestinationContract(x),
+            ForwardTransform = DeserializeTransform(x.ForwardTransformJson),
+            ReverseTransform = entity.Route.Direction == SyncDirection.Bidirectional
+                ? DeserializeTransform(x.ReverseTransformJson)
+                : new ValueTransformInput()
+        }).ToList(),
+        FixedValues = entity.FixedValues
+                .Where(x => entity.Route.Direction == SyncDirection.Bidirectional ||
+                            x.Direction == MappingWriteDirection.Forward)
                 .OrderBy(x => x.Direction)
                 .ThenBy(x => x.TargetColumn)
                 .Select(x => new FixedValueMappingInput
@@ -715,7 +748,7 @@ public sealed class EfCoordinatorAdminService(
                     Value = x.Value,
                     TargetContract = TargetContract(x)
                 }).ToList()
-        };
+    };
 
     private static object TableMappingSnapshot(RouteTableMappingEntity entity) => new
     {
@@ -823,6 +856,20 @@ public sealed class EfCoordinatorAdminService(
         {
             fixedValue.TargetColumn = fixedValue.TargetColumn.Trim();
         }
+    }
+
+    internal static void RemoveUnusedReverseSettings(TableMappingInput input, SyncDirection direction)
+    {
+        if (direction == SyncDirection.Bidirectional)
+        {
+            return;
+        }
+
+        foreach (var column in input.Columns)
+        {
+            column.ReverseTransform = new ValueTransformInput();
+        }
+        input.FixedValues.RemoveAll(x => x.Direction == MappingWriteDirection.Reverse);
     }
 
     private static string CreateInternalEntityType(Guid routeId) => $"rule:{routeId:N}";

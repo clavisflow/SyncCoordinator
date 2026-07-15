@@ -138,9 +138,55 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
 
                     b.HasKey("SourceMessageId", "RouteId", "DestinationSystem");
 
-                    b.HasIndex("State");
+                    b.HasIndex("State", "UpdatedAtUtc");
 
                     b.ToTable("InboxMessage", (string)null);
+                });
+
+            modelBuilder.Entity("SyncCoordinator.Infrastructure.Persistence.ManagementSettingsEntity", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("int");
+
+                    b.Property<int>("AcknowledgedOperationalEventRetentionDays")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("AutomaticCleanupLeaseUntilUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("BatchSize")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CompletedInboxRetentionDays")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ConfigurationAuditRetentionDays")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DeliveredWebhookRetentionDays")
+                        .HasColumnType("int");
+
+                    b.Property<int>("FailedWebhookRetentionDays")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("GlobalPaused")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset?>("LastAutomaticCleanupAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("LastManualCleanupAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("PollingIntervalSeconds")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ManagementSettings", (string)null);
                 });
 
             modelBuilder.Entity("SyncCoordinator.Infrastructure.Persistence.OperationalEventEntity", b =>
@@ -643,6 +689,10 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("EventId", "EndpointId")
                         .IsUnique();
+
+                    b.HasIndex("State", "DeliveredAtUtc");
+
+                    b.HasIndex("State", "LastAttemptAtUtc");
 
                     b.HasIndex("State", "NextAttemptAtUtc");
 

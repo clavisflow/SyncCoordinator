@@ -12,7 +12,6 @@ public sealed partial class OperationalEventRecorder(
     ILogger<OperationalEventRecorder> logger) : IOperationalEventRecorder
 {
     private static readonly TimeSpan AggregationWindow = TimeSpan.FromMinutes(5);
-    private static readonly TimeSpan RetentionPeriod = TimeSpan.FromDays(90);
 
     public async Task RecordAsync(OperationalEventInput input, CancellationToken cancellationToken)
     {
@@ -69,9 +68,6 @@ public sealed partial class OperationalEventRecorder(
                 existing.CorrelationId = correlationId ?? existing.CorrelationId;
             }
 
-            await dbContext.OperationalEvents
-                .Where(x => x.LastOccurredAtUtc < now.Subtract(RetentionPeriod))
-                .ExecuteDeleteAsync(cancellationToken);
             await dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

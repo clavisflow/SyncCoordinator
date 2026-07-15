@@ -16,13 +16,14 @@ namespace SyncCoordinator.Infrastructure.Connectors;
 /// キュー、適用済みメッセージ、Origin、TombstoneはDatabaseDeploymentServiceが配備する。
 /// </summary>
 internal sealed class MappedRelationalConnector(
-    RelationalSystemOptions options,
+    string systemCode,
+    RelationalProvider provider,
     string connectionString,
     RelationalMappingProvider mappings) : ISyncConnector
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    public string SystemCode => options.SystemCode;
+    public string SystemCode => systemCode;
 
     public async Task<IReadOnlyList<ChangeQueueItem>> ReadChangesAsync(
         long afterQueueId,
@@ -250,7 +251,7 @@ internal sealed class MappedRelationalConnector(
         string sql;
         object parameters;
 
-        if (options.Provider == RelationalProvider.PostgreSql)
+        if (provider == RelationalProvider.PostgreSql)
         {
             sql = BuildPostgreSqlUpsert(mapping, writeValues.Keys.ToArray());
             parameters = new { PayloadJson = JsonSerializer.Serialize(writeValues, JsonOptions) };
@@ -264,7 +265,7 @@ internal sealed class MappedRelationalConnector(
                 dynamicParameters.Add($"Value{index}", ToScalarParameter(writeValues[columns[index]]));
             }
 
-            sql = options.Provider == RelationalProvider.SqlServer
+            sql = provider == RelationalProvider.SqlServer
                 ? BuildSqlServerUpsert(mapping, columns)
                 : BuildMySqlUpsert(mapping, columns);
             parameters = dynamicParameters;
@@ -296,7 +297,7 @@ internal sealed class MappedRelationalConnector(
             var logicalColumn = behavior.LogicalDeleteColumn ??
                 throw new InvalidOperationException("論理削除列が指定されていません。");
             parameters.Add("DeleteValue", behavior.LogicalDeleteValue);
-            var valueExpression = options.Provider == RelationalProvider.PostgreSql
+            var valueExpression = provider == RelationalProvider.PostgreSql
                 ? $"(jsonb_populate_record(NULL::{QualifiedTable(mapping)}, jsonb_build_object('{SqlLiteral(logicalColumn)}', @DeleteValue))).{Quote(logicalColumn)}"
                 : "@DeleteValue";
             sql = $"UPDATE {QualifiedTable(mapping)} SET {Quote(logicalColumn)}={valueExpression} WHERE {KeyPredicate(mapping)};";
@@ -433,36 +434,36 @@ internal sealed class MappedRelationalConnector(
     private string QualifiedTable(RelationalEntityMapping mapping) =>
         $"{Quote(mapping.Schema)}.{Quote(mapping.Table)}";
 
-    private string Quote(string identifier) => options.Provider switch
+    private string Quote(string identifier) => provider switch
     {
         RelationalProvider.SqlServer => $"[{identifier.Replace("]", "]]", StringComparison.Ordinal)}]",
         RelationalProvider.MySql => $"`{identifier.Replace("`", "``", StringComparison.Ordinal)}`",
         RelationalProvider.PostgreSql => $"\"{identifier.Replace("\"", "\"\"", StringComparison.Ordinal)}\"",
-        _ => throw new InvalidOperationException($"未対応のProviderです: {options.Provider}")
+        _ => throw new InvalidOperationException($"未対応のProviderです: {provider}")
     };
 
-    private string TextType => options.Provider switch
+    private string TextType => provider switch
     {
         RelationalProvider.SqlServer => "nvarchar(4000)",
         RelationalProvider.MySql => "CHAR",
         RelationalProvider.PostgreSql => "text",
-        _ => throw new InvalidOperationException($"未対応のProviderです: {options.Provider}")
+        _ => throw new InvalidOperationException($"未対応のProviderです: {provider}")
     };
 
-    private DbConnection CreateConnection() => options.Provider switch
+    private DbConnection CreateConnection() => provider switch
     {
         RelationalProvider.SqlServer => new SqlConnection(connectionString),
         RelationalProvider.MySql => new MySqlConnection(connectionString),
         RelationalProvider.PostgreSql => new NpgsqlConnection(connectionString),
-        _ => throw new InvalidOperationException($"未対応のProviderです: {options.Provider}")
+        _ => throw new InvalidOperationException($"未対応のProviderです: {provider}")
     };
 
-    private SupportSql Sql => options.Provider switch
+    private SupportSql Sql => provider switch
     {
         RelationalProvider.SqlServer => SupportSql.SqlServer,
         RelationalProvider.MySql => SupportSql.MySql,
         RelationalProvider.PostgreSql => SupportSql.PostgreSql,
-        _ => throw new InvalidOperationException($"未対応のProviderです: {options.Provider}")
+        _ => throw new InvalidOperationException($"未対応のProviderです: {provider}")
     };
 
     private static string? ToScalarParameter(JsonNode? value) =>

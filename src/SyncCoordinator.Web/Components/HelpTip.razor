@@ -1,11 +1,31 @@
-<span class="help-tip"
+@inject TooltipService TooltipService
+
+<span @ref="anchor"
+      class="help-tip"
       tabindex="0"
       role="note"
       aria-label="@Text"
-      data-tooltip="@Text">
+      @onmouseenter="Open"
+      @onmouseleave="Close"
+      @onfocus="Open"
+      @onblur="Close">
     <RadzenIcon Icon="help_outline" aria-hidden="true" />
 </span>
 
 @code {
     [Parameter, EditorRequired] public string Text { get; set; } = string.Empty;
+
+    private ElementReference anchor;
+
+    private void Open()
+        => TooltipService.OpenOnTheBottom(
+            anchor,
+            Text,
+            new TooltipOptions
+            {
+                CssClass = "app-help-tooltip",
+                Style = "z-index: 3000;"
+            });
+
+    private void Close() => TooltipService.Close();
 }

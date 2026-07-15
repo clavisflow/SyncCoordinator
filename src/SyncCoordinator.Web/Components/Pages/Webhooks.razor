@@ -4,6 +4,7 @@
 @using SyncCoordinator.Core
 @inject IWebhookAdminService WebhookService
 @inject NotificationService NotificationService
+@inject DialogService DialogService
 @inject UiErrorReporter ErrorReporter
 @inject IStringLocalizer<SharedResource> L
 
@@ -12,12 +13,16 @@
 <section class="page-heading">
     <div>
         <p class="kicker">NOTIFICATIONS</p>
-        <h1>@L["Webhooks_Title"]</h1>
+        <PageHeadingTitle Icon="notifications">@L["Webhooks_Title"]</PageHeadingTitle>
         <p>@L["Webhooks_Description"]</p>
     </div>
     @if (selectedTab == 0)
     {
         <RadzenButton Text="@L["Webhooks_New"]" Icon="add" Click="@NewEndpoint" />
+    }
+    else
+    {
+        <RadzenButton Text="@(loadingDeliveries ? L["Action_Refreshing"] : L["Action_Reload"])" Icon="refresh" Click="@ReloadDeliveriesAsync" Disabled="@loadingDeliveries" />
     }
 </section>
 
@@ -37,12 +42,12 @@
                 <RadzenDataGridColumn TItem="WebhookEndpointListItem" Property="Url" Title="URL" />
                 <RadzenDataGridColumn TItem="WebhookEndpointListItem" Title="@L["Webhooks_Signature"]"><Template Context="item">@(item.SignatureEnabled ? L["Common_Enabled"] : L["Common_Disabled"])</Template></RadzenDataGridColumn>
                 <RadzenDataGridColumn TItem="WebhookEndpointListItem" Title="@L["Common_Status"]"><Template Context="item">@(item.Enabled ? L["Common_Enabled"] : L["Common_Disabled"])</Template></RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="WebhookEndpointListItem" Title="@L["Common_Action"]" Sortable="false">
+                <RadzenDataGridColumn TItem="WebhookEndpointListItem" Title="" Sortable="false" Width="132px" TextAlign="TextAlign.Right">
                     <Template Context="item">
                         <div class="table-actions">
-                            <RadzenButton Text="@L["Common_Edit"]" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" Click="@(() => EditAsync(item.Id))" />
-                            <RadzenButton Text="@L["Webhooks_Test"]" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" Click="@(() => TestAsync(item.Id))" />
-                            <RadzenButton Text="@L["Common_Delete"]" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Danger" Click="@(() => DeleteAsync(item.Id))" />
+                            <RadzenButton Icon="edit" title="@L["Common_Edit"]" aria-label="@L["Common_Edit"]" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Click="@(() => EditAsync(item.Id))" />
+                            <RadzenButton Icon="send" title="@L["Webhooks_Test"]" aria-label="@L["Webhooks_Test"]" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Click="@(() => TestAsync(item.Id))" />
+                            <RadzenButton Icon="delete" title="@L["Common_Delete"]" aria-label="@L["Common_Delete"]" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Text" Click="@(() => DeleteAsync(item))" />
                         </div>
                     </Template>
                 </RadzenDataGridColumn>
@@ -125,7 +130,7 @@ else
                 <RadzenDataGridColumn TItem="WebhookDeliveryListItem" Title="@L["Common_DetectedAt"]"><Template Context="item">@UiFormat.LocalDateTime(item.OccurredAtUtc)</Template></RadzenDataGridColumn>
                 <RadzenDataGridColumn TItem="WebhookDeliveryListItem" Property="EndpointName" Title="@L["Webhooks_Endpoint"]" />
                 <RadzenDataGridColumn TItem="WebhookDeliveryListItem" Property="EventType" Title="@L["Common_Type"]"><Template Context="item">@EventLabel(item.EventType)</Template></RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="WebhookDeliveryListItem" Property="State" Title="@L["Common_Status"]"><Template Context="item">@StateLabel(item.State)</Template></RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="WebhookDeliveryListItem" Property="State" Title="@L["Common_Status"]"><Template Context="item"><span class="status-pill @StateClass(item.State)">@StateLabel(item.State)</span></Template></RadzenDataGridColumn>
                 <RadzenDataGridColumn TItem="WebhookDeliveryListItem" Property="AttemptCount" Title="@L["Operations_Attempts"]" />
                 <RadzenDataGridColumn TItem="WebhookDeliveryListItem" Property="HttpStatusCode" Title="HTTP" />
                 <RadzenDataGridColumn TItem="WebhookDeliveryListItem" Property="LastError" Title="@L["Common_Error"]" />
@@ -140,6 +145,7 @@ else
     private WebhookEndpointInput model = new();
     private int selectedTab;
     private bool saving;
+    private bool loadingDeliveries;
     private string? newSecret;
     private bool IsHttp => Uri.TryCreate(model.Url, UriKind.Absolute, out var uri) && uri.Scheme == "http";
     private IReadOnlyList<EventGroup> EventGroups =>
@@ -156,6 +162,23 @@ else
     {
         endpoints = await WebhookService.GetEndpointsAsync(CancellationToken.None);
         deliveries = await WebhookService.GetRecentDeliveriesAsync(200, CancellationToken.None);
+    }
+
+    private async Task ReloadDeliveriesAsync()
+    {
+        loadingDeliveries = true;
+        try
+        {
+            deliveries = await WebhookService.GetRecentDeliveriesAsync(200, CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            await ShowErrorAsync(exception, "Webhooks.ReloadDeliveries");
+        }
+        finally
+        {
+            loadingDeliveries = false;
+        }
     }
 
     private void NewEndpoint()
@@ -209,12 +232,25 @@ else
         }
     }
 
-    private async Task DeleteAsync(Guid id)
+    private async Task DeleteAsync(WebhookEndpointListItem item)
     {
+        var confirmed = await DialogService.Confirm(
+            L["Webhooks_DeleteConfirmation", item.Name],
+            L["Webhooks_DeleteTitle"],
+            new ConfirmOptions
+            {
+                OkButtonText = L["Common_Delete"],
+                CancelButtonText = L["Common_Cancel"]
+            });
+        if (confirmed != true)
+        {
+            return;
+        }
+
         try
         {
-            await WebhookService.DeleteEndpointAsync(id, CancellationToken.None);
-            if (model.Id == id) NewEndpoint();
+            await WebhookService.DeleteEndpointAsync(item.Id, CancellationToken.None);
+            if (model.Id == item.Id) NewEndpoint();
             await LoadAsync();
         }
         catch (Exception exception)
@@ -249,6 +285,15 @@ else
         "Delivered" => L["Webhooks_StateDelivered"],
         "Failed" => L["Webhooks_StateFailed"],
         _ => state
+    };
+
+    private static string StateClass(string state) => state switch
+    {
+        "Delivered" => "enabled",
+        "Pending" or "Processing" => "processing",
+        "Retry" => "held",
+        "Failed" => "failed",
+        _ => "disabled"
     };
 
     private string LocalizeError(string error)

@@ -7,12 +7,12 @@
 @inject UiErrorReporter ErrorReporter
 @inject IStringLocalizer<SharedResource> L
 
-<PageTitle>@L["DatabaseSetup_PageTitle"]</PageTitle>
+<PageTitle>@L["RouteEdit_PageTitle"]</PageTitle>
 
 <section class="page-heading compact">
     <div>
         <p class="kicker">DATABASE PREPARATION</p>
-        <h1>@L["DatabaseSetup_Title"]</h1>
+        <PageHeadingTitle Icon="account_tree">@L["RouteEdit_EditTitle"]</PageHeadingTitle>
         @if (plan is not null) { <p>@plan.RouteName</p> }
     </div>
     <RadzenButton Text="@L["Common_BackToList"]" Icon="arrow_back" ButtonStyle="ButtonStyle.Primary" Variant="Variant.Text" Click="@BackToList" />
@@ -80,12 +80,11 @@ else if (plan is not null)
 
         <RadzenCard class="deployment-final-verification">
             <div class="deployment-verification-heading">
-                <h2>@L["DatabaseSetup_DbPreparation"]</h2>
+                <div class="caption-title"><h2>@L["DatabaseSetup_DbPreparation"]</h2><HelpTip Text="@L["DatabaseSetup_VerifyHelp"]" /></div>
                 <strong class="deployment-verification-status @(plan.State == DatabaseDeploymentState.Prepared ? "verified" : "unverified")" role="status">
                     @(plan.State == DatabaseDeploymentState.Prepared ? L["DatabaseSetup_Verified"] : L["DatabaseSetup_Unverified"])
                 </strong>
             </div>
-            <p class="deployment-action-help">@L["DatabaseSetup_VerifyHelp"]</p>
             <div class="deployment-actions">
                 <RadzenButton Text="@(verifying ? L["DatabaseSetup_Verifying"] : plan.State == DatabaseDeploymentState.Prepared ? L["DatabaseSetup_VerifyAgain"] : L["DatabaseSetup_VerifyAll"])" Icon="fact_check" ButtonStyle="ButtonStyle.Primary" Click="@VerifyAsync" Disabled="@verifying" />
             </div>

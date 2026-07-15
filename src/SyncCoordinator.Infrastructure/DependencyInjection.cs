@@ -26,7 +26,6 @@ public static class DependencyInjection
             dataProtection.PersistKeysToFileSystem(new DirectoryInfo(keyRingPath));
         }
         services.Configure<CoordinatorDatabaseOptions>(configuration.GetSection("CoordinatorDatabase"));
-        services.Configure<RelationalConnectorOptions>(configuration.GetSection("SyncCoordinator:Connectors"));
         services.Configure<DatabaseDeploymentOptions>(configuration.GetSection("DatabaseDeployment"));
 
         services.AddScoped<ICoordinatorStore, EfCoordinatorStore>();
@@ -38,6 +37,7 @@ public static class DependencyInjection
         services.AddScoped<IWebhookDeliveryService, WebhookDeliveryService>();
         services.AddSingleton<IOperationalEventRecorder, OperationalEventRecorder>();
         services.AddScoped<IOperationalEventAdminService, OperationalEventAdminService>();
+        services.AddScoped<IManagementSettingsService, ManagementSettingsService>();
         services.AddScoped<WebhookOutboxWriter>();
         services.AddScoped<ProtectedWebhookSecretService>();
         services.AddHttpClient(WebhookDeliveryService.HttpClientName, client =>
@@ -50,29 +50,10 @@ public static class DependencyInjection
         services.AddSingleton<IConflictValueMerger, NoOpConflictValueMerger>();
         services.AddSingleton(TimeProvider.System);
 
-        foreach (var system in configuration
-                     .GetSection("SyncCoordinator:Connectors:Systems")
-                     .Get<List<RelationalSystemOptions>>() ?? [])
-        {
-            if (!system.Enabled)
-            {
-                continue;
-            }
-
-            services.AddScoped<ISyncConnector>(provider =>
-            {
-                var connectionString = configuration.GetConnectionString(system.ConnectionStringName) ??
-                    throw new InvalidOperationException(
-                        $"Connection string '{system.ConnectionStringName}' is not configured.");
-                return new MappedRelationalConnector(
-                    system,
-                    connectionString,
-                    provider.GetRequiredService<RelationalMappingProvider>());
-            });
-        }
-
         services.AddScoped<RelationalMappingProvider>();
-        services.AddScoped<IConnectorCatalog, ConnectorCatalog>();
+        services.AddScoped<IManagedConnectorDefinitionSource, EfManagedConnectorDefinitionSource>();
+        services.AddScoped<IManagedConnectorFactory, ManagedConnectorFactory>();
+        services.AddScoped<IConnectorCatalog, ManagedConnectorCatalog>();
         return services;
     }
 }

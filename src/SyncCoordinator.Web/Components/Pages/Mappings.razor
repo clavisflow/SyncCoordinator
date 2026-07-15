@@ -11,12 +11,12 @@
 @inject UiErrorReporter ErrorReporter
 @inject IStringLocalizer<SharedResource> L
 
-<PageTitle>@L["Mappings_PageTitle"]</PageTitle>
+<PageTitle>@(RouteId is null ? L["Mappings_PageTitle"] : L["RouteEdit_PageTitle"])</PageTitle>
 
 <section class="page-heading compact">
     <div>
         <p class="kicker">SCHEMA MAPPING</p>
-        <h1>@L["Mappings_Title"]</h1>
+        <PageHeadingTitle Icon="account_tree">@(RouteId is null ? L["Mappings_Title"] : L["RouteEdit_EditTitle"])</PageHeadingTitle>
         @if (SelectedRoute is not null) { <p>@SelectedRoute.Name</p> }
     </div>
     <RadzenButton Text="@L["Common_BackToList"]" Icon="arrow_back" ButtonStyle="ButtonStyle.Primary" Variant="Variant.Text" Click="@BackToList" />
@@ -50,7 +50,7 @@ else
                 <RadzenDataGridColumn TItem="TableMappingListItem" Property="ColumnCount" Title="@L["Mappings_ColumnCount"]" Width="80px" />
                 <RadzenDataGridColumn TItem="TableMappingListItem" Title="" Sortable="false" Filterable="false" Width="70px" TextAlign="TextAlign.Right">
                     <Template Context="item">
-                        <RadzenButton Icon="edit" title="@L["Common_Edit"]" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => EditMappingAsync(item))" />
+                        <RadzenButton Icon="edit" title="@L["Common_Edit"]" aria-label="@L["Common_Edit"]" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => EditMappingAsync(item))" />
                     </Template>
                 </RadzenDataGridColumn>
             </Columns>
@@ -69,12 +69,12 @@ else
             <div class="mapping-table-picker">
                 <div class="form-field">
                 <label>@L["Mappings_SourceTableFor", SelectedRoute?.SourceSystemName ?? string.Empty]</label>
-                <RadzenDropDown TValue="DatabaseTableInfo" Value="@selectedSourceTable" Change="@OnSourceTableChangedAsync" Data="@sourceTables" TextProperty="DisplayName" Placeholder="@L["Mappings_SelectTable"]" AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive" Disabled="@loadingColumns" class="form-control" />
+                <RadzenDropDown TValue="DatabaseTableInfo" Value="@selectedSourceTable" Change="@OnSourceTableChangedAsync" Data="@sourceTables" TextProperty="DisplayName" Placeholder="@L["Mappings_SelectTable"]" AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive" Disabled="@(loadingColumns || TableSelectionLocked)" class="form-control" />
                 </div>
                 <RadzenIcon Icon="@(SelectedRoute?.Direction == SyncDirection.Bidirectional ? "sync_alt" : "arrow_forward")" class="mapping-arrow" />
                 <div class="form-field">
                 <label>@L["Mappings_DestinationTableFor", SelectedDestinationSystemName]</label>
-                <RadzenDropDown TValue="DatabaseTableInfo" Value="@selectedDestinationTable" Change="@OnDestinationTableChangedAsync" Data="@destinationTables" TextProperty="DisplayName" Placeholder="@L["Mappings_SelectTable"]" AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive" Disabled="@loadingColumns" class="form-control" />
+                <RadzenDropDown TValue="DatabaseTableInfo" Value="@selectedDestinationTable" Change="@OnDestinationTableChangedAsync" Data="@destinationTables" TextProperty="DisplayName" Placeholder="@L["Mappings_SelectTable"]" AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive" Disabled="@(loadingColumns || TableSelectionLocked)" class="form-control" />
                 </div>
             </div>
             @if (loadingColumns)
@@ -123,14 +123,17 @@ else
                         @if (row.Included && !row.IsKey && DestinationColumn(row) is { } targetColumn)
                         {
                             <ValueTransformEditor Title="@L["Mappings_ForwardTransform"]" Transform="@row.ForwardTransform" SourceContract="@row.Source.Contract" Contract="@targetColumn.Contract" FieldName="@row.Source.Name" TargetColumn="@targetColumn.Name" />
-                            <ValueTransformEditor Title="@L["Mappings_ReverseTransform"]" Transform="@row.ReverseTransform" SourceContract="@targetColumn.Contract" Contract="@row.Source.Contract" FieldName="@row.Source.Name" TargetColumn="@row.Source.Name" />
+                            @if (IsBidirectional)
+                            {
+                                <ValueTransformEditor Title="@L["Mappings_ReverseTransform"]" Transform="@row.ReverseTransform" SourceContract="@targetColumn.Contract" Contract="@row.Source.Contract" FieldName="@row.Source.Name" TargetColumn="@row.Source.Name" />
+                            }
                         }
                     </div>
                 }
             </div>
 
             <div class="fixed-value-header">
-                <div class="caption-title"><strong>@L["Mappings_FixedValues"]</strong><HelpTip Text="@L["Mappings_FixedValuesHelp"]" /></div>
+                <strong>@L["Mappings_FixedValues"]</strong>
                 <RadzenButton Text="@L["Mappings_AddFixedValue"]" Icon="add" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" Click="@AddFixedValue" />
             </div>
             @if (fixedValueRows.Count > 0)
@@ -149,7 +152,7 @@ else
                             }
                             <RadzenDropDown TValue="string" @bind-Value="fixedValue.TargetColumn" Data="@FixedTargetColumns(fixedValue)" TextProperty="DisplayName" ValueProperty="Name" Placeholder="@L["Mappings_SelectColumn"]" AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive" class="form-control compact-control" />
                             <RadzenTextBox @bind-Value="fixedValue.Value" Placeholder="@L["Mappings_FixedValueExample"]" MaxLength="4000" class="form-control compact-control" />
-                            <RadzenButton Icon="delete" title="@L["Common_Delete"]" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => RemoveFixedValue(fixedValue))" />
+                            <RadzenButton Icon="delete" title="@L["Common_Delete"]" aria-label="@L["Common_Delete"]" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => RemoveFixedValue(fixedValue))" />
                         </div>
                     }
                 </div>
@@ -264,6 +267,8 @@ else
     ];
 
     private RouteListItem? SelectedRoute => routes.SingleOrDefault(x => x.Id == selectedRouteId);
+    private bool IsBidirectional => SelectedRoute?.Direction == SyncDirection.Bidirectional;
+    private bool TableSelectionLocked => SelectedRoute?.DeploymentState == DatabaseDeploymentState.Prepared;
     private string SelectedDestinationSystemName =>
         systems.SingleOrDefault(x => x.Code == selectedDestinationSystem)?.DisplayName ?? selectedDestinationSystem;
 
@@ -414,6 +419,7 @@ else
                 };
             }).ToList();
             fixedValueRows = mappingApplies ? existingMapping!.FixedValues
+                .Where(x => IsBidirectional || x.Direction == MappingWriteDirection.Forward)
                 .Select(x => new FixedValueRow
                 {
                     Direction = x.Direction,
@@ -467,13 +473,13 @@ else
                     SourceContract = x.Source.Contract,
                     DestinationContract = DestinationColumn(x)?.Contract ?? ColumnValueContract.Unknown,
                     ForwardTransform = x.ForwardTransform,
-                    ReverseTransform = x.ReverseTransform
+                    ReverseTransform = IsBidirectional ? x.ReverseTransform : new ValueTransformInput()
                 }).ToList(),
-                FixedValues = fixedValueRows.Select(x => new FixedValueMappingInput
+                FixedValues = fixedValueRows
+                    .Where(x => IsBidirectional || x.Direction == MappingWriteDirection.Forward)
+                    .Select(x => new FixedValueMappingInput
                 {
-                    Direction = SelectedRoute?.Direction == SyncDirection.Bidirectional
-                        ? x.Direction
-                        : MappingWriteDirection.Forward,
+                    Direction = x.Direction,
                     TargetColumn = x.TargetColumn,
                     Value = x.Value,
                     TargetContract = FixedTargetColumns(x)

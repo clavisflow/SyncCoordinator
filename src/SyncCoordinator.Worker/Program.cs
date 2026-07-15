@@ -6,7 +6,6 @@ var builder = Host.CreateApplicationBuilder(args);
 builder.AddServiceDefaults();
 builder.Services.AddWindowsService(options => options.ServiceName = "SyncCoordinator Worker");
 builder.Services.AddSyncCoordinator(builder.Configuration);
-builder.Services.Configure<WorkerOptions>(builder.Configuration.GetSection("Worker"));
 builder.Services.AddHostedService<Worker>();
 
 var host = builder.Build();

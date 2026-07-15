@@ -1,31 +1,28 @@
-using Microsoft.Extensions.Options;
 using SyncCoordinator.Core;
 
 namespace SyncCoordinator.Worker;
 
-public sealed class WorkerOptions
-{
-    public int BatchSize { get; set; } = 100;
-    public TimeSpan PollingInterval { get; set; } = TimeSpan.FromSeconds(5);
-}
-
 public sealed class Worker(
     IServiceScopeFactory scopeFactory,
-    IOptions<WorkerOptions> options,
     ILogger<Worker> logger,
     IOperationalEventRecorder operationalEvents) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        var pollingInterval = TimeSpan.FromSeconds(5);
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
                 await using var scope = scopeFactory.CreateAsyncScope();
+                var settingsService = scope.ServiceProvider.GetRequiredService<IManagementSettingsService>();
+                var settings = await settingsService.GetAsync(stoppingToken);
+                pollingInterval = TimeSpan.FromSeconds(settings.PollingIntervalSeconds);
                 var coordinator = scope.ServiceProvider.GetRequiredService<SynchronizationCoordinator>();
-                var processed = await coordinator.RunOnceAsync(options.Value.BatchSize, stoppingToken);
+                var processed = await coordinator.RunOnceAsync(settings.BatchSize, stoppingToken);
                 var webhooks = scope.ServiceProvider.GetRequiredService<IWebhookDeliveryService>();
-                var delivered = await webhooks.DeliverDueAsync(options.Value.BatchSize, stoppingToken);
+                var delivered = await webhooks.DeliverDueAsync(settings.BatchSize, stoppingToken);
+                var cleanup = await settingsService.RunAutomaticCleanupIfDueAsync(stoppingToken);
                 if (processed > 0)
                 {
                     WorkerLog.QueueItemsProcessed(logger, processed);
@@ -33,6 +30,10 @@ public sealed class Worker(
                 if (delivered > 0)
                 {
                     WorkerLog.WebhooksProcessed(logger, delivered);
+                }
+                if (cleanup is { Deleted.Total: > 0 })
+                {
+                    WorkerLog.ManagementRowsCleaned(logger, cleanup.Deleted.Total);
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -51,7 +52,7 @@ public sealed class Worker(
                     $"{exception.GetType().Name}: {exception.Message}"), CancellationToken.None);
             }
 
-            await Task.Delay(options.Value.PollingInterval, stoppingToken);
+            await Task.Delay(pollingInterval, stoppingToken);
         }
     }
 }
@@ -63,6 +64,9 @@ internal static partial class WorkerLog
 
     [LoggerMessage(LogLevel.Information, "Processed {count} webhook deliveries")]
     public static partial void WebhooksProcessed(ILogger logger, int count);
+
+    [LoggerMessage(LogLevel.Information, "Deleted {count} expired management database rows")]
+    public static partial void ManagementRowsCleaned(ILogger logger, long count);
 
     [LoggerMessage(LogLevel.Error, "Synchronization polling cycle failed")]
     public static partial void PollingCycleFailed(ILogger logger, Exception exception);

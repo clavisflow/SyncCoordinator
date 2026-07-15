@@ -6,42 +6,10 @@
     flex: 0 0 auto;
     line-height: 1;
     outline: none;
-    position: relative;
 }
 
 .help-tip ::deep .rzi {
     font-size: 1.05rem;
-}
-
-.help-tip::after {
-    background: #1f2d27;
-    border-radius: 3px;
-    color: #fff;
-    content: attr(data-tooltip);
-    font-size: .78rem;
-    font-weight: 400;
-    left: 50%;
-    line-height: 1.55;
-    max-width: min(28rem, 75vw);
-    opacity: 0;
-    padding: .65rem .75rem;
-    pointer-events: none;
-    position: absolute;
-    text-align: left;
-    transform: translate(-50%, .2rem);
-    transition: opacity .12s ease, transform .12s ease;
-    visibility: hidden;
-    white-space: normal;
-    width: max-content;
-    z-index: 1200;
-    top: calc(100% + .55rem);
-}
-
-.help-tip:hover::after,
-.help-tip:focus-visible::after {
-    opacity: 1;
-    transform: translate(-50%, 0);
-    visibility: visible;
 }
 
 .help-tip:focus-visible {

@@ -13,13 +13,58 @@
 <section class="page-heading">
     <div>
         <p class="kicker">OPERATIONS</p>
-        <h1>@L["Operations_Title"]</h1>
+        <PageHeadingTitle Icon="monitor_heart">@L["Operations_Title"]</PageHeadingTitle>
         <p>@L["Operations_Description"]</p>
     </div>
     <RadzenButton Text="@(loading ? L["Action_Refreshing"] : L["Action_Reload"])" Icon="refresh" Click="@LoadAsync" Disabled="@loading" />
 </section>
 
 <div class="content-stack">
+    <RadzenCard>
+        <div class="panel-title"><h2>@L["Operations_QueuePosition"]</h2><span>@L["Common_SystemCount", checkpoints.Count]</span></div>
+        <RadzenDataGrid Data="@checkpoints" TItem="CheckpointListItem" AllowSorting="true" EmptyText="@L["Operations_NoCheckpoints"]" Density="Density.Compact">
+            <Columns>
+                <RadzenDataGridColumn TItem="CheckpointListItem" Property="SystemName" Title="@L["Common_System"]">
+                    <Template Context="checkpoint">@checkpoint.SystemName</Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="CheckpointListItem" Property="LastQueueId" Title="@L["Operations_LastQueueId"]" />
+                <RadzenDataGridColumn TItem="CheckpointListItem" Property="UpdatedAtUtc" Title="@L["Common_UpdatedAt"]">
+                    <Template Context="checkpoint">@FormatDate(checkpoint.UpdatedAtUtc)</Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    </RadzenCard>
+
+    <RadzenCard>
+        <div class="panel-title"><h2>@L["Operations_RecentInbox"]</h2><span>@L["Common_Count", inbox.Count]</span></div>
+        <RadzenDataGrid Data="@inbox" TItem="InboxListItem" AllowSorting="true" AllowFiltering="true" FilterMode="FilterMode.Simple" AllowPaging="true" PageSize="25" ShowPagingSummary="true" PagingSummaryFormat="@L["Common_PagingSummary"]" EmptyText="@L["Operations_NoInbox"]" Density="Density.Compact">
+            <Columns>
+                <RadzenDataGridColumn TItem="InboxListItem" Property="UpdatedAtUtc" Title="@L["Common_UpdatedAt"]">
+                    <Template Context="item">@FormatDate(item.UpdatedAtUtc)</Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="InboxListItem" Property="RouteName" Title="@L["Operations_RouteDestination"]">
+                    <Template Context="item">@item.RouteName<br /><small>→ @item.DestinationSystemName</small></Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="InboxListItem" Property="State" Title="@L["Common_Status"]" Width="110px">
+                    <Template Context="item"><span class="status-pill @StateClass(item.State)">@StateText(item.State)</span></Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="InboxListItem" Property="AttemptCount" Title="@L["Operations_Attempts"]" Width="80px" />
+                <RadzenDataGridColumn TItem="InboxListItem" Property="LastError" Title="@L["Common_Error"]" Sortable="false" Filterable="false" Width="100px">
+                    <Template Context="item">
+                        @if (!string.IsNullOrWhiteSpace(item.LastError))
+                        {
+                            <RadzenButton Text="@L["Common_Show"]" Icon="article" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => ShowInboxErrorAsync(item))" />
+                        }
+                        else
+                        {
+                            <span>—</span>
+                        }
+                    </Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    </RadzenCard>
+
     <RadzenCard>
         <div class="panel-title"><h2>@L["Operations_SystemEvents"]</h2><span>@L["Common_Count", operationalEvents.Count]</span></div>
         <RadzenDataGrid Data="@operationalEvents" TItem="OperationalEventListItem" AllowSorting="true" AllowFiltering="true" FilterMode="FilterMode.Simple" AllowPaging="true" PageSize="25" ShowPagingSummary="true" PagingSummaryFormat="@L["Common_PagingSummary"]" EmptyText="@L["Operations_NoSystemEvents"]" Density="Density.Compact">
@@ -59,54 +104,6 @@
                         {
                             <span class="status-pill enabled">@L["Operations_Acknowledged"]</span><br />
                             <small>@FormatDate(entry.AcknowledgedAtUtc)</small>
-                        }
-                    </Template>
-                </RadzenDataGridColumn>
-            </Columns>
-        </RadzenDataGrid>
-    </RadzenCard>
-
-    <RadzenCard>
-        <div class="panel-title"><h2>Queue Checkpoint</h2><span>@L["Common_SystemCount", checkpoints.Count]</span></div>
-        <RadzenDataGrid Data="@checkpoints" TItem="CheckpointListItem" AllowSorting="true" EmptyText="@L["Operations_NoCheckpoints"]" Density="Density.Compact">
-            <Columns>
-                <RadzenDataGridColumn TItem="CheckpointListItem" Property="SystemName" Title="@L["Common_System"]">
-                    <Template Context="checkpoint">@checkpoint.SystemName</Template>
-                </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="CheckpointListItem" Property="LastQueueId" Title="@L["Operations_LastQueueId"]" />
-                <RadzenDataGridColumn TItem="CheckpointListItem" Property="UpdatedAtUtc" Title="@L["Common_UpdatedAt"]">
-                    <Template Context="checkpoint">@FormatDate(checkpoint.UpdatedAtUtc)</Template>
-                </RadzenDataGridColumn>
-            </Columns>
-        </RadzenDataGrid>
-    </RadzenCard>
-
-    <RadzenCard>
-        <div class="panel-title"><h2>@L["Operations_RecentInbox"]</h2><span>@L["Common_Count", inbox.Count]</span></div>
-        <RadzenDataGrid Data="@inbox" TItem="InboxListItem" AllowSorting="true" AllowFiltering="true" FilterMode="FilterMode.Simple" AllowPaging="true" PageSize="25" ShowPagingSummary="true" PagingSummaryFormat="@L["Common_PagingSummary"]" EmptyText="@L["Operations_NoInbox"]" Density="Density.Compact">
-            <Columns>
-                <RadzenDataGridColumn TItem="InboxListItem" Property="UpdatedAtUtc" Title="@L["Common_UpdatedAt"]">
-                    <Template Context="item">@FormatDate(item.UpdatedAtUtc)</Template>
-                </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="InboxListItem" Property="SourceMessageId" Title="MessageId">
-                    <Template Context="item"><code>@item.SourceMessageId</code></Template>
-                </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="InboxListItem" Property="RouteName" Title="@L["Operations_RouteDestination"]">
-                    <Template Context="item">@item.RouteName<br /><small>→ @item.DestinationSystemName</small></Template>
-                </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="InboxListItem" Property="State" Title="@L["Common_Status"]" Width="110px">
-                    <Template Context="item"><span class="status-pill @StateClass(item.State)">@StateText(item.State)</span></Template>
-                </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="InboxListItem" Property="AttemptCount" Title="@L["Operations_Attempts"]" Width="80px" />
-                <RadzenDataGridColumn TItem="InboxListItem" Property="LastError" Title="@L["Common_Error"]" Sortable="false" Filterable="false" Width="100px">
-                    <Template Context="item">
-                        @if (!string.IsNullOrWhiteSpace(item.LastError))
-                        {
-                            <RadzenButton Text="@L["Common_Show"]" Icon="article" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => ShowInboxErrorAsync(item))" />
-                        }
-                        else
-                        {
-                            <span>—</span>
                         }
                     </Template>
                 </RadzenDataGridColumn>
@@ -174,6 +171,7 @@
         "TableMapping" => L["Common_Mapping"],
         "DatabaseDeployment" => L["Common_DatabaseDeployment"],
         "AdminAccount" => L["Operations_AdminAccount"],
+        "ManagementSettings" => L["Operations_ManagementSettings"],
         _ => value
     };
 
@@ -188,6 +186,8 @@
         "Initialized" => L["Operations_Initialized"],
         "PasswordReset" => L["Operations_PasswordReset"],
         "PasswordChanged" => L["Operations_PasswordChanged"],
+        "AutomaticCleanup" => L["Operations_AutomaticCleanup"],
+        "ManualCleanup" => L["Operations_ManualCleanup"],
         _ => value
     };
 
@@ -196,6 +196,7 @@
         "management-ui" => L["Operations_ManagementUi"],
         "administrator" => L["Operations_Administrator"],
         "localhost-recovery" => L["Operations_LocalRecovery"],
+        "worker" => L["Operations_SourceWorker"],
         _ => value
     };
 

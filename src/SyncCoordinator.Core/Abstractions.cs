@@ -33,12 +33,13 @@ public interface ISyncConnector
 
 public interface IConnectorCatalog
 {
-    IReadOnlyCollection<ISyncConnector> All { get; }
-    ISyncConnector GetRequired(string systemCode);
+    Task<IReadOnlyCollection<ISyncConnector>> GetAllAsync(CancellationToken cancellationToken);
+    Task<ISyncConnector> GetRequiredAsync(string systemCode, CancellationToken cancellationToken);
 }
 
 public interface ICoordinatorStore
 {
+    Task<bool> IsGloballyPausedAsync(CancellationToken cancellationToken);
     Task<bool> IsSystemPausedAsync(string systemCode, CancellationToken cancellationToken);
     Task<long> GetCheckpointAsync(string systemCode, CancellationToken cancellationToken);
     Task AdvanceCheckpointAsync(string systemCode, long queueId, CancellationToken cancellationToken);
@@ -172,6 +173,16 @@ public interface IOperationalEventAdminService
         int take,
         CancellationToken cancellationToken);
     Task AcknowledgeAsync(Guid id, string acknowledgedBy, CancellationToken cancellationToken);
+}
+
+public interface IManagementSettingsService
+{
+    Task<ManagementSettings> GetAsync(CancellationToken cancellationToken);
+    Task SetGlobalPausedAsync(bool paused, CancellationToken cancellationToken);
+    Task SaveAsync(ManagementSettings settings, CancellationToken cancellationToken);
+    Task<ManagementCleanupPreview> PreviewCleanupAsync(CancellationToken cancellationToken);
+    Task<ManagementCleanupResult> CleanupNowAsync(CancellationToken cancellationToken);
+    Task<ManagementCleanupResult?> RunAutomaticCleanupIfDueAsync(CancellationToken cancellationToken);
 }
 
 public interface IConflictValueMerger
