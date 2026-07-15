@@ -8,16 +8,13 @@ public sealed class ConfigurationValidatorTests
     [Theory]
     [InlineData("A", "B")]
     [InlineData("B", "A")]
-    public void DirectRouteBetweenAAndBIsRejected(string source, string destination)
+    public void DirectRouteBetweenDistinctSystemsIsAllowed(string source, string destination)
     {
         var input = ValidRoute();
         input.SourceSystem = source;
         input.DestinationSystem = destination;
 
-        var exception = Assert.Throws<ConfigurationValidationException>(() =>
-            ConfigurationValidator.ValidateRoute(input, ["A", "B", "C"]));
-
-        Assert.Contains(exception.Errors, x => x.Contains("直接同期", StringComparison.Ordinal));
+        ConfigurationValidator.ValidateRoute(input, ["A", "B", "C"]);
     }
 
     [Fact]
@@ -168,6 +165,40 @@ public sealed class ConfigurationValidatorTests
         input.DestinationLogicalDeleteValue = "1";
 
         ConfigurationValidator.ValidateTableMapping(input, ValidRoute());
+    }
+
+    [Fact]
+    public void KeyColumnsCannotUseValueTransformations()
+    {
+        var input = ValidTableMapping();
+        input.Columns[0].ForwardTransform.UseNullFallback = true;
+        input.Columns[0].ForwardTransform.NullFallback = "0";
+
+        var exception = Assert.Throws<ConfigurationValidationException>(() =>
+            ConfigurationValidator.ValidateTableMapping(input, ValidRoute()));
+
+        Assert.Contains(exception.Errors, error => error.Contains("キー列", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void FixedValuesMustFitTheSelectedTargetContract()
+    {
+        var input = ValidTableMapping();
+        input.FixedValues =
+        [
+            new FixedValueMappingInput
+            {
+                Direction = MappingWriteDirection.Forward,
+                TargetColumn = "SourceCode",
+                Value = "too-long",
+                TargetContract = new ColumnValueContract("varchar", false, 3, null, null)
+            }
+        ];
+
+        var exception = Assert.Throws<ConfigurationValidationException>(() =>
+            ConfigurationValidator.ValidateTableMapping(input, ValidRoute()));
+
+        Assert.Contains(exception.Errors, error => error.Contains("列制約", StringComparison.Ordinal));
     }
 
     private static TableMappingInput ValidTableMapping() => new()

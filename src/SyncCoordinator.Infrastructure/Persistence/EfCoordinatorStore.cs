@@ -57,7 +57,8 @@ public sealed class EfCoordinatorStore(
             .Include(x => x.SourceSystem)
             .Include(x => x.DestinationSystem)
             .Include(x => x.TableMapping).ThenInclude(x => x!.Columns)
-            .Where(x => x.Enabled && x.EntityType == entityType &&
+            .Where(x => (x.Enabled || x.MappingMaintenanceStartedAtUtc != null) &&
+                        x.EntityType == entityType &&
                         (x.SourceSystem.Code == sourceSystem ||
                          x.Direction == SyncDirection.Bidirectional &&
                          x.DestinationSystem.Code == sourceSystem &&
@@ -85,7 +86,19 @@ public sealed class EfCoordinatorStore(
                     .ToDictionary(y => y.SourceColumn, y => y.ConflictPolicy!.Value, StringComparer.Ordinal))
             {
                 OperationallyPaused = x.SourceSystem.PausedAtUtc is not null ||
-                                      x.DestinationSystem.PausedAtUtc is not null
+                                      x.DestinationSystem.PausedAtUtc is not null ||
+                                      x.MappingMaintenanceStartedAtUtc is not null,
+                MappingMaintenance = x.MappingMaintenanceStartedAtUtc is not null,
+                ValueMappings = mapping.Columns.ToDictionary(
+                    column => column.SourceColumn,
+                    column => new ColumnValueMappingDefinition(
+                        column.SourceColumn,
+                        column.DestinationColumn,
+                        SourceContract(column),
+                        DestinationContract(column),
+                        DeserializeTransform(column.ForwardTransformJson),
+                        DeserializeTransform(column.ReverseTransformJson)),
+                    StringComparer.Ordinal)
             };
         }).ToArray();
     }
@@ -103,6 +116,17 @@ public sealed class EfCoordinatorStore(
         string destinationSystem,
         CancellationToken cancellationToken)
     {
+        var routeState = await dbContext.Routes.AsNoTracking()
+            .Where(x => x.Id == routeId)
+            .Select(x => new { x.Enabled, x.MappingMaintenanceStartedAtUtc })
+            .SingleOrDefaultAsync(cancellationToken);
+        if (routeState is null ||
+            !routeState.Enabled ||
+            routeState.MappingMaintenanceStartedAtUtc is not null)
+        {
+            return InboxAcquireResult.RoutePaused;
+        }
+
         var key = new object[] { sourceMessageId, routeId, destinationSystem };
         var item = await dbContext.InboxMessages.FindAsync(key, cancellationToken);
         var now = timeProvider.GetUtcNow();
@@ -168,6 +192,15 @@ public sealed class EfCoordinatorStore(
         WebhookEventNotification webhookEvent,
         CancellationToken cancellationToken) =>
         UpdateInboxAsync(sourceMessageId, routeId, destinationSystem, InboxState.Failed, errorDetails, webhookEvent, cancellationToken);
+
+    public Task HoldInboxAsync(
+        Guid sourceMessageId,
+        Guid routeId,
+        string destinationSystem,
+        string errorDetails,
+        WebhookEventNotification webhookEvent,
+        CancellationToken cancellationToken) =>
+        UpdateInboxAsync(sourceMessageId, routeId, destinationSystem, InboxState.Held, errorDetails, webhookEvent, cancellationToken);
 
     public async Task<SyncSnapshot?> GetSnapshotAsync(
         Guid routeId,
@@ -279,4 +312,23 @@ public sealed class EfCoordinatorStore(
         json is null
             ? null
             : new EntityPayload(JsonSerializer.Deserialize<Dictionary<string, JsonNode?>>(json, JsonOptions) ?? []);
+
+    private static ColumnValueContract SourceContract(RouteColumnMappingEntity column) => new(
+        column.SourceDataType,
+        column.SourceIsNullable,
+        column.SourceMaxLength,
+        column.SourceNumericPrecision,
+        column.SourceNumericScale);
+
+    private static ColumnValueContract DestinationContract(RouteColumnMappingEntity column) => new(
+        column.DestinationDataType,
+        column.DestinationIsNullable,
+        column.DestinationMaxLength,
+        column.DestinationNumericPrecision,
+        column.DestinationNumericScale);
+
+    private static ValueTransformInput DeserializeTransform(string? json) =>
+        string.IsNullOrWhiteSpace(json)
+            ? new ValueTransformInput()
+            : JsonSerializer.Deserialize<ValueTransformInput>(json, JsonOptions) ?? new ValueTransformInput();
 }

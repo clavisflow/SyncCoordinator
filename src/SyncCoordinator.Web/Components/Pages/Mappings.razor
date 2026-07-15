@@ -8,6 +8,7 @@
 @inject IDatabaseMetadataService MetadataService
 @inject NavigationManager Navigation
 @inject NotificationService NotificationService
+@inject UiErrorReporter ErrorReporter
 @inject IStringLocalizer<SharedResource> L
 
 <PageTitle>@L["Mappings_PageTitle"]</PageTitle>
@@ -104,19 +105,26 @@ else
                 }
                 @foreach (var row in VisibleColumnRows)
                 {
-                    <div class="column-mapping-row" @key="row.Source.Name">
-                        <RadzenCheckBox TValue="bool" @bind-Value="row.Included" />
-                        <div class="column-source">
-                            <strong>@row.Source.Name</strong>
-                            <small>@row.Source.DataType @(row.Source.IsNullable ? "NULL" : "NOT NULL")</small>
-                        </div>
-                        <RadzenIcon Icon="arrow_forward" />
+                    <div class="column-mapping-item" @key="row.Source.Name">
+                        <div class="column-mapping-row">
+                            <RadzenCheckBox TValue="bool" @bind-Value="row.Included" />
+                            <div class="column-source">
+                                <strong>@row.Source.Name</strong>
+                                <small>@row.Source.Contract.DisplayType @(row.Source.IsNullable ? "NULL" : "NOT NULL")</small>
+                            </div>
+                            <RadzenIcon Icon="arrow_forward" />
                             <RadzenDropDown TValue="string" @bind-Value="row.DestinationColumn" Data="@destinationColumns" TextProperty="DisplayName" ValueProperty="Name" Placeholder="@L["Mappings_SelectDestinationColumn"]" AllowClear="true" AllowFiltering="true" class="form-control" />
-                        <div class="check-row key-check">
-                            <RadzenCheckBox TValue="bool" @bind-Value="row.IsKey" Disabled="@(!row.Included)" />
+                            <div class="check-row key-check">
+                                <RadzenCheckBox TValue="bool" @bind-Value="row.IsKey" Disabled="@(!row.Included)" />
                                 <span>@L["Mappings_Key"]</span>
+                            </div>
+                            <RadzenDropDown TValue="ConflictPolicy?" @bind-Value="row.ConflictPolicy" Data="@columnConflictPolicies" TextProperty="Text" ValueProperty="Value" Disabled="@(!row.Included)" class="form-control compact-control" />
                         </div>
-                        <RadzenDropDown TValue="ConflictPolicy?" @bind-Value="row.ConflictPolicy" Data="@columnConflictPolicies" TextProperty="Text" ValueProperty="Value" Disabled="@(!row.Included)" class="form-control compact-control" />
+                        @if (row.Included && !row.IsKey && DestinationColumn(row) is { } targetColumn)
+                        {
+                            <ValueTransformEditor Title="@L["Mappings_ForwardTransform"]" Transform="@row.ForwardTransform" SourceContract="@row.Source.Contract" Contract="@targetColumn.Contract" FieldName="@row.Source.Name" TargetColumn="@targetColumn.Name" />
+                            <ValueTransformEditor Title="@L["Mappings_ReverseTransform"]" Transform="@row.ReverseTransform" SourceContract="@targetColumn.Contract" Contract="@row.Source.Contract" FieldName="@row.Source.Name" TargetColumn="@row.Source.Name" />
+                        }
                     </div>
                 }
             </div>
@@ -363,6 +371,7 @@ else
         }
         catch (Exception exception)
         {
+            await ErrorReporter.ReportAsync(exception, "Mappings.LoadTables");
             NotificationService.ShowError([exception.Message], L["Common_OperationFailed"]);
         }
         finally
@@ -399,7 +408,9 @@ else
                     Included = savedColumn is not null || sameName is not null,
                     DestinationColumn = savedColumn?.DestinationColumn ?? sameName?.Name ?? string.Empty,
                     IsKey = savedColumn?.IsKey ?? sourceColumn.IsPrimaryKey,
-                    ConflictPolicy = savedColumn?.ConflictPolicy
+                    ConflictPolicy = savedColumn?.ConflictPolicy,
+                    ForwardTransform = savedColumn?.ForwardTransform ?? new ValueTransformInput(),
+                    ReverseTransform = savedColumn?.ReverseTransform ?? new ValueTransformInput()
                 };
             }).ToList();
             fixedValueRows = mappingApplies ? existingMapping!.FixedValues
@@ -419,6 +430,7 @@ else
         }
         catch (Exception exception)
         {
+            await ErrorReporter.ReportAsync(exception, "Mappings.LoadColumns");
             NotificationService.ShowError([exception.Message], L["Common_OperationFailed"]);
         }
         finally
@@ -451,7 +463,11 @@ else
                     SourceColumn = x.Source.Name,
                     DestinationColumn = x.DestinationColumn,
                     IsKey = x.IsKey,
-                    ConflictPolicy = x.ConflictPolicy
+                    ConflictPolicy = x.ConflictPolicy,
+                    SourceContract = x.Source.Contract,
+                    DestinationContract = DestinationColumn(x)?.Contract ?? ColumnValueContract.Unknown,
+                    ForwardTransform = x.ForwardTransform,
+                    ReverseTransform = x.ReverseTransform
                 }).ToList(),
                 FixedValues = fixedValueRows.Select(x => new FixedValueMappingInput
                 {
@@ -459,7 +475,10 @@ else
                         ? x.Direction
                         : MappingWriteDirection.Forward,
                     TargetColumn = x.TargetColumn,
-                    Value = x.Value
+                    Value = x.Value,
+                    TargetContract = FixedTargetColumns(x)
+                        .FirstOrDefault(column => string.Equals(column.Name, x.TargetColumn, StringComparison.OrdinalIgnoreCase))
+                        ?.Contract ?? ColumnValueContract.Unknown
                 }).ToList()
             };
             await AdminService.SaveTableMappingAsync(model, CancellationToken.None);
@@ -474,6 +493,7 @@ else
         }
         catch (Exception exception)
         {
+            await ErrorReporter.ReportAsync(exception, "Mappings.Save");
             NotificationService.ShowError([exception.Message], L["Common_OperationFailed"]);
         }
         finally
@@ -529,6 +549,10 @@ else
             .ToArray();
     }
 
+    private DatabaseColumnInfo? DestinationColumn(ColumnMappingRow row) =>
+        destinationColumns.FirstOrDefault(column =>
+            string.Equals(column.Name, row.DestinationColumn, StringComparison.OrdinalIgnoreCase));
+
     private SystemListItem GetConfiguredSystem(string code)
     {
         var system = systems.SingleOrDefault(x => string.Equals(x.Code, code, StringComparison.OrdinalIgnoreCase)) ??
@@ -550,6 +574,8 @@ else
         public string DestinationColumn { get; set; } = string.Empty;
         public bool IsKey { get; set; }
         public ConflictPolicy? ConflictPolicy { get; set; }
+        public ValueTransformInput ForwardTransform { get; set; } = new();
+        public ValueTransformInput ReverseTransform { get; set; } = new();
     }
 
     private sealed class FixedValueRow

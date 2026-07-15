@@ -6,6 +6,7 @@
 @inject IDatabaseDeploymentService DeploymentService
 @inject NavigationManager Navigation
 @inject NotificationService NotificationService
+@inject UiErrorReporter ErrorReporter
 @inject IStringLocalizer<SharedResource> L
 
 <PageTitle>@L["RouteEdit_PageTitle"]</PageTitle>
@@ -79,10 +80,6 @@ else
                         <div class="route-activation-status">
                             <span>@L["RouteEdit_RuleStatus"]</span>
                             <strong class="status-pill @(model.Enabled ? "enabled" : "disabled")">@(model.Enabled ? L["Common_Enabled"] : L["Common_Disabled"])</strong>
-                            @if (!model.Enabled && model.DeploymentState != DatabaseDeploymentState.Prepared)
-                            {
-                                <small>@L["RouteEdit_EnableBlocked"]</small>
-                            }
                         </div>
                         <RadzenButton Text="@(changingEnabled ? L["Common_Processing"] : model.Enabled ? L["RouteEdit_DisableRule"] : L["RouteEdit_EnableRule"])"
                                       Icon="@(model.Enabled ? "pause_circle" : "play_circle")"
@@ -154,6 +151,7 @@ else
         }
         catch (Exception exception)
         {
+            await ErrorReporter.ReportAsync(exception, "RouteEdit.Save");
             NotificationService.ShowError([exception.Message], L["Common_OperationFailed"]);
         }
         finally
@@ -175,6 +173,10 @@ else
         }
         catch (Exception exception)
         {
+            if (exception is not ConfigurationValidationException)
+            {
+                await ErrorReporter.ReportAsync(exception, "RouteEdit.SetEnabled");
+            }
             NotificationService.ShowError(
                 exception is ConfigurationValidationException validation ? validation.Errors : [exception.Message],
                 L["Common_OperationFailed"]);

@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using SyncCoordinator.Contracts;
 
 namespace SyncCoordinator.Core;
@@ -59,11 +60,6 @@ public static class ConfigurationValidator
         {
             errors.Add("送信元と送信先に同じシステムは指定できません。");
         }
-        else if (IsDirectRouteBetweenAAndB(input.SourceSystem, input.DestinationSystem))
-        {
-            errors.Add("AとBを直接同期するルールは作成できません。");
-        }
-
         ThrowIfAny(errors);
     }
 
@@ -102,6 +98,16 @@ public static class ConfigurationValidator
         if (input.Columns.GroupBy(x => x.SourceColumn, StringComparer.OrdinalIgnoreCase).Any(x => x.Count() > 1)) errors.Add("同期元列が重複しています。");
         if (input.Columns.GroupBy(x => x.DestinationColumn, StringComparer.OrdinalIgnoreCase).Any(x => x.Count() > 1)) errors.Add("同期先列が重複しています。");
 
+        foreach (var column in input.Columns)
+        {
+            if (column.IsKey && (!column.ForwardTransform.IsIdentity || !column.ReverseTransform.IsIdentity))
+            {
+                errors.Add($"キー列 '{column.SourceColumn}' には値変換を設定できません。");
+            }
+            ValidateTransform(column.ForwardTransform, $"{column.SourceColumn} → {column.DestinationColumn}", errors);
+            ValidateTransform(column.ReverseTransform, $"{column.DestinationColumn} → {column.SourceColumn}", errors);
+        }
+
         if (input.SyncDeletes)
         {
             ValidateDeletionMode(
@@ -138,6 +144,20 @@ public static class ConfigurationValidator
             {
                 errors.Add("片方向ルールに戻り方向の固定値は設定できません。");
             }
+
+            try
+            {
+                ValueTransformEngine.Transform(
+                    JsonValue.Create(fixedValue.Value),
+                    new ValueTransformInput(),
+                    fixedValue.TargetContract,
+                    fixedValue.TargetColumn,
+                    fixedValue.TargetColumn);
+            }
+            catch (ValueTransformationException exception)
+            {
+                errors.Add($"固定値が書き込み先の列制約を満たしません: {exception.Message}");
+            }
         }
 
         if (input.FixedValues
@@ -159,14 +179,35 @@ public static class ConfigurationValidator
         ThrowIfAny(errors);
     }
 
+    private static void ValidateTransform(
+        ValueTransformInput transform,
+        string label,
+        List<string> errors)
+    {
+        if (transform.NullFallback.Length > 4000)
+        {
+            errors.Add($"{label} のNULL既定値は4000文字以内です。");
+        }
+        if (transform.ValueMap.Count > 200)
+        {
+            errors.Add($"{label} のコード変換は200件以内です。");
+        }
+        if (transform.ValueMap.GroupBy(x => x.SourceValue, StringComparer.Ordinal).Any(x => x.Count() > 1))
+        {
+            errors.Add($"{label} のコード変換元の値が重複しています。");
+        }
+        if (transform.ValueMap.Any(x => x.SourceValue.Length > 4000 || x.TargetValue.Length > 4000))
+        {
+            errors.Add($"{label} のコード変換値は4000文字以内です。");
+        }
+        if (transform.RejectUnmappedValues && transform.ValueMap.Count == 0)
+        {
+            errors.Add($"{label} で未定義値を拒否する場合はコード変換を1件以上指定してください。");
+        }
+    }
+
     private static bool ContainsCode(IReadOnlyCollection<string> codes, string? code) =>
         !string.IsNullOrWhiteSpace(code) && codes.Contains(code, StringComparer.OrdinalIgnoreCase);
-
-    private static bool IsDirectRouteBetweenAAndB(string source, string destination) =>
-        string.Equals(source, "A", StringComparison.OrdinalIgnoreCase) &&
-        string.Equals(destination, "B", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(source, "B", StringComparison.OrdinalIgnoreCase) &&
-        string.Equals(destination, "A", StringComparison.OrdinalIgnoreCase);
 
     private static void ValidateDeletionMode(
         DeletionMode mode,

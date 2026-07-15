@@ -1,0 +1,34 @@
+@page "{id}/work-order"
+@model SyncCoordinator.Demo.Crm.Pages.Cases.CreateWorkOrderModel
+@{
+    ViewData["Title"] = "作業指示作成";
+}
+
+<nav class="breadcrumb" aria-label="パンくず"><a asp-page="Index">問い合わせ一覧</a><span>›</span>@if (Model.SupportCase is not null) { <a asp-page="Edit" asp-route-id="@Model.SupportCase.EntityId">@Model.SupportCase.Payload.CaseNumber</a> }<span>›</span><span>作業指示作成</span></nav>
+<header class="record-header"><div><p class="page-kicker">作業指示管理</p><h1>作業指示を作成</h1><p>問い合わせ内容を引き継ぎ、訪問修理の担当者へ連携します。</p></div></header>
+
+<partial name="_DataError" model="Model.DataError ?? string.Empty" />
+
+@if (Model.SupportCase is not null)
+{
+    <div class="record-layout">
+        <form method="post" class="section-card">
+            <header class="section-header"><div><h2>訪問作業の内容</h2><p>訪問先、予定日時、担当者と依頼内容を設定します。</p></div></header>
+            <div asp-validation-summary="ModelOnly" class="validation"></div>
+            <div class="edit-grid">
+                <div class="form-field span-2"><label asp-for="Input.Address"></label><input asp-for="Input.Address" placeholder="東京都千代田区..." /><span asp-validation-for="Input.Address"></span></div>
+                <div class="form-field"><label asp-for="Input.ScheduledAt"></label><input asp-for="Input.ScheduledAt" type="datetime-local" /><span asp-validation-for="Input.ScheduledAt"></span></div>
+                <div class="form-field"><label asp-for="Input.TechnicianName"></label><input asp-for="Input.TechnicianName" placeholder="未定の場合は空欄" /><span asp-validation-for="Input.TechnicianName"></span></div>
+                <div class="form-field"><label asp-for="Input.Status"></label><select asp-for="Input.Status">@foreach (var status in Model.Statuses) { <option value="@status">@StatusOptions.Label(status) (@status)</option> }</select><span asp-validation-for="Input.Status"></span></div>
+                <div class="form-field span-2"><label asp-for="Input.ProblemSummary"></label><textarea asp-for="Input.ProblemSummary" rows="7"></textarea><span asp-validation-for="Input.ProblemSummary"></span></div>
+            </div>
+            <div class="form-actions"><a class="button button-secondary" asp-page="Edit" asp-route-id="@Model.SupportCase.EntityId">キャンセル</a><button class="button button-primary" type="submit">作業指示を作成</button></div>
+        </form>
+        <aside class="aside-stack">
+            <section class="section-card compact-card"><header class="section-header"><h2>元の問い合わせ</h2></header><dl class="metadata-list"><div><dt>ケース番号</dt><dd>@(Model.SupportCase.Payload.CaseNumber ?? "—")</dd></div><div><dt>お客様</dt><dd>@(Model.SupportCase.Payload.CustomerName ?? "—")</dd></div><div><dt>製品</dt><dd>@(Model.SupportCase.Payload.ProductName ?? "—")</dd></div><div><dt>電話番号</dt><dd>@(Model.SupportCase.Payload.Phone ?? "—")</dd></div><div><dt>件名</dt><dd>@(Model.SupportCase.Payload.Subject ?? "—")</dd></div></dl></section>
+            <section class="notice-box"><h2>データ連携</h2><p>作成後、SyncCoordinatorを介してField Serviceへ連携されます。</p></section>
+        </aside>
+    </div>
+}
+
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }

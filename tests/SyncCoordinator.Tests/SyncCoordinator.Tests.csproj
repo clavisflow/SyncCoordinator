@@ -19,6 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\demos\Crm\SyncCoordinator.Demo.Crm.csproj" />
     <ProjectReference Include="..\..\src\SyncCoordinator.Core\SyncCoordinator.Core.csproj" />
     <ProjectReference Include="..\..\src\SyncCoordinator.Infrastructure\SyncCoordinator.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\SyncCoordinator.Contracts\SyncCoordinator.Contracts.csproj" />

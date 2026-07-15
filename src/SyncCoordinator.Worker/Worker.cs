@@ -12,7 +12,8 @@ public sealed class WorkerOptions
 public sealed class Worker(
     IServiceScopeFactory scopeFactory,
     IOptions<WorkerOptions> options,
-    ILogger<Worker> logger) : BackgroundService
+    ILogger<Worker> logger,
+    IOperationalEventRecorder operationalEvents) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -41,6 +42,13 @@ public sealed class Worker(
             catch (Exception exception)
             {
                 WorkerLog.PollingCycleFailed(logger, exception);
+                await operationalEvents.RecordAsync(new OperationalEventInput(
+                    OperationalEventSeverity.Error,
+                    OperationalEventCategories.Synchronization,
+                    OperationalEventCodes.SynchronizationPollingFailed,
+                    "worker",
+                    null,
+                    $"{exception.GetType().Name}: {exception.Message}"), CancellationToken.None);
             }
 
             await Task.Delay(options.Value.PollingInterval, stoppingToken);

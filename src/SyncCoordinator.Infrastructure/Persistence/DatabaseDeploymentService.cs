@@ -22,7 +22,8 @@ public sealed class DatabaseDeploymentService(
     CoordinatorDbContext dbContext,
     ProtectedConnectionStringService protector,
     TimeProvider timeProvider,
-    IOptions<DatabaseDeploymentOptions> options) : IDatabaseDeploymentService
+    IOptions<DatabaseDeploymentOptions> options,
+    IOperationalEventRecorder operationalEvents) : IDatabaseDeploymentService
 {
     public async Task<DatabaseDeploymentPlan> GetPlanAsync(Guid routeId, CancellationToken cancellationToken) =>
         (await BuildPlanAsync(routeId, cancellationToken)).Plan;
@@ -47,15 +48,16 @@ public sealed class DatabaseDeploymentService(
         }
 
         await using var connection = CreateConnection(target.System);
-        await connection.OpenAsync(cancellationToken);
         DbTransaction? transaction = null;
-        if (IsSqlServer(target.System.Provider) || IsPostgreSql(target.System.Provider))
-        {
-            transaction = await connection.BeginTransactionAsync(cancellationToken);
-        }
 
         try
         {
+            await connection.OpenAsync(cancellationToken);
+            if (IsSqlServer(target.System.Provider) || IsPostgreSql(target.System.Provider))
+            {
+                transaction = await connection.BeginTransactionAsync(cancellationToken);
+            }
+
             foreach (var batch in target.Batches)
             {
                 await connection.ExecuteAsync(new CommandDefinition(
@@ -68,11 +70,21 @@ public sealed class DatabaseDeploymentService(
                 await transaction.CommitAsync(cancellationToken);
             }
         }
-        catch
+        catch (Exception exception)
         {
             if (transaction is not null)
             {
                 await transaction.RollbackAsync(CancellationToken.None);
+            }
+            if (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+            {
+                await operationalEvents.RecordAsync(new OperationalEventInput(
+                    OperationalEventSeverity.Error,
+                    OperationalEventCategories.Database,
+                    OperationalEventCodes.DatabaseDeploymentFailed,
+                    "web",
+                    $"{built.Route.Name} / {target.Public.SystemName}",
+                    $"{exception.GetType().Name}: {exception.Message}"), CancellationToken.None);
             }
             throw;
         }
@@ -84,7 +96,17 @@ public sealed class DatabaseDeploymentService(
             }
         }
 
-        var verified = await VerifyTargetAsync(target, cancellationToken);
+        var verified = await VerifyTargetWithOperationalEventAsync(built, target, cancellationToken);
+        if (!verified)
+        {
+            await operationalEvents.RecordAsync(new OperationalEventInput(
+                OperationalEventSeverity.Warning,
+                OperationalEventCategories.Database,
+                OperationalEventCodes.DatabaseVerificationFailed,
+                "web",
+                $"{built.Route.Name} / {target.Public.SystemName}",
+                "Required synchronization objects were not found after deployment."), CancellationToken.None);
+        }
         AddAudit(built.Route, "DatabaseApplied", new { target.Public.SystemCode, target.Public.DatabaseName, Verified = verified });
         await dbContext.SaveChangesAsync(cancellationToken);
         return new DatabaseDeploymentResult(
@@ -101,8 +123,15 @@ public sealed class DatabaseDeploymentService(
         var built = await BuildPlanAsync(routeId, cancellationToken);
         foreach (var target in built.Targets)
         {
-            if (!await VerifyTargetAsync(target, cancellationToken))
+            if (!await VerifyTargetWithOperationalEventAsync(built, target, cancellationToken))
             {
+                await operationalEvents.RecordAsync(new OperationalEventInput(
+                    OperationalEventSeverity.Warning,
+                    OperationalEventCategories.Database,
+                    OperationalEventCodes.DatabaseVerificationFailed,
+                    "web",
+                    $"{built.Route.Name} / {target.Public.SystemName}",
+                    "Required synchronization objects were not found."), CancellationToken.None);
                 built.Route.DeploymentState = DatabaseDeploymentState.Draft;
                 built.Route.Enabled = false;
                 AddAudit(built.Route, "DatabaseVerificationFailed");
@@ -144,6 +173,10 @@ public sealed class DatabaseDeploymentService(
         }
 
         route.Enabled = enabled;
+        if (enabled)
+        {
+            route.MappingMaintenanceStartedAtUtc = null;
+        }
         AddAudit(route, enabled ? "Enabled" : "Disabled");
         await dbContext.SaveChangesAsync(cancellationToken);
         return new DatabaseDeploymentResult(
@@ -350,16 +383,42 @@ public sealed class DatabaseDeploymentService(
         }
 
         var triggerCount = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
-            target.System.Provider.ToUpperInvariant() switch
-            {
-                "SQLSERVER" => "SELECT COUNT(*) FROM sys.triggers WHERE name IN @names",
-                "MYSQL" => "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TRIGGERS WHERE TRIGGER_SCHEMA = DATABASE() AND TRIGGER_NAME IN @names",
-                "POSTGRESQL" => "SELECT COUNT(DISTINCT trigger_name) FROM information_schema.triggers WHERE event_object_schema = @schema AND trigger_name IN @names",
-                _ => throw new InvalidOperationException($"未対応のProviderです: {target.System.Provider}")
-            },
-            new { names = target.TriggerNames, schema = target.Schema },
+            BuildTriggerVerificationSql(target.System.Provider),
+            new { names = target.TriggerNames.ToArray(), schema = target.Schema },
             cancellationToken: cancellationToken));
         return triggerCount == target.TriggerNames.Count;
+    }
+
+    internal static string BuildTriggerVerificationSql(string provider) =>
+        provider.ToUpperInvariant() switch
+        {
+            "SQLSERVER" => "SELECT COUNT(*) FROM sys.triggers WHERE name IN @names",
+            "MYSQL" => "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TRIGGERS WHERE TRIGGER_SCHEMA = DATABASE() AND TRIGGER_NAME IN @names",
+            "POSTGRESQL" => "SELECT COUNT(DISTINCT trigger_name) FROM information_schema.triggers WHERE event_object_schema = @schema AND trigger_name = ANY(@names)",
+            _ => throw new InvalidOperationException($"未対応のProviderです: {provider}")
+        };
+
+    private async Task<bool> VerifyTargetWithOperationalEventAsync(
+        BuiltPlan built,
+        TargetDefinition target,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await VerifyTargetAsync(target, cancellationToken);
+        }
+        catch (Exception exception) when (
+            exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            await operationalEvents.RecordAsync(new OperationalEventInput(
+                OperationalEventSeverity.Error,
+                OperationalEventCategories.Database,
+                OperationalEventCodes.DatabaseVerificationFailed,
+                "web",
+                $"{built.Route.Name} / {target.Public.SystemName}",
+                $"{exception.GetType().Name}: {exception.Message}"), CancellationToken.None);
+            throw;
+        }
     }
 
     private DbConnection CreateConnection(SystemDefinitionEntity system)
@@ -952,9 +1011,11 @@ public sealed class DatabaseDeploymentService(
     private static string PostgreSqlIsDeleted(string alias, DeletionBehavior behavior) =>
         $"COALESCE(CAST({alias}.{PostgreSqlIdentifier(behavior.LogicalDeleteColumn!)} AS text) = '{SqlLiteral(behavior.LogicalDeleteValue!)}', FALSE)";
 
-    private static string RenderMySqlScript(IReadOnlyList<string> batches)
+    internal static string RenderMySqlScript(IReadOnlyList<string> batches)
     {
-        var builder = new StringBuilder();
+        var builder = new StringBuilder("SET NAMES utf8mb4;")
+            .AppendLine()
+            .AppendLine();
         foreach (var batch in batches)
         {
             if (batch.TrimStart().StartsWith("CREATE TRIGGER", StringComparison.OrdinalIgnoreCase))
@@ -969,7 +1030,8 @@ public sealed class DatabaseDeploymentService(
         return builder.ToString();
     }
 
-    private static string RenderPostgreSqlScript(IReadOnlyList<string> batches) =>
+    internal static string RenderPostgreSqlScript(IReadOnlyList<string> batches) =>
+        $"SET client_encoding = 'UTF8';{Environment.NewLine}{Environment.NewLine}" +
         string.Join($";{Environment.NewLine}{Environment.NewLine}", batches) + ";" + Environment.NewLine;
 
     internal static void AppendDeploymentMarker(

@@ -4,6 +4,7 @@
 @using SyncCoordinator.Core
 @inject IWebhookAdminService WebhookService
 @inject NotificationService NotificationService
+@inject UiErrorReporter ErrorReporter
 @inject IStringLocalizer<SharedResource> L
 
 <PageTitle>@L["Webhooks_PageTitle"]</PageTitle>
@@ -188,6 +189,7 @@ else
         }
         catch (Exception exception)
         {
+            await ErrorReporter.ReportAsync(exception, "Webhooks.Save");
             NotificationService.ShowError([exception.Message], L["Common_OperationFailed"]);
         }
         finally { saving = false; }
@@ -203,7 +205,7 @@ else
         }
         catch (Exception exception)
         {
-            ShowError(exception);
+            await ShowErrorAsync(exception, "Webhooks.QueueTest");
         }
     }
 
@@ -217,7 +219,7 @@ else
         }
         catch (Exception exception)
         {
-            ShowError(exception);
+            await ShowErrorAsync(exception, "Webhooks.Delete");
         }
     }
 
@@ -255,8 +257,12 @@ else
         return localized.ResourceNotFound ? error : localized.Value;
     }
 
-    private void ShowError(Exception exception)
+    private async Task ShowErrorAsync(Exception exception, string operation)
     {
+        if (exception is not ConfigurationValidationException)
+        {
+            await ErrorReporter.ReportAsync(exception, operation);
+        }
         var errors = exception is ConfigurationValidationException validation
             ? validation.Errors.Select(LocalizeError)
             : [exception.Message];

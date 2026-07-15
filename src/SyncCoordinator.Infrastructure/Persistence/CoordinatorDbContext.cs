@@ -16,6 +16,7 @@ public sealed class CoordinatorDbContext(DbContextOptions<CoordinatorDbContext> 
     public DbSet<SyncSnapshotEntity> SyncSnapshots => Set<SyncSnapshotEntity>();
     public DbSet<SyncConflictEntity> SyncConflicts => Set<SyncConflictEntity>();
     public DbSet<ConfigurationAuditEntity> ConfigurationAudits => Set<ConfigurationAuditEntity>();
+    public DbSet<OperationalEventEntity> OperationalEvents => Set<OperationalEventEntity>();
     public DbSet<WebhookEndpointEntity> WebhookEndpoints => Set<WebhookEndpointEntity>();
     public DbSet<WebhookEventEntity> WebhookEvents => Set<WebhookEventEntity>();
     public DbSet<WebhookDeliveryEntity> WebhookDeliveries => Set<WebhookDeliveryEntity>();
@@ -48,6 +49,7 @@ public sealed class CoordinatorDbContext(DbContextOptions<CoordinatorDbContext> 
             entity.HasKey(x => x.Id);
             entity.HasIndex(x => new { x.SourceSystemId, x.EntityType, x.Enabled });
             entity.HasIndex(x => new { x.DestinationSystemId, x.EntityType, x.Direction, x.Enabled });
+            entity.HasIndex(x => new { x.MappingMaintenanceStartedAtUtc, x.EntityType });
             entity.Property(x => x.Name).HasMaxLength(200);
             entity.Property(x => x.EntityType).HasMaxLength(128);
             entity.Property(x => x.Direction).HasConversion<string>().HasMaxLength(16);
@@ -84,6 +86,10 @@ public sealed class CoordinatorDbContext(DbContextOptions<CoordinatorDbContext> 
             entity.Property(x => x.SourceColumn).HasMaxLength(128);
             entity.Property(x => x.DestinationColumn).HasMaxLength(128);
             entity.Property(x => x.ConflictPolicy).HasConversion<string>().HasMaxLength(40);
+            entity.Property(x => x.SourceDataType).HasMaxLength(64);
+            entity.Property(x => x.DestinationDataType).HasMaxLength(64);
+            entity.Property(x => x.ForwardTransformJson).HasColumnType("nvarchar(max)");
+            entity.Property(x => x.ReverseTransformJson).HasColumnType("nvarchar(max)");
             entity.HasOne(x => x.TableMapping).WithMany(x => x.Columns).HasForeignKey(x => x.TableMappingId);
         });
 
@@ -95,6 +101,7 @@ public sealed class CoordinatorDbContext(DbContextOptions<CoordinatorDbContext> 
             entity.Property(x => x.Direction).HasConversion<string>().HasMaxLength(16);
             entity.Property(x => x.TargetColumn).HasMaxLength(128);
             entity.Property(x => x.Value).HasMaxLength(4000);
+            entity.Property(x => x.TargetDataType).HasMaxLength(64);
             entity.HasOne(x => x.TableMapping).WithMany(x => x.FixedValues).HasForeignKey(x => x.TableMappingId);
         });
 
@@ -152,6 +159,22 @@ public sealed class CoordinatorDbContext(DbContextOptions<CoordinatorDbContext> 
             entity.Property(x => x.BeforeJson).HasColumnType("nvarchar(max)");
             entity.Property(x => x.AfterJson).HasColumnType("nvarchar(max)");
             entity.Property(x => x.ChangedBy).HasMaxLength(200);
+        });
+
+        modelBuilder.Entity<OperationalEventEntity>(entity =>
+        {
+            entity.ToTable("OperationalEvent");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => new { x.AcknowledgedAtUtc, x.LastOccurredAtUtc });
+            entity.HasIndex(x => new { x.Category, x.Code, x.Source });
+            entity.Property(x => x.Severity).HasConversion<string>().HasMaxLength(16);
+            entity.Property(x => x.Category).HasMaxLength(64);
+            entity.Property(x => x.Code).HasMaxLength(100);
+            entity.Property(x => x.Source).HasMaxLength(64);
+            entity.Property(x => x.Target).HasMaxLength(200);
+            entity.Property(x => x.Details).HasMaxLength(4000);
+            entity.Property(x => x.CorrelationId).HasMaxLength(64);
+            entity.Property(x => x.AcknowledgedBy).HasMaxLength(200);
         });
 
         modelBuilder.Entity<WebhookEndpointEntity>(entity =>

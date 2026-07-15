@@ -1,0 +1,46 @@
+@{
+    var currentPage = ViewContext.RouteData.Values["page"]?.ToString() ?? string.Empty;
+    var dashboardIsCurrent = string.Equals(currentPage, "/Index", StringComparison.OrdinalIgnoreCase);
+    var casesAreCurrent = currentPage.StartsWith("/Cases/", StringComparison.OrdinalIgnoreCase);
+    var workOrdersAreCurrent = currentPage.StartsWith("/WorkOrders/", StringComparison.OrdinalIgnoreCase);
+}
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#17324d" />
+    <title>@ViewData["Title"] - Service CRM</title>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body>
+    <header class="app-header">
+        <div class="app-header-inner">
+            <a class="app-brand" asp-page="/Index">
+                <span class="app-logo">CRM</span>
+                <span class="app-name"><strong>Service CRM</strong><small>カスタマーサービス管理</small></span>
+            </a>
+            <nav class="app-nav" aria-label="メインメニュー">
+                <a class="@(dashboardIsCurrent ? "is-current" : null)" aria-current="@(dashboardIsCurrent ? "page" : null)" asp-page="/Index">ダッシュボード</a>
+                <a class="@(casesAreCurrent ? "is-current" : null)" aria-current="@(casesAreCurrent ? "page" : null)" asp-page="/Cases/Index">問い合わせ</a>
+                <a class="@(workOrdersAreCurrent ? "is-current" : null)" aria-current="@(workOrdersAreCurrent ? "page" : null)" asp-page="/WorkOrders/Index">作業指示</a>
+            </nav>
+            <div class="user-menu"><span class="user-initial">DO</span><span><strong>Demo Operator</strong><small>オペレーター</small></span></div>
+        </div>
+    </header>
+    <div class="context-bar">
+        <div class="context-inner">
+            <span>サービス業務管理</span>
+            <span class="connection"><i aria-hidden="true"></i>SQL Server 接続済み</span>
+        </div>
+    </div>
+    <main class="page-container">
+        @RenderBody()
+    </main>
+    <footer class="app-footer">
+        <span>SyncCoordinator Demo</span>
+        <span>ASP.NET Core / SQL Server</span>
+    </footer>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

@@ -122,7 +122,7 @@
   <data name="Common_KeepDestination"><value>送信先を維持</value></data><data name="Common_Mapping"><value>マッピング</value></data>
   <data name="Common_Merge"><value>マージ</value></data><data name="Common_NotConfigured"><value>未設定</value></data>
   <data name="Common_OneWay"><value>片方向</value></data><data name="Common_PagingSummary"><value>{0} / {1}ページ（全{2}件）</value></data>
-  <data name="Common_Paused"><value>一時停止中</value></data><data name="Common_Policy"><value>ポリシー</value></data>
+  <data name="Common_Paused"><value>一時停止中</value></data><data name="Common_MappingMaintenance"><value>マッピング変更中</value></data><data name="Common_Policy"><value>ポリシー</value></data>
   <data name="Common_RecordScope"><value>レコード単位</value></data><data name="Common_Resolved"><value>解決済み</value></data>
   <data name="Common_Result"><value>結果</value></data><data name="Common_Rule"><value>同期ルール</value></data>
   <data name="Common_Running"><value>稼働中</value></data><data name="Common_Save"><value>保存</value></data>
@@ -168,7 +168,6 @@
   <data name="RouteEdit_RuleStatus"><value>ルールの状態</value></data>
   <data name="RouteEdit_EnableRule"><value>ルールを有効化</value></data>
   <data name="RouteEdit_DisableRule"><value>ルールを無効化</value></data>
-  <data name="RouteEdit_EnableBlocked"><value>DB構成の検証が完了すると有効化できます。</value></data>
   <data name="RouteTabs_Aria"><value>同期ルール設定</value></data>
   <data name="RouteTabs_Settings"><value>基本設定</value></data>
   <data name="RouteTabs_Mappings"><value>テーブルマッピング</value></data>
@@ -195,13 +194,13 @@
   <data name="DatabaseSetup_Loading"><value>反映内容を作成しています…</value></data><data name="DatabaseSetup_Empty"><value>反映内容を表示できません。</value></data>
   <data name="DatabaseSetup_DbPreparation"><value>DB構成の検証</value></data><data name="DatabaseSetup_Verified"><value>検証済み</value></data><data name="DatabaseSetup_Unverified"><value>未検証</value></data>
   <data name="DatabaseSetup_Verifying"><value>検証中…</value></data><data name="DatabaseSetup_VerifyAll"><value>すべてのDB構成を検証</value></data>
+  <data name="DatabaseSetup_VerifyAgain"><value>DB構成を再検証</value></data>
   <data name="DatabaseSetup_VerifyHelp"><value>同期に必要なテーブルとトリガーが、すべての対象DBに反映されているか検証します。</value></data>
   <data name="DatabaseSetup_DirectDisabled"><value>この環境では管理画面から直接反映できません。SQLをダウンロードし、DBAが内容を確認したうえで実行してください。</value></data>
   <data name="DatabaseSetup_DownloadSql"><value>SQLをダウンロード</value></data><data name="DatabaseSetup_ViewSql"><value>実行SQLを確認</value></data>
   <data name="DatabaseSetup_ViewChanges"><value>反映内容を確認</value></data>
   <data name="DatabaseSetup_ConfirmDatabaseName"><value>確認のためDB名「{0}」を入力</value></data><data name="DatabaseSetup_ConfirmedSql"><value>SQLと対象DBを確認しました</value></data>
   <data name="DatabaseSetup_Applying"><value>反映中…</value></data><data name="DatabaseSetup_ApplyDatabase"><value>このDBへ反映</value></data>
-  <data name="DatabaseSetup_DbaNote"><value>DBAがダウンロードしたSQLを実行した場合は、対象となるすべてのDBへの反映後に「すべてのDBを確認」を押してください。</value></data>
   <data name="DatabaseSetup_TriggerNote"><value>ルールを削除または無効化しても、業務DBのTriggerは自動では削除されません。</value></data>
   <data name="DatabaseSetup_PlanFailed"><value>反映内容を作成できませんでした</value></data><data name="DatabaseSetup_ConfirmationRequired"><value>SQLと対象DBの確認が必要です。</value></data>
   <data name="DatabaseSetup_ApplyComplete"><value>DB反映完了</value></data><data name="DatabaseSetup_ApplyFailed"><value>DB反映に失敗しました</value></data>
@@ -230,13 +229,13 @@
   <data name="Mappings_Save"><value>マッピングとポリシーを保存</value></data><data name="Mappings_RuleDefault"><value>ルール既定</value></data>
   <data name="Mappings_WriteDestination"><value>送信先へ書く</value></data><data name="Mappings_WriteSource"><value>送信元へ戻す</value></data>
   <data name="Mappings_PhysicalDelete"><value>物理削除</value></data><data name="Mappings_LogicalDelete"><value>論理削除</value></data>
-  <data name="Mappings_SelectRuleError"><value>同期ルールを選択してください。</value></data><data name="Mappings_Saved"><value>テーブル／列マッピングとコンフリクトポリシーを保存しました。</value></data>
+  <data name="Mappings_SelectRuleError"><value>同期ルールを選択してください。</value></data><data name="Mappings_Saved"><value>マッピングを安全に保存し、同期を停止しました。必要に応じてDB反映・検証を行い、ルールを有効化してください。</value></data>
   <data name="Mappings_SystemMissing"><value>システム '{0}' が存在しません。</value></data><data name="Mappings_ConnectionMissing"><value>システム '{0}' のDB接続情報が未設定です。システム管理から設定してください。</value></data>
   <data name="ConflictDetail_SourceMessageId"><value>送信元MessageId</value></data>
   <data name="ConflictDetail_DeliveryMessageId"><value>配信MessageId</value></data>
   <data name="ConflictDetail_Incoming"><value>受信値</value></data>
   <data name="ConflictDetail_Current"><value>現在値</value></data>
-  <data name="DatabaseSetup_ResultApplyVerified"><value>{0}への反映を確認しました。すべてのDBを反映後に全体確認してください。</value></data>
+  <data name="DatabaseSetup_ResultApplyVerified"><value>{0}への反映を確認しました。すべてのDBへの反映後に、画面下部でDB構成を検証してください。</value></data>
   <data name="DatabaseSetup_ResultApplyUnverified"><value>{0}へSQLを実行しましたが、必要なオブジェクトを確認できませんでした。</value></data>
   <data name="DatabaseSetup_ResultObjectsMissing"><value>{0}に必要な同期用オブジェクトが揃っていません。</value></data>
   <data name="DatabaseSetup_ResultAllVerified"><value>すべての業務DBで同期用オブジェクトを検証しました。基本設定からルールを有効化できます。</value></data>
@@ -318,4 +317,55 @@
   <data name="Webhooks_ErrorUrl"><value>URLはユーザー情報とフラグメントを含まないHTTPまたはHTTPSの絶対URLを指定してください。</value></data>
   <data name="Webhooks_ErrorEvents"><value>対応するイベントを1件以上選択してください。</value></data>
   <data name="Webhooks_ErrorNotFound"><value>指定されたWebhook通知先は存在しません。</value></data>
+  <data name="Systems_ConnectionWarning"><value>接続できましたが確認が必要です</value></data>
+  <data name="Operations_SystemEvents"><value>システムイベント</value></data>
+  <data name="Operations_NoSystemEvents"><value>記録されたシステムイベントはありません。</value></data>
+  <data name="Operations_LastOccurred"><value>最終発生日時</value></data>
+  <data name="Operations_Severity"><value>重要度</value></data>
+  <data name="Operations_Occurrences"><value>発生回数</value></data>
+  <data name="Operations_CorrelationId"><value>相関ID</value></data>
+  <data name="Operations_Acknowledgement"><value>確認状況</value></data>
+  <data name="Operations_Acknowledge"><value>確認済みにする</value></data>
+  <data name="Operations_Acknowledged"><value>確認済み</value></data>
+  <data name="Operations_SeverityWarning"><value>警告</value></data>
+  <data name="Operations_SeverityError"><value>エラー</value></data>
+  <data name="Operations_SeverityCritical"><value>重大</value></data>
+  <data name="Operations_CategoryApplication"><value>管理画面</value></data>
+  <data name="Operations_CategoryDatabase"><value>データベース</value></data>
+  <data name="Operations_CategorySynchronization"><value>同期処理</value></data>
+  <data name="Operations_CategoryWebhook"><value>Webhook</value></data>
+  <data name="Operations_EventApplicationUiOperationFailed"><value>管理画面操作失敗</value></data>
+  <data name="Operations_EventDatabaseConnectionTestFailed"><value>DB接続テスト失敗</value></data>
+  <data name="Operations_EventDatabaseDeploymentFailed"><value>DB構成反映失敗</value></data>
+  <data name="Operations_EventDatabaseVerificationFailed"><value>DB構成検証失敗</value></data>
+  <data name="Operations_EventSynchronizationPollingFailed"><value>同期ポーリング失敗</value></data>
+  <data name="Operations_EventWebhookDeliveryFailed"><value>Webhook配信失敗</value></data>
+  <data name="Operations_SourceWeb"><value>Web管理画面</value></data>
+  <data name="Operations_SourceWorker"><value>Worker</value></data>
+  <data name="Operations_EventSynchronizationValueValidationHeld"><value>値変換・書込み検証で保留</value></data>
+  <data name="Mappings_ForwardTransform"><value>同期元の値 → 同期先の値変換</value></data>
+  <data name="Mappings_ReverseTransform"><value>同期先の値 → 同期元の値変換</value></data>
+  <data name="Transform_Configured"><value>設定あり</value></data>
+  <data name="Transform_NullFallback"><value>NULL時に変換する</value></data>
+  <data name="Transform_DefaultValue"><value>変換する値</value></data>
+  <data name="Transform_StringOverflow"><value>文字数超過</value></data>
+  <data name="Transform_NumericScale"><value>小数桁超過</value></data>
+  <data name="Transform_NormalizeUtc"><value>日時をUTCへ変換</value></data>
+  <data name="Transform_CodeMap"><value>コード変換</value></data>
+  <data name="Transform_PassThroughUnmapped"><value>コード変換にない値はそのまま書き込む</value></data>
+  <data name="Transform_TruncateOverflow"><value>文字数超過時に末尾をカット</value></data>
+  <data name="Transform_AddCodeMap"><value>コード変換を追加</value></data>
+  <data name="Transform_Before"><value>変換前</value></data>
+  <data name="Transform_After"><value>変換後</value></data>
+  <data name="Transform_Preview"><value>変換プレビュー</value></data>
+  <data name="Transform_PreviewExample"><value>例: New / 123 / null</value></data>
+  <data name="Transform_Test"><value>確認</value></data>
+  <data name="Transform_HoldSafe"><value>超過時は書き込まず保留</value></data>
+  <data name="Transform_Truncate"><value>末尾を切り詰める</value></data>
+  <data name="Transform_Round"><value>四捨五入</value></data>
+  <data name="Common_Close"><value>閉じる</value></data>
+  <data name="Operations_CopyDetails"><value>クリップボードにコピー</value></data>
+  <data name="Operations_DetailsCopied"><value>詳細をクリップボードにコピーしました。</value></data>
+  <data name="Operations_InboxErrorDetails"><value>Inboxエラー詳細</value></data>
+  <data name="Operations_NoDetails"><value>詳細はありません。</value></data>
 </root>

@@ -1,0 +1,8 @@
+@model string
+@if (!string.IsNullOrWhiteSpace(Model))
+{
+    <div class="alert alert-error" role="alert">
+        <strong>データを読み込めませんでした</strong>
+        <span>@Model</span>
+    </div>
+}

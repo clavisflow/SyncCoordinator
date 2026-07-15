@@ -4,6 +4,7 @@
 @inject IDatabaseDeploymentService DeploymentService
 @inject NavigationManager Navigation
 @inject NotificationService NotificationService
+@inject UiErrorReporter ErrorReporter
 @inject IStringLocalizer<SharedResource> L
 
 <PageTitle>@L["DatabaseSetup_PageTitle"]</PageTitle>
@@ -30,29 +31,17 @@ else if (plan is null)
 else if (plan is not null)
 {
     <div class="content-stack">
-        <RadzenCard>
-            <div class="deployment-summary">
-                <div><span>@L["DatabaseSetup_DbPreparation"]</span><strong>@(plan.State == DatabaseDeploymentState.Prepared ? L["DatabaseSetup_Verified"] : L["DatabaseSetup_Unverified"])</strong></div>
+        <div class="info-note deployment-warning deployment-review" role="note">
+            <div class="deployment-review-heading">
+                <RadzenIcon Icon="warning_amber" />
+                <strong>@L["DatabaseSetup_ReviewBeforeApply"]</strong>
             </div>
-            <div class="deployment-actions">
-                <RadzenButton Text="@(verifying ? L["DatabaseSetup_Verifying"] : L["DatabaseSetup_VerifyAll"])" Icon="fact_check" ButtonStyle="ButtonStyle.Light" Click="@VerifyAsync" Disabled="@verifying" />
-            </div>
-            <p class="deployment-action-help">@L["DatabaseSetup_VerifyHelp"]</p>
-        </RadzenCard>
-
-        @if (plan.Warnings.Count > 0 || !plan.DirectApplyAllowed)
-        {
-            <div class="info-note deployment-warning deployment-review" role="note">
-                <div class="deployment-review-heading">
-                    <RadzenIcon Icon="warning_amber" />
-                    <strong>@L["DatabaseSetup_ReviewBeforeApply"]</strong>
-                </div>
-                <ul class="deployment-review-list">
-                    @foreach (var warning in plan.Warnings) { <li>@Display(warning)</li> }
-                    @if (!plan.DirectApplyAllowed) { <li>@L["DatabaseSetup_DirectDisabled"]</li> }
-                </ul>
-            </div>
-        }
+            <ul class="deployment-review-list">
+                @foreach (var warning in plan.Warnings) { <li>@Display(warning)</li> }
+                @if (!plan.DirectApplyAllowed) { <li>@L["DatabaseSetup_DirectDisabled"]</li> }
+                <li>@L["DatabaseSetup_TriggerNote"]</li>
+            </ul>
+        </div>
 
         @foreach (var item in targets)
         {
@@ -89,10 +78,18 @@ else if (plan is not null)
             </RadzenCard>
         }
 
-        <div class="info-note deployment-warning">
-            <div>@L["DatabaseSetup_DbaNote"]</div>
-            <div>@L["DatabaseSetup_TriggerNote"]</div>
-        </div>
+        <RadzenCard class="deployment-final-verification">
+            <div class="deployment-verification-heading">
+                <h2>@L["DatabaseSetup_DbPreparation"]</h2>
+                <strong class="deployment-verification-status @(plan.State == DatabaseDeploymentState.Prepared ? "verified" : "unverified")" role="status">
+                    @(plan.State == DatabaseDeploymentState.Prepared ? L["DatabaseSetup_Verified"] : L["DatabaseSetup_Unverified"])
+                </strong>
+            </div>
+            <p class="deployment-action-help">@L["DatabaseSetup_VerifyHelp"]</p>
+            <div class="deployment-actions">
+                <RadzenButton Text="@(verifying ? L["DatabaseSetup_Verifying"] : plan.State == DatabaseDeploymentState.Prepared ? L["DatabaseSetup_VerifyAgain"] : L["DatabaseSetup_VerifyAll"])" Icon="fact_check" ButtonStyle="ButtonStyle.Primary" Click="@VerifyAsync" Disabled="@verifying" />
+            </div>
+        </RadzenCard>
     </div>
 }
 
@@ -121,6 +118,7 @@ else if (plan is not null)
         }
         catch (Exception exception)
         {
+            await ErrorReporter.ReportAsync(exception, "DatabaseSetup.LoadPlan");
             NotificationService.ShowError([exception.Message], L["DatabaseSetup_PlanFailed"]);
         }
         finally
@@ -144,7 +142,14 @@ else if (plan is not null)
                 item.Target.SystemCode,
                 item.DatabaseNameConfirmation,
                 CancellationToken.None);
-            NotificationService.ShowSuccess(Display(result.Message), L["DatabaseSetup_ApplyComplete"]);
+            if (result.Success)
+            {
+                NotificationService.ShowSuccess(Display(result.Message), L["DatabaseSetup_ApplyComplete"]);
+            }
+            else
+            {
+                NotificationService.ShowError([Display(result.Message)], L["DatabaseSetup_ApplyFailed"]);
+            }
             item.Confirmed = false;
             item.DatabaseNameConfirmation = string.Empty;
         }
@@ -154,6 +159,7 @@ else if (plan is not null)
         }
         catch (Exception exception)
         {
+            await ErrorReporter.ReportAsync(exception, "DatabaseSetup.Apply");
             NotificationService.ShowError([exception.Message], L["DatabaseSetup_ApplyFailed"]);
         }
         finally
@@ -168,11 +174,22 @@ else if (plan is not null)
         try
         {
             var result = await DeploymentService.VerifyAsync(RouteId, CancellationToken.None);
-            NotificationService.ShowSuccess(Display(result.Message), L["DatabaseSetup_VerifyComplete"]);
             plan = plan! with { State = result.State, Enabled = result.Enabled };
+            if (result.Success)
+            {
+                NotificationService.ShowSuccess(Display(result.Message), L["DatabaseSetup_VerifyComplete"]);
+            }
+            else
+            {
+                NotificationService.ShowError([Display(result.Message)], L["DatabaseSetup_VerifyFailed"]);
+            }
         }
         catch (Exception exception)
         {
+            if (exception is not ConfigurationValidationException)
+            {
+                await ErrorReporter.ReportAsync(exception, "DatabaseSetup.Verify");
+            }
             NotificationService.ShowError(
                 exception is ConfigurationValidationException validation ? validation.Errors : [exception.Message],
                 L["DatabaseSetup_VerifyFailed"]);

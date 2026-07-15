@@ -32,7 +32,10 @@ public sealed class EfCoordinatorReadService(CoordinatorDbContext dbContext) : I
             x.ConflictScope,
             x.DefaultConflictPolicy)
         {
-            OperationallyPaused = x.SourceSystem.PausedAtUtc != null || x.DestinationSystem.PausedAtUtc != null
+            OperationallyPaused = x.SourceSystem.PausedAtUtc != null ||
+                                  x.DestinationSystem.PausedAtUtc != null ||
+                                  x.MappingMaintenanceStartedAtUtc != null,
+            MappingMaintenance = x.MappingMaintenanceStartedAtUtc != null
         }).ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<ConflictListItem>> GetRecentConflictsAsync(

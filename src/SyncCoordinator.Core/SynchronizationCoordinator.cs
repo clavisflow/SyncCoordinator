@@ -8,7 +8,8 @@ public sealed class SynchronizationCoordinator(
     ICoordinatorStore store,
     ConflictResolver conflictResolver,
     TimeProvider timeProvider,
-    ILogger<SynchronizationCoordinator> logger)
+    ILogger<SynchronizationCoordinator> logger,
+    IOperationalEventRecorder? operationalEvents = null)
 {
     public async Task<int> RunOnceAsync(int batchSize, CancellationToken cancellationToken)
     {
@@ -82,7 +83,10 @@ public sealed class SynchronizationCoordinator(
 
                 foreach (var route in routes)
                 {
-                    await ProcessRouteAsync(message, route, cancellationToken);
+                    if (!await ProcessRouteAsync(message, route, cancellationToken))
+                    {
+                        return 0;
+                    }
                 }
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
@@ -101,7 +105,7 @@ public sealed class SynchronizationCoordinator(
         return changes.Count;
     }
 
-    private async Task ProcessRouteAsync(
+    private async Task<bool> ProcessRouteAsync(
         SyncMessage message,
         SyncRouteDefinition route,
         CancellationToken cancellationToken)
@@ -112,7 +116,7 @@ public sealed class SynchronizationCoordinator(
         if (string.Equals(message.SourceSystem, destinationSystem, StringComparison.OrdinalIgnoreCase))
         {
             CoordinatorLog.SelfRouteSkipped(logger, route.Name);
-            return;
+            return true;
         }
         var deletionBehavior = message.Operation == ChangeOperation.Delete
             ? route.ResolveDeletionBehavior(destinationSystem)
@@ -120,7 +124,7 @@ public sealed class SynchronizationCoordinator(
         if (message.Operation == ChangeOperation.Delete && deletionBehavior is null)
         {
             CoordinatorLog.DeleteSkipped(logger, route.Name);
-            return;
+            return true;
         }
 
         var inboxResult = await store.TryBeginInboxAsync(
@@ -130,7 +134,12 @@ public sealed class SynchronizationCoordinator(
             cancellationToken);
         if (inboxResult == InboxAcquireResult.AlreadyCompleted)
         {
-            return;
+            return true;
+        }
+        if (inboxResult == InboxAcquireResult.RoutePaused)
+        {
+            CoordinatorLog.PausedRouteDeferred(logger, route.Name, message.SourceSystem);
+            return false;
         }
         if (inboxResult == InboxAcquireResult.Busy)
         {
@@ -141,10 +150,14 @@ public sealed class SynchronizationCoordinator(
         try
         {
             var destination = connectors.GetRequired(destinationSystem);
-            var current = await destination.ReadCurrentAsync(
+            var incoming = NormalizeToCanonical(message.Payload, route, message.SourceSystem);
+            var destinationPayload = await destination.ReadCurrentAsync(
                 message.EntityType,
                 message.EntityId,
                 cancellationToken);
+            var current = destinationPayload is null
+                ? null
+                : NormalizeToCanonical(destinationPayload, route, destinationSystem);
             var snapshot = await store.GetSnapshotAsync(
                 route.Id,
                 destinationSystem,
@@ -152,11 +165,11 @@ public sealed class SynchronizationCoordinator(
                 message.EntityId,
                 cancellationToken);
             var resolution = message.Operation == ChangeOperation.Delete
-                ? ConflictResolver.ResolveDelete(snapshot, message.Payload, current, route)
+                ? ConflictResolver.ResolveDelete(snapshot, incoming, current, route)
                 : conflictResolver.Resolve(
                         message.EntityType,
                         snapshot,
-                        message.Payload,
+                        incoming,
                         current,
                         route);
             var deliveryMessageId = DeliveryMessageId.Create(
@@ -189,6 +202,9 @@ public sealed class SynchronizationCoordinator(
 
             if (resolution.ShouldApply)
             {
+                var payloadToWrite = message.Operation == ChangeOperation.Delete
+                    ? resolution.AdoptedPayload
+                    : TransformFromCanonical(resolution.AdoptedPayload, route, destinationSystem);
                 await destination.ApplyAsync(new ApplyRequest(
                     deliveryMessageId,
                     message.SourceMessageId,
@@ -198,7 +214,7 @@ public sealed class SynchronizationCoordinator(
                     message.EntityId,
                     message.Operation,
                     deletionBehavior,
-                    resolution.AdoptedPayload), cancellationToken);
+                    payloadToWrite), cancellationToken);
             }
 
             await store.SaveSnapshotAsync(new SyncSnapshot(
@@ -206,7 +222,7 @@ public sealed class SynchronizationCoordinator(
                 destinationSystem,
                 message.EntityType,
                 message.EntityId,
-                message.Operation == ChangeOperation.Delete ? null : message.Payload,
+                message.Operation == ChangeOperation.Delete ? null : incoming,
                 resolution.AdoptedExists ? resolution.AdoptedPayload : null), cancellationToken);
             if (route.Direction == SyncDirection.Bidirectional)
             {
@@ -216,7 +232,7 @@ public sealed class SynchronizationCoordinator(
                     message.EntityType,
                     message.EntityId,
                     resolution.AdoptedExists ? resolution.AdoptedPayload : null,
-                    message.Operation == ChangeOperation.Delete ? null : message.Payload), cancellationToken);
+                    message.Operation == ChangeOperation.Delete ? null : incoming), cancellationToken);
             }
             await store.CompleteInboxAsync(
                 message.SourceMessageId,
@@ -234,6 +250,39 @@ public sealed class SynchronizationCoordinator(
                         message.EntityType, message.EntityId, message.SourceMessageId, deliveryMessageId)
                     : null,
                 cancellationToken);
+            return true;
+        }
+        catch (ValueTransformationException exception)
+        {
+            var webhook = FailureWebhook(message, route, destinationSystem);
+            await store.HoldInboxAsync(
+                message.SourceMessageId,
+                route.Id,
+                destinationSystem,
+                exception.ToString(),
+                webhook,
+                cancellationToken);
+            CoordinatorLog.ValueValidationHeld(
+                logger,
+                route.Name,
+                message.EntityType,
+                message.EntityId,
+                exception.FieldName,
+                exception.TargetColumn,
+                exception.ReasonCode);
+            if (operationalEvents is not null)
+            {
+                await operationalEvents.RecordAsync(new OperationalEventInput(
+                    OperationalEventSeverity.Warning,
+                    OperationalEventCategories.Synchronization,
+                    OperationalEventCodes.SynchronizationValueValidationHeld,
+                    "worker",
+                    $"{route.Name}: {message.EntityType}/{message.EntityId}",
+                    exception.Message,
+                    message.SourceMessageId.ToString("D")), CancellationToken.None);
+            }
+            // データ修正または変換設定の変更が必要な非一時エラー。キュー全体を詰まらせない。
+            return true;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -242,17 +291,72 @@ public sealed class SynchronizationCoordinator(
                 route.Id,
                 destinationSystem,
                 exception.ToString(),
-                new WebhookEventNotification(
-                    WebhookEventId.Create(WebhookEventTypes.SyncFailed, message.SourceMessageId, route.Id, destinationSystem),
-                    WebhookEventTypes.SyncFailed,
-                    timeProvider.GetUtcNow(),
-                    route.Id, route.Name, message.SourceSystem, destinationSystem,
-                    message.EntityType, message.EntityId, message.SourceMessageId,
-                    DeliveryMessageId.Create(message.SourceMessageId, route.Id, destinationSystem)),
+                FailureWebhook(message, route, destinationSystem),
                 cancellationToken);
             throw;
         }
     }
+
+    private static EntityPayload NormalizeToCanonical(
+        EntityPayload payload,
+        SyncRouteDefinition route,
+        string physicalSystem) =>
+        TransformPayload(
+            payload,
+            route,
+            mapping => string.Equals(physicalSystem, route.DestinationSystem, StringComparison.OrdinalIgnoreCase)
+                ? (mapping.ReverseTransform, mapping.SourceContract, mapping.FieldName)
+                : (new ValueTransformInput(), mapping.SourceContract, mapping.FieldName));
+
+    private static EntityPayload TransformFromCanonical(
+        EntityPayload payload,
+        SyncRouteDefinition route,
+        string physicalSystem) =>
+        TransformPayload(
+            payload,
+            route,
+            mapping => string.Equals(physicalSystem, route.DestinationSystem, StringComparison.OrdinalIgnoreCase)
+                ? (mapping.ForwardTransform, mapping.DestinationContract, mapping.DestinationColumn)
+                : (new ValueTransformInput(), mapping.SourceContract, mapping.FieldName));
+
+    private static EntityPayload TransformPayload(
+        EntityPayload payload,
+        SyncRouteDefinition route,
+        Func<ColumnValueMappingDefinition, (ValueTransformInput Transform, ColumnValueContract Contract, string TargetColumn)> select)
+    {
+        var fields = payload.Fields.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value?.DeepClone(),
+            StringComparer.Ordinal);
+        foreach (var mapping in route.ValueMappings.Values)
+        {
+            if (!payload.Fields.TryGetValue(mapping.FieldName, out var value))
+            {
+                continue;
+            }
+
+            var target = select(mapping);
+            fields[mapping.FieldName] = ValueTransformEngine.Transform(
+                value,
+                target.Transform,
+                target.Contract,
+                mapping.FieldName,
+                target.TargetColumn);
+        }
+        return new EntityPayload(fields);
+    }
+
+    private WebhookEventNotification FailureWebhook(
+        SyncMessage message,
+        SyncRouteDefinition route,
+        string destinationSystem) =>
+        new(
+            WebhookEventId.Create(WebhookEventTypes.SyncFailed, message.SourceMessageId, route.Id, destinationSystem),
+            WebhookEventTypes.SyncFailed,
+            timeProvider.GetUtcNow(),
+            route.Id, route.Name, message.SourceSystem, destinationSystem,
+            message.EntityType, message.EntityId, message.SourceMessageId,
+            DeliveryMessageId.Create(message.SourceMessageId, route.Id, destinationSystem));
 
     private readonly record struct EntityKey(string EntityType, string EntityId);
 }
@@ -276,4 +380,14 @@ internal static partial class CoordinatorLog
 
     [LoggerMessage(LogLevel.Debug, "Delete change for route {routeName} was skipped because delete synchronization is disabled")]
     public static partial void DeleteSkipped(ILogger logger, string routeName);
+
+    [LoggerMessage(LogLevel.Warning, "Route {routeName} held {entityType}/{entityId}: value validation failed for {fieldName} -> {targetColumn} ({reasonCode})")]
+    public static partial void ValueValidationHeld(
+        ILogger logger,
+        string routeName,
+        string entityType,
+        string entityId,
+        string fieldName,
+        string targetColumn,
+        string reasonCode);
 }

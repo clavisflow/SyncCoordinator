@@ -102,6 +102,7 @@ builder.Services.AddRateLimiter(options =>
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddRadzenComponents();
+builder.Services.AddScoped<UiErrorReporter>();
 
 var app = builder.Build();
 app.UseRequestLocalization();

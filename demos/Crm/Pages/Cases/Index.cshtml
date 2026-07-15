@@ -1,0 +1,40 @@
+@page
+@model SyncCoordinator.Demo.Crm.Pages.Cases.IndexModel
+@{
+    ViewData["Title"] = "問い合わせ";
+}
+
+<header class="page-header">
+    <div><p class="page-kicker">問い合わせ管理</p><h1>問い合わせ一覧</h1><p>顧客ポータルから連携された修理・サポート依頼です。</p></div>
+</header>
+
+<partial name="_DataError" model="Model.DataError ?? string.Empty" />
+
+<section class="data-card">
+    <header class="data-card-header"><div><h2>問い合わせ</h2><p>更新日時の新しい順に表示</p></div><strong>@Model.Cases.Count 件</strong></header>
+    @if (Model.Cases.Count == 0 && Model.DataError is null)
+    {
+        <div class="empty-state"><strong>問い合わせはありません</strong><p>Customer Portalから同期されると、ここに表示されます。</p></div>
+    }
+    else if (Model.Cases.Count > 0)
+    {
+        <div class="table-scroll">
+            <table class="data-table">
+                <thead><tr><th>ケース番号</th><th>お客様</th><th>件名・製品</th><th>ステータス</th><th>更新日時</th><th class="action-column">操作</th></tr></thead>
+                <tbody>
+                @foreach (var item in Model.Cases)
+                {
+                    <tr>
+                        <td><strong>@(item.Payload.CaseNumber ?? "—")</strong><small>@item.OriginSystem</small></td>
+                        <td>@(item.Payload.CustomerName ?? "—")<small>@(item.Payload.Phone ?? item.Payload.Email ?? "連絡先なし")</small></td>
+                        <td>@(item.Payload.Subject ?? "件名なし")<small>@(item.Payload.ProductName ?? "製品未設定")</small></td>
+                        <td><span class="status status-@((item.Payload.Status ?? "unknown").ToLowerInvariant())">@StatusOptions.Label(item.Payload.Status)</span></td>
+                        <td><time>@item.UpdatedAtUtc.ToLocalTime().ToString("yyyy/MM/dd HH:mm")</time></td>
+                        <td class="action-column"><a class="record-link" asp-page="Edit" asp-route-id="@item.EntityId">開く</a></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>

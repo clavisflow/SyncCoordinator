@@ -207,7 +207,8 @@ public sealed class WebhookDeliveryService(
     CoordinatorDbContext dbContext,
     IHttpClientFactory httpClientFactory,
     ProtectedWebhookSecretService secretProtector,
-    TimeProvider timeProvider) : IWebhookDeliveryService
+    TimeProvider timeProvider,
+    IOperationalEventRecorder operationalEvents) : IWebhookDeliveryService
 {
     public const string HttpClientName = "SyncCoordinator.Webhooks";
     private static readonly TimeSpan[] RetryDelays =
@@ -284,6 +285,16 @@ public sealed class WebhookDeliveryService(
             delivery.NextAttemptAtUtc = DateTimeOffset.MaxValue;
         }
         await dbContext.SaveChangesAsync(cancellationToken);
+        if (delivery.State == "Failed")
+        {
+            await operationalEvents.RecordAsync(new OperationalEventInput(
+                OperationalEventSeverity.Error,
+                OperationalEventCategories.Webhook,
+                OperationalEventCodes.WebhookDeliveryFailed,
+                "worker",
+                delivery.Endpoint.Name,
+                delivery.LastError), CancellationToken.None);
+        }
     }
 
     private async Task CleanupAsync(DateTimeOffset now, CancellationToken cancellationToken)

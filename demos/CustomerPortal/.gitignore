@@ -1,0 +1,8 @@
+/.env
+/vendor/
+/bootstrap/cache/*.php
+/storage/*.key
+/storage/logs/*.log
+/.phpunit.cache
+/.idea/
+/.vscode/

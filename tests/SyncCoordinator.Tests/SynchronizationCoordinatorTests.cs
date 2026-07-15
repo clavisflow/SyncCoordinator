@@ -162,6 +162,81 @@ public sealed class SynchronizationCoordinatorTests
     }
 
     [Fact]
+    public async Task RunOnceHoldsNonRetryableValueOverflowAndAdvancesCheckpoint()
+    {
+        var baseline = Payload("short");
+        var latest = Payload("too long");
+        var messageId = Guid.NewGuid();
+        var source = new FakeConnector
+        {
+            SystemCode = "A",
+            MessageId = messageId,
+            Message = new SyncMessage(messageId, "A", "A", "Sample", "1", ChangeOperation.Upsert, DateTimeOffset.UtcNow, latest)
+        };
+        var destination = new FakeConnector { SystemCode = "C", EmitChange = false, Current = baseline };
+        var route = Route() with
+        {
+            ValueMappings = new Dictionary<string, ColumnValueMappingDefinition>(StringComparer.Ordinal)
+            {
+                ["Value"] = new(
+                    "Value", "target_value",
+                    new ColumnValueContract("varchar", true, 100, null, null),
+                    new ColumnValueContract("varchar", true, 5, null, null),
+                    new ValueTransformInput(), new ValueTransformInput())
+            }
+        };
+        var store = new RecordingStore(route, Snapshot(route, baseline));
+        var coordinator = Coordinator(source, destination, store);
+
+        var processed = await coordinator.RunOnceAsync(10, CancellationToken.None);
+
+        Assert.Equal(1, processed);
+        Assert.Equal(42, store.Checkpoint);
+        Assert.Equal(1, store.HeldDeliveries);
+        Assert.Equal(0, store.FailedDeliveries);
+        Assert.Equal(0, destination.ApplyCalls);
+        Assert.Equal(WebhookEventTypes.SyncFailed, store.FailedWebhook?.EventType);
+    }
+
+    [Fact]
+    public async Task BidirectionalDeliveryNormalizesDestinationCodesBackToCanonicalValues()
+    {
+        var messageId = Guid.NewGuid();
+        var incoming = Payload("done");
+        var baseline = Payload("Received");
+        var source = new FakeConnector
+        {
+            SystemCode = "C",
+            MessageId = messageId,
+            Message = new SyncMessage(messageId, "C", "A", "Sample", "1", ChangeOperation.Upsert, DateTimeOffset.UtcNow, incoming)
+        };
+        var destination = new FakeConnector { SystemCode = "A", EmitChange = false, Current = baseline };
+        var reverse = new ValueTransformInput
+        {
+            RejectUnmappedValues = true,
+            ValueMap = [new ValueMapEntryInput { SourceValue = "done", TargetValue = "Completed" }]
+        };
+        var route = (Route() with { Direction = SyncDirection.Bidirectional }) with
+        {
+            ValueMappings = new Dictionary<string, ColumnValueMappingDefinition>(StringComparer.Ordinal)
+            {
+                ["Value"] = new(
+                    "Value", "job_status",
+                    new ColumnValueContract("nvarchar", false, 40, null, null),
+                    new ColumnValueContract("varchar", false, 20, null, null),
+                    new ValueTransformInput(), reverse)
+            }
+        };
+        var snapshot = new SyncSnapshot(route.Id, "A", "Sample", "1", baseline, baseline);
+        var store = new RecordingStore(route, snapshot);
+        var coordinator = Coordinator(source, destination, store);
+
+        await coordinator.RunOnceAsync(10, CancellationToken.None);
+
+        Assert.Equal("Completed", destination.AppliedRequest!.Payload.Fields["Value"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task RunOnceDoesNotAdvanceCheckpointWhileInboxLeaseIsBusy()
     {
         var payload = Payload("latest");
@@ -185,6 +260,33 @@ public sealed class SynchronizationCoordinatorTests
         Assert.Equal(0, processed);
         Assert.Equal(0, store.Checkpoint);
         Assert.Equal(0, destination.ApplyCalls);
+    }
+
+    [Fact]
+    public async Task RunOnceDoesNotAdvanceCheckpointWhenMappingMaintenanceStartsBeforeInboxClaim()
+    {
+        var payload = Payload("latest");
+        var messageId = Guid.NewGuid();
+        var source = new FakeConnector
+        {
+            SystemCode = "A",
+            MessageId = messageId,
+            Message = new SyncMessage(messageId, "A", "A", "Sample", "1", ChangeOperation.Upsert, DateTimeOffset.UtcNow, payload)
+        };
+        var destination = new FakeConnector { SystemCode = "C", EmitChange = false, Current = payload };
+        var route = Route();
+        var store = new RecordingStore(route, Snapshot(route, payload))
+        {
+            AcquireResult = InboxAcquireResult.RoutePaused
+        };
+        var coordinator = Coordinator(source, destination, store);
+
+        var processed = await coordinator.RunOnceAsync(10, CancellationToken.None);
+
+        Assert.Equal(0, processed);
+        Assert.Equal(0, store.Checkpoint);
+        Assert.Equal(0, destination.ApplyCalls);
+        Assert.Equal(0, store.FailedDeliveries);
     }
 
     [Fact]
@@ -324,6 +426,7 @@ public sealed class SynchronizationCoordinatorTests
     {
         public long Checkpoint { get; private set; }
         public int FailedDeliveries { get; private set; }
+        public int HeldDeliveries { get; private set; }
         public InboxAcquireResult AcquireResult { get; init; } = InboxAcquireResult.Acquired;
         public bool SystemPaused { get; init; }
         public bool RoutePaused { get; set; }
@@ -368,6 +471,13 @@ public sealed class SynchronizationCoordinatorTests
             return Task.CompletedTask;
         }
 
+        public Task HoldInboxAsync(Guid sourceMessageId, Guid routeId, string destinationSystem, string errorDetails, WebhookEventNotification webhookEvent, CancellationToken cancellationToken)
+        {
+            HeldDeliveries++;
+            FailedWebhook = webhookEvent;
+            return Task.CompletedTask;
+        }
+
         public Task<SyncSnapshot?> GetSnapshotAsync(Guid routeId, string destinationSystem, string entityType, string entityId, CancellationToken cancellationToken) =>
             Task.FromResult(snapshot);
 
@@ -396,6 +506,7 @@ public sealed class SynchronizationCoordinatorTests
         public Task<InboxAcquireResult> TryBeginInboxAsync(Guid sourceMessageId, Guid routeId, string destinationSystem, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task CompleteInboxAsync(Guid sourceMessageId, Guid routeId, string destinationSystem, InboxState state, WebhookEventNotification? webhookEvent, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task FailInboxAsync(Guid sourceMessageId, Guid routeId, string destinationSystem, string errorDetails, WebhookEventNotification webhookEvent, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task HoldInboxAsync(Guid sourceMessageId, Guid routeId, string destinationSystem, string errorDetails, WebhookEventNotification webhookEvent, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<SyncSnapshot?> GetSnapshotAsync(Guid routeId, string destinationSystem, string entityType, string entityId, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task SaveSnapshotAsync(SyncSnapshot snapshot, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task SaveConflictAsync(ConflictHistory conflict, WebhookEventNotification webhookEvent, CancellationToken cancellationToken) => throw new NotSupportedException();
@@ -411,6 +522,7 @@ public sealed class SynchronizationCoordinatorTests
         public Task<InboxAcquireResult> TryBeginInboxAsync(Guid sourceMessageId, Guid routeId, string destinationSystem, CancellationToken cancellationToken) => Task.FromResult(InboxAcquireResult.Acquired);
         public Task CompleteInboxAsync(Guid sourceMessageId, Guid routeId, string destinationSystem, InboxState state, WebhookEventNotification? webhookEvent, CancellationToken cancellationToken) => Task.CompletedTask;
         public Task FailInboxAsync(Guid sourceMessageId, Guid routeId, string destinationSystem, string errorDetails, WebhookEventNotification webhookEvent, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task HoldInboxAsync(Guid sourceMessageId, Guid routeId, string destinationSystem, string errorDetails, WebhookEventNotification webhookEvent, CancellationToken cancellationToken) => Task.CompletedTask;
         public Task<SyncSnapshot?> GetSnapshotAsync(Guid routeId, string destinationSystem, string entityType, string entityId, CancellationToken cancellationToken) =>
             Task.FromResult<SyncSnapshot?>(new SyncSnapshot(
                 routeId,

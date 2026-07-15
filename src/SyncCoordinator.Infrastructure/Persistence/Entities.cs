@@ -37,6 +37,7 @@ public sealed class SyncRouteEntity
     public ConflictPolicy DefaultConflictPolicy { get; set; }
     public DatabaseDeploymentState DeploymentState { get; set; }
     public bool Enabled { get; set; }
+    public DateTimeOffset? MappingMaintenanceStartedAtUtc { get; set; }
     public SystemDefinitionEntity SourceSystem { get; set; } = null!;
     public SystemDefinitionEntity DestinationSystem { get; set; } = null!;
     public RouteTableMappingEntity? TableMapping { get; set; }
@@ -69,6 +70,18 @@ public sealed class RouteColumnMappingEntity
     public required string DestinationColumn { get; set; }
     public bool IsKey { get; set; }
     public ConflictPolicy? ConflictPolicy { get; set; }
+    public string SourceDataType { get; set; } = string.Empty;
+    public bool SourceIsNullable { get; set; } = true;
+    public int? SourceMaxLength { get; set; }
+    public int? SourceNumericPrecision { get; set; }
+    public int? SourceNumericScale { get; set; }
+    public string DestinationDataType { get; set; } = string.Empty;
+    public bool DestinationIsNullable { get; set; } = true;
+    public int? DestinationMaxLength { get; set; }
+    public int? DestinationNumericPrecision { get; set; }
+    public int? DestinationNumericScale { get; set; }
+    public string? ForwardTransformJson { get; set; }
+    public string? ReverseTransformJson { get; set; }
     public RouteTableMappingEntity TableMapping { get; set; } = null!;
 }
 
@@ -79,6 +92,11 @@ public sealed class RouteFixedValueMappingEntity
     public MappingWriteDirection Direction { get; set; }
     public required string TargetColumn { get; set; }
     public required string Value { get; set; }
+    public string TargetDataType { get; set; } = string.Empty;
+    public bool TargetIsNullable { get; set; } = true;
+    public int? TargetMaxLength { get; set; }
+    public int? TargetNumericPrecision { get; set; }
+    public int? TargetNumericScale { get; set; }
     public RouteTableMappingEntity TableMapping { get; set; } = null!;
 }
 
@@ -141,6 +159,23 @@ public sealed class ConfigurationAuditEntity
     public required string AfterJson { get; set; }
     public required string ChangedBy { get; set; }
     public DateTimeOffset ChangedAtUtc { get; set; }
+}
+
+public sealed class OperationalEventEntity
+{
+    public Guid Id { get; set; }
+    public OperationalEventSeverity Severity { get; set; }
+    public required string Category { get; set; }
+    public required string Code { get; set; }
+    public required string Source { get; set; }
+    public string? Target { get; set; }
+    public string? Details { get; set; }
+    public string? CorrelationId { get; set; }
+    public DateTimeOffset FirstOccurredAtUtc { get; set; }
+    public DateTimeOffset LastOccurredAtUtc { get; set; }
+    public int OccurrenceCount { get; set; }
+    public DateTimeOffset? AcknowledgedAtUtc { get; set; }
+    public string? AcknowledgedBy { get; set; }
 }
 
 public sealed class WebhookEndpointEntity

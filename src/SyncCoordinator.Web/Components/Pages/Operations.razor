@@ -2,6 +2,10 @@
 @attribute [Authorize]
 @using SyncCoordinator.Core
 @inject ICoordinatorAdminService AdminService
+@inject IOperationalEventAdminService OperationalEventService
+@inject NotificationService NotificationService
+@inject DialogService DialogService
+@inject UiErrorReporter ErrorReporter
 @inject IStringLocalizer<SharedResource> L
 
 <PageTitle>@L["Operations_PageTitle"]</PageTitle>
@@ -16,6 +20,52 @@
 </section>
 
 <div class="content-stack">
+    <RadzenCard>
+        <div class="panel-title"><h2>@L["Operations_SystemEvents"]</h2><span>@L["Common_Count", operationalEvents.Count]</span></div>
+        <RadzenDataGrid Data="@operationalEvents" TItem="OperationalEventListItem" AllowSorting="true" AllowFiltering="true" FilterMode="FilterMode.Simple" AllowPaging="true" PageSize="25" ShowPagingSummary="true" PagingSummaryFormat="@L["Common_PagingSummary"]" EmptyText="@L["Operations_NoSystemEvents"]" Density="Density.Compact">
+            <Columns>
+                <RadzenDataGridColumn TItem="OperationalEventListItem" Property="LastOccurredAtUtc" Title="@L["Operations_LastOccurred"]">
+                    <Template Context="entry">@FormatDate(entry.LastOccurredAtUtc)</Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="OperationalEventListItem" Property="Severity" Title="@L["Operations_Severity"]" Width="110px">
+                    <Template Context="entry"><span class="status-pill @SeverityClass(entry.Severity)">@SeverityText(entry.Severity)</span></Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="OperationalEventListItem" Property="Code" Title="@L["Common_Type"]">
+                    <Template Context="entry">@EventCodeText(entry.Code)<br /><small>@CategoryText(entry.Category)</small></Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="OperationalEventListItem" Property="Target" Title="@L["Common_Target"]">
+                    <Template Context="entry">@(entry.Target ?? "—")<br /><small>@SourceText(entry.Source)</small></Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="OperationalEventListItem" Property="OccurrenceCount" Title="@L["Operations_Occurrences"]" Width="80px" />
+                <RadzenDataGridColumn TItem="OperationalEventListItem" Property="Details" Title="@L["Common_Details"]" Sortable="false" Filterable="false" Width="100px">
+                    <Template Context="entry">
+                        @if (!string.IsNullOrWhiteSpace(entry.Details) || !string.IsNullOrWhiteSpace(entry.CorrelationId))
+                        {
+                            <RadzenButton Text="@L["Common_Show"]" Icon="article" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => ShowOperationalEventDetailsAsync(entry))" />
+                        }
+                        else
+                        {
+                            <span>—</span>
+                        }
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="OperationalEventListItem" Property="AcknowledgedAtUtc" Title="@L["Operations_Acknowledgement"]" Sortable="true" Filterable="false" Width="200px">
+                    <Template Context="entry">
+                        @if (entry.AcknowledgedAtUtc is null)
+                        {
+                            <RadzenButton Text="@L["Operations_Acknowledge"]" Icon="done" ButtonStyle="ButtonStyle.Light" class="acknowledgement-button" Click="@(() => AcknowledgeAsync(entry.Id))" Disabled="@(acknowledgingEventId is not null)" />
+                        }
+                        else
+                        {
+                            <span class="status-pill enabled">@L["Operations_Acknowledged"]</span><br />
+                            <small>@FormatDate(entry.AcknowledgedAtUtc)</small>
+                        }
+                    </Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    </RadzenCard>
+
     <RadzenCard>
         <div class="panel-title"><h2>Queue Checkpoint</h2><span>@L["Common_SystemCount", checkpoints.Count]</span></div>
         <RadzenDataGrid Data="@checkpoints" TItem="CheckpointListItem" AllowSorting="true" EmptyText="@L["Operations_NoCheckpoints"]" Density="Density.Compact">
@@ -48,11 +98,11 @@
                     <Template Context="item"><span class="status-pill @StateClass(item.State)">@StateText(item.State)</span></Template>
                 </RadzenDataGridColumn>
                 <RadzenDataGridColumn TItem="InboxListItem" Property="AttemptCount" Title="@L["Operations_Attempts"]" Width="80px" />
-                <RadzenDataGridColumn TItem="InboxListItem" Property="LastError" Title="@L["Common_Error"]" Sortable="false">
+                <RadzenDataGridColumn TItem="InboxListItem" Property="LastError" Title="@L["Common_Error"]" Sortable="false" Filterable="false" Width="100px">
                     <Template Context="item">
                         @if (!string.IsNullOrWhiteSpace(item.LastError))
                         {
-                            <details><summary>@L["Common_Show"]</summary><pre class="error-text">@item.LastError</pre></details>
+                            <RadzenButton Text="@L["Common_Show"]" Icon="article" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => ShowInboxErrorAsync(item))" />
                         }
                         else
                         {
@@ -84,7 +134,9 @@
     private IReadOnlyList<CheckpointListItem> checkpoints = [];
     private IReadOnlyList<InboxListItem> inbox = [];
     private IReadOnlyList<ConfigurationAuditListItem> audits = [];
+    private IReadOnlyList<OperationalEventListItem> operationalEvents = [];
     private bool loading;
+    private Guid? acknowledgingEventId;
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
@@ -96,6 +148,7 @@
             checkpoints = await AdminService.GetCheckpointsAsync(CancellationToken.None);
             inbox = await AdminService.GetRecentInboxAsync(200, CancellationToken.None);
             audits = await AdminService.GetRecentConfigurationAuditsAsync(100, CancellationToken.None);
+            operationalEvents = await OperationalEventService.GetRecentAsync(200, CancellationToken.None);
         }
         finally
         {
@@ -144,6 +197,124 @@
         "administrator" => L["Operations_Administrator"],
         "localhost-recovery" => L["Operations_LocalRecovery"],
         _ => value
+    };
+
+    private async Task AcknowledgeAsync(Guid id)
+    {
+        acknowledgingEventId = id;
+        try
+        {
+            await OperationalEventService.AcknowledgeAsync(id, "management-ui", CancellationToken.None);
+            operationalEvents = await OperationalEventService.GetRecentAsync(200, CancellationToken.None);
+            NotificationService.ShowSuccess(L["Operations_Acknowledged"], L["Common_Completed"]);
+        }
+        catch (Exception exception)
+        {
+            await ErrorReporter.ReportAsync(exception, "Operations.AcknowledgeEvent");
+            NotificationService.ShowError([exception.Message], L["Common_OperationFailed"]);
+        }
+        finally
+        {
+            acknowledgingEventId = null;
+        }
+    }
+
+    private Task ShowOperationalEventDetailsAsync(OperationalEventListItem entry)
+    {
+        var metadata = new Dictionary<string, string>
+        {
+            [L["Operations_LastOccurred"]] = FormatDate(entry.LastOccurredAtUtc),
+            [L["Operations_Severity"]] = SeverityText(entry.Severity),
+            [L["Common_Type"]] = EventCodeText(entry.Code),
+            [L["Common_Target"]] = entry.Target ?? "—",
+            [L["Operations_Occurrences"]] = entry.OccurrenceCount.ToString()
+        };
+
+        return ShowDetailsAsync(
+            EventCodeText(entry.Code),
+            entry.Details ?? L["Operations_NoDetails"],
+            entry.CorrelationId,
+            metadata);
+    }
+
+    private Task ShowInboxErrorAsync(InboxListItem item)
+    {
+        var metadata = new Dictionary<string, string>
+        {
+            ["MessageId"] = item.SourceMessageId.ToString(),
+            [L["Operations_RouteDestination"]] = $"{item.RouteName} → {item.DestinationSystemName}",
+            [L["Common_Status"]] = StateText(item.State),
+            [L["Operations_Attempts"]] = item.AttemptCount.ToString(),
+            [L["Common_UpdatedAt"]] = FormatDate(item.UpdatedAtUtc)
+        };
+
+        return ShowDetailsAsync(L["Operations_InboxErrorDetails"], item.LastError ?? string.Empty, null, metadata);
+    }
+
+    private async Task ShowDetailsAsync(
+        string title,
+        string details,
+        string? correlationId,
+        IReadOnlyDictionary<string, string> metadata)
+    {
+        await DialogService.OpenAsync<LogDetailsDialog>(
+            title,
+            new Dictionary<string, object?>
+            {
+                [nameof(LogDetailsDialog.Details)] = details,
+                [nameof(LogDetailsDialog.CorrelationId)] = correlationId ?? string.Empty,
+                [nameof(LogDetailsDialog.Metadata)] = metadata
+            },
+            new DialogOptions
+            {
+                Width = "min(900px, 92vw)",
+                CloseDialogOnOverlayClick = true,
+                Draggable = true,
+                Resizable = true
+            });
+    }
+
+    private string SeverityText(OperationalEventSeverity severity) => severity switch
+    {
+        OperationalEventSeverity.Warning => L["Operations_SeverityWarning"],
+        OperationalEventSeverity.Error => L["Operations_SeverityError"],
+        OperationalEventSeverity.Critical => L["Operations_SeverityCritical"],
+        _ => severity.ToString()
+    };
+
+    private static string SeverityClass(OperationalEventSeverity severity) => severity switch
+    {
+        OperationalEventSeverity.Warning => "held",
+        OperationalEventSeverity.Error or OperationalEventSeverity.Critical => "failed",
+        _ => "disabled"
+    };
+
+    private string CategoryText(string category) => category switch
+    {
+        OperationalEventCategories.Application => L["Operations_CategoryApplication"],
+        OperationalEventCategories.Database => L["Operations_CategoryDatabase"],
+        OperationalEventCategories.Synchronization => L["Operations_CategorySynchronization"],
+        OperationalEventCategories.Webhook => L["Operations_CategoryWebhook"],
+        _ => category
+    };
+
+    private string EventCodeText(string code) => code switch
+    {
+        OperationalEventCodes.ApplicationUiOperationFailed => L["Operations_EventApplicationUiOperationFailed"],
+        OperationalEventCodes.DatabaseConnectionTestFailed => L["Operations_EventDatabaseConnectionTestFailed"],
+        OperationalEventCodes.DatabaseDeploymentFailed => L["Operations_EventDatabaseDeploymentFailed"],
+        OperationalEventCodes.DatabaseVerificationFailed => L["Operations_EventDatabaseVerificationFailed"],
+        OperationalEventCodes.SynchronizationPollingFailed => L["Operations_EventSynchronizationPollingFailed"],
+        OperationalEventCodes.SynchronizationValueValidationHeld => L["Operations_EventSynchronizationValueValidationHeld"],
+        OperationalEventCodes.WebhookDeliveryFailed => L["Operations_EventWebhookDeliveryFailed"],
+        _ => code
+    };
+
+    private string SourceText(string source) => source switch
+    {
+        "web" => L["Operations_SourceWeb"],
+        "worker" => L["Operations_SourceWorker"],
+        _ => source
     };
 
     private static string StateClass(InboxState state) => state switch

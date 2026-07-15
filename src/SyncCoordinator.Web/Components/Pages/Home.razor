@@ -124,16 +124,20 @@ else
     private void OpenRoutes() => Navigation.NavigateTo("/routes");
     private void OpenConflicts() => Navigation.NavigateTo("/conflicts");
 
-    private string StatusText(RouteListItem route) => route.Enabled
-        ? route.OperationallyPaused ? L["Home_Paused"] : L["Home_Enabled"]
-        : route.DeploymentState == DatabaseDeploymentState.Prepared ? L["Home_Prepared"] : L["Home_Draft"];
+    private string StatusText(RouteListItem route) => route.MappingMaintenance
+        ? L["Common_MappingMaintenance"]
+        : route.Enabled
+            ? route.OperationallyPaused ? L["Home_Paused"] : L["Home_Enabled"]
+            : route.DeploymentState == DatabaseDeploymentState.Prepared ? L["Home_Prepared"] : L["Home_Draft"];
 
-    private static string StatusClass(RouteListItem route) => route.Enabled
-        ? route.OperationallyPaused ? "held" : "enabled"
-        : route.DeploymentState == DatabaseDeploymentState.Prepared ? "prepared" : "disabled";
+    private static string StatusClass(RouteListItem route) => route.MappingMaintenance
+        ? "held"
+        : route.Enabled
+            ? route.OperationallyPaused ? "held" : "enabled"
+            : route.DeploymentState == DatabaseDeploymentState.Prepared ? "prepared" : "disabled";
 
     private static string WireClass(RouteListItem route) =>
-        $"{(route.Direction == SyncDirection.Bidirectional ? "bidirectional" : "one-way")} {(route.OperationallyPaused ? "disabled" : StatusClass(route))}";
+        $"{(route.Direction == SyncDirection.Bidirectional ? "bidirectional" : "one-way")} {StatusClass(route)}";
 
     private string ConflictScopeText(ConflictScope scope) =>
         scope == ConflictScope.Field ? L["Conflict_FieldScope"] : L["Conflict_RecordScope"];

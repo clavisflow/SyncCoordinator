@@ -1,0 +1,108 @@
+@using System.Text.Json.Nodes
+@using SyncCoordinator.Core
+@inject IStringLocalizer<SharedResource> L
+
+<details class="value-transform-editor">
+    <summary>
+        <span>@Title</span>
+        <small>@Contract.DisplayType</small>
+        @if (!Transform.IsIdentity) { <span class="status-pill warning">@L["Transform_Configured"]</span> }
+    </summary>
+    <div class="value-transform-grid">
+        <label class="check-row"><RadzenCheckBox TValue="bool" @bind-Value="Transform.UseNullFallback" /><span>@L["Transform_NullFallback"]</span></label>
+        <RadzenTextBox @bind-Value="Transform.NullFallback" Disabled="@(!Transform.UseNullFallback)" Placeholder="@L["Transform_DefaultValue"]" MaxLength="4000" class="form-control compact-control" />
+        @if (Contract.MaxLength is not null)
+        {
+            <label class="check-row">
+                <RadzenCheckBox TValue="bool" Value="@(Transform.StringOverflow == StringOverflowBehavior.Truncate)" Change="@OnTruncateChanged" Disabled="@(!HasStringOverflowRisk)" />
+                <span>@L["Transform_TruncateOverflow"]</span>
+            </label>
+            <span></span>
+        }
+        @if (Contract.NumericScale is not null)
+        {
+            <label>@L["Transform_NumericScale"]</label>
+            <RadzenDropDown TValue="NumericScaleBehavior" @bind-Value="Transform.NumericScale" Data="@numericScaleOptions" TextProperty="Text" ValueProperty="Value" class="form-control compact-control" />
+        }
+        <label class="check-row"><RadzenCheckBox TValue="bool" @bind-Value="Transform.NormalizeDateTimeToUtc" /><span>@L["Transform_NormalizeUtc"]</span></label><span></span>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(Warning))
+    {
+        <div class="message message-warning transform-warning">@Warning</div>
+    }
+    <div class="value-map-header">
+        <strong>@L["Transform_CodeMap"]</strong>
+        <RadzenButton Text="@L["Transform_AddCodeMap"]" Icon="add" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" Click="@AddMap" />
+    </div>
+    @foreach (var entry in Transform.ValueMap)
+    {
+        <div class="value-map-row" @key="entry">
+            <RadzenTextBox @bind-Value="entry.SourceValue" Placeholder="@L["Transform_Before"]" MaxLength="4000" class="form-control compact-control" />
+            <RadzenIcon Icon="arrow_forward" />
+            <RadzenTextBox @bind-Value="entry.TargetValue" Placeholder="@L["Transform_After"]" MaxLength="4000" class="form-control compact-control" />
+            <RadzenButton Icon="delete" title="@L["Common_Delete"]" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => RemoveMap(entry))" />
+        </div>
+    }
+    <label class="check-row pass-through-unmapped">
+        <RadzenCheckBox TValue="bool" Value="@(!Transform.RejectUnmappedValues)" Change="@OnPassThroughChanged" Disabled="@(Transform.ValueMap.Count == 0)" />
+        <span>@L["Transform_PassThroughUnmapped"]</span>
+    </label>
+    <div class="transform-preview">
+        <strong>@L["Transform_Preview"]</strong>
+        <div class="transform-preview-row">
+            <RadzenTextBox @bind-Value="previewInput" Placeholder="@L["Transform_PreviewExample"]" class="form-control compact-control" />
+            <RadzenButton Text="@L["Transform_Test"]" Icon="play_arrow" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" Click="@Preview" />
+            <output class="@(previewError ? "preview-error" : null)">@previewResult</output>
+        </div>
+    </div>
+</details>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public ValueTransformInput Transform { get; set; } = new();
+    [Parameter, EditorRequired] public ColumnValueContract SourceContract { get; set; } = ColumnValueContract.Unknown;
+    [Parameter, EditorRequired] public ColumnValueContract Contract { get; set; } = ColumnValueContract.Unknown;
+    [Parameter, EditorRequired] public string FieldName { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string TargetColumn { get; set; } = string.Empty;
+
+    private string previewInput = string.Empty;
+    private string previewResult = string.Empty;
+    private bool previewError;
+    private Option<NumericScaleBehavior>[] numericScaleOptions => [new(NumericScaleBehavior.Reject, L["Transform_HoldSafe"]), new(NumericScaleBehavior.Round, L["Transform_Round"] )];
+
+    private bool HasStringOverflowRisk => Contract.MaxLength is { } targetLength &&
+        (SourceContract.MaxLength is not { } sourceLength || sourceLength > targetLength);
+    private string? Warning => ValueTransformEngine.CompatibilityWarning(SourceContract, Contract, Transform);
+
+    private void AddMap() => Transform.ValueMap.Add(new ValueMapEntryInput());
+    private void RemoveMap(ValueMapEntryInput entry)
+    {
+        Transform.ValueMap.Remove(entry);
+        if (Transform.ValueMap.Count == 0)
+        {
+            Transform.RejectUnmappedValues = false;
+        }
+    }
+    private void OnTruncateChanged(bool enabled) => Transform.StringOverflow = enabled
+        ? StringOverflowBehavior.Truncate
+        : StringOverflowBehavior.Reject;
+    private void OnPassThroughChanged(bool enabled) => Transform.RejectUnmappedValues = !enabled;
+    private void Preview()
+    {
+        try
+        {
+            JsonNode? input;
+            try { input = JsonNode.Parse(previewInput); }
+            catch { input = JsonValue.Create(previewInput); }
+            var result = ValueTransformEngine.Transform(input, Transform, Contract, FieldName, TargetColumn);
+            previewResult = result?.ToJsonString() ?? "null";
+            previewError = false;
+        }
+        catch (ValueTransformationException exception)
+        {
+            previewResult = exception.Message;
+            previewError = true;
+        }
+    }
+    private sealed record Option<T>(T Value, string Text);
+}

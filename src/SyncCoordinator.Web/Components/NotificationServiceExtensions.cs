@@ -34,4 +34,18 @@ internal static class NotificationServiceExtensions
             ShowProgress = true
         });
     }
+
+    public static void ShowWarning(
+        this NotificationService service,
+        string detail,
+        string summary = "確認が必要です") =>
+        service.Notify(new NotificationMessage
+        {
+            Severity = NotificationSeverity.Warning,
+            Summary = summary,
+            Detail = detail,
+            Duration = 10000,
+            CloseOnClick = true,
+            ShowProgress = true
+        });
 }

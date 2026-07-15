@@ -143,6 +143,69 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
                     b.ToTable("InboxMessage", (string)null);
                 });
 
+            modelBuilder.Entity("SyncCoordinator.Infrastructure.Persistence.OperationalEventEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("AcknowledgedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("AcknowledgedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<DateTimeOffset>("FirstOccurredAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("LastOccurredAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("OccurrenceCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("Target")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AcknowledgedAtUtc", "LastOccurredAtUtc");
+
+                    b.HasIndex("Category", "Code", "Source");
+
+                    b.ToTable("OperationalEvent", (string)null);
+                });
+
             modelBuilder.Entity("SyncCoordinator.Infrastructure.Persistence.QueueCheckpointEntity", b =>
                 {
                     b.Property<string>("SystemCode")
@@ -175,13 +238,53 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
 
+                    b.Property<string>("DestinationDataType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<bool>("DestinationIsNullable")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("DestinationMaxLength")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DestinationNumericPrecision")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DestinationNumericScale")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ForwardTransformJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<bool>("IsKey")
                         .HasColumnType("bit");
+
+                    b.Property<string>("ReverseTransformJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("SourceColumn")
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("SourceDataType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<bool>("SourceIsNullable")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("SourceMaxLength")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("SourceNumericPrecision")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("SourceNumericScale")
+                        .HasColumnType("int");
 
                     b.Property<Guid>("TableMappingId")
                         .HasColumnType("uniqueidentifier");
@@ -215,6 +318,23 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("TargetDataType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<bool>("TargetIsNullable")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("TargetMaxLength")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("TargetNumericPrecision")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("TargetNumericScale")
+                        .HasColumnType("int");
 
                     b.Property<string>("Value")
                         .IsRequired()
@@ -384,6 +504,9 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
 
+                    b.Property<DateTimeOffset?>("MappingMaintenanceStartedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -393,6 +516,8 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("MappingMaintenanceStartedAtUtc", "EntityType");
 
                     b.HasIndex("SourceSystemId", "EntityType", "Enabled");
 

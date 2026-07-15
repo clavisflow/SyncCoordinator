@@ -1,4 +1,5 @@
 using Dapper;
+using System.Globalization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -147,16 +148,17 @@ internal static class ManagedConnectionStringFactory
 
 public sealed class DatabaseMetadataService(
     CoordinatorDbContext dbContext,
-    ProtectedConnectionStringService protector) : IDatabaseMetadataService
+    ProtectedConnectionStringService protector,
+    IOperationalEventRecorder operationalEvents) : IDatabaseMetadataService
 {
     public async Task<ConnectionTestResult> TestConnectionAsync(
         string provider,
         DatabaseConnectionInput input,
         CancellationToken cancellationToken)
     {
+        SystemDefinitionEntity? system = null;
         try
         {
-            SystemDefinitionEntity? system = null;
             if (input.SystemId != Guid.Empty)
             {
                 system = await dbContext.Systems
@@ -180,8 +182,16 @@ public sealed class DatabaseMetadataService(
             await using (connection)
             {
                 await connection.OpenAsync(cancellationToken);
+                var unicodeResult = await TestUnicodeRoundTripAsync(
+                    connection,
+                    provider,
+                    cancellationToken);
+                if (unicodeResult is not null)
+                {
+                    return unicodeResult;
+                }
             }
-            return new ConnectionTestResult(true, "接続に成功しました。");
+            return new ConnectionTestResult(true, "接続とUnicode文字列の往復確認に成功しました。");
         }
         catch (ConfigurationValidationException exception)
         {
@@ -189,6 +199,13 @@ public sealed class DatabaseMetadataService(
         }
         catch (Exception exception) when (exception is SqlException or MySqlException or NpgsqlException or InvalidOperationException)
         {
+            await operationalEvents.RecordAsync(new OperationalEventInput(
+                OperationalEventSeverity.Error,
+                OperationalEventCategories.Database,
+                OperationalEventCodes.DatabaseConnectionTestFailed,
+                "web",
+                system?.DisplayName ?? provider,
+                $"{exception.GetType().Name}: {exception.Message}"), CancellationToken.None);
             return new ConnectionTestResult(false, $"接続に失敗しました: {exception.Message}");
         }
     }
@@ -235,7 +252,10 @@ public sealed class DatabaseMetadataService(
                   SELECT c.COLUMN_NAME AS Name, c.DATA_TYPE AS DataType,
                          CASE WHEN c.IS_NULLABLE = 'YES' THEN 1 ELSE 0 END AS IsNullable,
                          c.ORDINAL_POSITION AS Ordinal,
-                         CASE WHEN k.COLUMN_NAME IS NULL THEN 0 ELSE 1 END AS IsPrimaryKey
+                         CASE WHEN k.COLUMN_NAME IS NULL THEN 0 ELSE 1 END AS IsPrimaryKey,
+                         c.CHARACTER_MAXIMUM_LENGTH AS MaxLength,
+                         c.NUMERIC_PRECISION AS NumericPrecision,
+                         c.NUMERIC_SCALE AS NumericScale
                   FROM INFORMATION_SCHEMA.COLUMNS c
                   LEFT JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE k
                     ON k.TABLE_SCHEMA = c.TABLE_SCHEMA AND k.TABLE_NAME = c.TABLE_NAME
@@ -247,7 +267,10 @@ public sealed class DatabaseMetadataService(
                   SELECT c.column_name AS "Name", c.data_type AS "DataType",
                          (c.is_nullable = 'YES') AS "IsNullable",
                          c.ordinal_position AS "Ordinal",
-                         (k.column_name IS NOT NULL) AS "IsPrimaryKey"
+                         (k.column_name IS NOT NULL) AS "IsPrimaryKey",
+                         c.character_maximum_length AS "MaxLength",
+                         c.numeric_precision AS "NumericPrecision",
+                         c.numeric_scale AS "NumericScale"
                   FROM information_schema.columns c
                   LEFT JOIN (
                       SELECT ku.table_schema, ku.table_name, ku.column_name
@@ -265,7 +288,10 @@ public sealed class DatabaseMetadataService(
                   SELECT c.COLUMN_NAME AS Name, c.DATA_TYPE AS DataType,
                          CAST(CASE WHEN c.IS_NULLABLE = 'YES' THEN 1 ELSE 0 END AS bit) AS IsNullable,
                          c.ORDINAL_POSITION AS Ordinal,
-                         CAST(CASE WHEN k.COLUMN_NAME IS NULL THEN 0 ELSE 1 END AS bit) AS IsPrimaryKey
+                         CAST(CASE WHEN k.COLUMN_NAME IS NULL THEN 0 ELSE 1 END AS bit) AS IsPrimaryKey,
+                         c.CHARACTER_MAXIMUM_LENGTH AS MaxLength,
+                         c.NUMERIC_PRECISION AS NumericPrecision,
+                         c.NUMERIC_SCALE AS NumericScale
                   FROM INFORMATION_SCHEMA.COLUMNS c
                   LEFT JOIN (
                       SELECT ku.TABLE_SCHEMA, ku.TABLE_NAME, ku.COLUMN_NAME
@@ -279,10 +305,48 @@ public sealed class DatabaseMetadataService(
                   """,
                 _ => throw new InvalidOperationException($"未対応のProviderです: {system.Provider}")
             };
-            var rows = await connection.QueryAsync<DatabaseColumnInfo>(
+            var rows = await connection.QueryAsync(
                 new CommandDefinition(sql, new { schema, table }, cancellationToken: cancellationToken));
-            return rows.AsList();
+            return rows.Select(row => MaterializeColumnInfo(
+                (string)row.Name,
+                (string)row.DataType,
+                (object)row.IsNullable,
+                (object)row.Ordinal,
+                (object)row.IsPrimaryKey,
+                (object?)row.MaxLength,
+                (object?)row.NumericPrecision,
+                (object?)row.NumericScale)).ToList();
         }
+    }
+
+    internal static DatabaseColumnInfo MaterializeColumnInfo(
+        string name,
+        string dataType,
+        object isNullable,
+        object ordinal,
+        object isPrimaryKey,
+        object? maxLength = null,
+        object? numericPrecision = null,
+        object? numericScale = null) =>
+        new(
+            name,
+            dataType,
+            Convert.ToBoolean(isNullable, CultureInfo.InvariantCulture),
+            Convert.ToInt32(ordinal, CultureInfo.InvariantCulture),
+            Convert.ToBoolean(isPrimaryKey, CultureInfo.InvariantCulture),
+            NullableInt(maxLength, treatNegativeAsNull: true),
+            NullableInt(numericPrecision),
+            NullableInt(numericScale));
+
+    private static int? NullableInt(object? value, bool treatNegativeAsNull = false)
+    {
+        if (value is null or DBNull) return null;
+        var converted = Convert.ToInt64(value, CultureInfo.InvariantCulture);
+        if (converted > int.MaxValue || converted < int.MinValue || treatNegativeAsNull && converted < 0)
+        {
+            return null;
+        }
+        return (int)converted;
     }
 
     private async Task<(SystemDefinitionEntity System, System.Data.Common.DbConnection Connection)> GetSystemAndConnectionAsync(
@@ -308,5 +372,41 @@ public sealed class DatabaseMetadataService(
                 : string.Equals(provider, "PostgreSql", StringComparison.OrdinalIgnoreCase)
                     ? new NpgsqlConnection(connectionString)
                     : throw new InvalidOperationException($"未対応のProviderです: {provider}");
+    }
+
+    private static async Task<ConnectionTestResult?> TestUnicodeRoundTripAsync(
+        System.Data.Common.DbConnection connection,
+        string provider,
+        CancellationToken cancellationToken)
+    {
+        const string probe = "日本語😀";
+        var sql = provider.ToUpperInvariant() switch
+        {
+            "SQLSERVER" => "SELECT CAST(@value AS nvarchar(max))",
+            "MYSQL" => "SELECT CAST(@value AS CHAR CHARACTER SET utf8mb4)",
+            "POSTGRESQL" => "SELECT CAST(@value AS text)",
+            _ => throw new InvalidOperationException($"未対応のProviderです: {provider}")
+        };
+
+        try
+        {
+            var returned = await connection.QuerySingleAsync<string>(new CommandDefinition(
+                sql,
+                new { value = probe },
+                cancellationToken: cancellationToken));
+            return string.Equals(returned, probe, StringComparison.Ordinal)
+                ? null
+                : new ConnectionTestResult(
+                    true,
+                    "接続には成功しましたが、日本語と絵文字の往復結果が一致しません。DBまたは実行クライアントの文字コードを確認してください。",
+                    HasWarning: true);
+        }
+        catch (Exception exception) when (exception is SqlException or MySqlException or NpgsqlException or InvalidOperationException)
+        {
+            return new ConnectionTestResult(
+                true,
+                $"接続には成功しましたが、Unicode文字列の往復確認に失敗しました: {exception.Message}",
+                HasWarning: true);
+        }
     }
 }

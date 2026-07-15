@@ -1,0 +1,44 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "ダッシュボード";
+}
+
+<header class="page-header">
+    <div>
+        <p class="page-kicker">ダッシュボード</p>
+        <h1>サービス業務の状況</h1>
+        <p>問い合わせ受付から訪問作業までの現在の件数を確認できます。</p>
+    </div>
+    <dl class="business-date"><dt>業務日</dt><dd>@DateTime.Today.ToString("yyyy年M月d日")</dd></dl>
+</header>
+
+<partial name="_DataError" model="Model.DataError ?? string.Empty" />
+
+<section class="summary-strip" aria-label="業務件数">
+    <a asp-page="/Cases/Index"><span>問い合わせ総数</span><strong>@Model.Summary.SupportCaseCount</strong><small>件</small></a>
+    <a asp-page="/Cases/Index"><span>新着・未受付</span><strong>@Model.Summary.NewSupportCaseCount</strong><small>件</small></a>
+    <a asp-page="/WorkOrders/Index"><span>進行中の作業</span><strong>@Model.Summary.OpenWorkOrderCount</strong><small>件</small></a>
+    <a asp-page="/WorkOrders/Index"><span>完了した作業</span><strong>@Model.Summary.CompletedWorkOrderCount</strong><small>件</small></a>
+</section>
+
+<div class="dashboard-grid">
+    <section class="module">
+        <header class="module-header"><div><h2>担当業務</h2><p>確認する業務を選択してください。</p></div></header>
+        <div class="task-list">
+            <a asp-page="/Cases/Index"><span class="task-code">01</span><span><strong>問い合わせを確認する</strong><small>顧客ポータルから届いた依頼の受付・回答</small></span><b aria-hidden="true">›</b></a>
+            <a asp-page="/WorkOrders/Index"><span class="task-code">02</span><span><strong>作業指示を確認する</strong><small>訪問修理の手配・担当者・完了報告</small></span><b aria-hidden="true">›</b></a>
+        </div>
+    </section>
+    <section class="module">
+        <header class="module-header"><div><h2>システム連携</h2><p>このCRMを中心にデータを同期します。</p></div></header>
+        <table class="integration-table">
+            <thead><tr><th>システム</th><th>データベース</th><th>接続</th></tr></thead>
+            <tbody>
+                <tr><td>Customer Portal</td><td>MySQL</td><td><span class="connection-label">連携中</span></td></tr>
+                <tr class="current-system"><td>Service CRM</td><td>SQL Server</td><td><span class="connection-label">稼働中</span></td></tr>
+                <tr><td>Field Service</td><td>PostgreSQL</td><td><span class="connection-label">連携中</span></td></tr>
+            </tbody>
+        </table>
+    </section>
+</div>

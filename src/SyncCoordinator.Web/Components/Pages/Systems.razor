@@ -4,6 +4,7 @@
 @inject ICoordinatorAdminService AdminService
 @inject IDatabaseMetadataService MetadataService
 @inject NotificationService NotificationService
+@inject UiErrorReporter ErrorReporter
 @inject IStringLocalizer<SharedResource> L
 
 <PageTitle>@L["Systems_PageTitle"]</PageTitle>
@@ -173,6 +174,7 @@
         }
         catch (Exception exception)
         {
+            await ErrorReporter.ReportAsync(exception, "Systems.SetPaused");
             NotificationService.ShowError([exception.Message], L["Common_OperationFailed"]);
         }
         finally
@@ -199,6 +201,7 @@
         }
         catch (Exception exception)
         {
+            await ErrorReporter.ReportAsync(exception, "Systems.Save");
             NotificationService.ShowError([exception.Message], L["Common_OperationFailed"]);
         }
         finally
@@ -213,7 +216,11 @@
         try
         {
             var result = await MetadataService.TestConnectionAsync(editModel.Provider, connectionModel, CancellationToken.None);
-            if (result.Success)
+            if (result.HasWarning)
+            {
+                NotificationService.ShowWarning(result.Message, L["Systems_ConnectionWarning"]);
+            }
+            else if (result.Success)
             {
                 NotificationService.ShowSuccess(result.Message, L["Systems_ConnectionSucceeded"]);
             }
@@ -224,6 +231,7 @@
         }
         catch (Exception exception)
         {
+            await ErrorReporter.ReportAsync(exception, "Systems.TestConnection");
             NotificationService.ShowError([exception.Message], L["Systems_ConnectionFailed"]);
         }
         finally

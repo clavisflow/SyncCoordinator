@@ -1,0 +1,7 @@
+.git
+.gitignore
+.env
+vendor
+storage/logs/*
+bootstrap/cache/*.php
+README.md

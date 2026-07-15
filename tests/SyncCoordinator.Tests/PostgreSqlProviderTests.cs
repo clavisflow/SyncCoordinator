@@ -45,4 +45,20 @@ public sealed class PostgreSqlProviderTests
 
         ConfigurationValidator.ValidateSystem(input);
     }
+
+    [Fact]
+    public void DemoPostgreSqlConnectionDisablesSessionEncryption()
+    {
+        const string connectionString =
+            "Host=postgres;Port=5432;Database=DemoFieldService;Username=postgres;Password=secret;" +
+            "SSL Mode=VerifyFull;GSS Encryption Mode=Require";
+
+        var prepared = CoordinatorDatabaseInitializer.PrepareDemoConnectionString(
+            "PostgreSql",
+            connectionString);
+        var builder = new NpgsqlConnectionStringBuilder(prepared);
+
+        Assert.Equal(SslMode.Disable, builder.SslMode);
+        Assert.Equal(GssEncryptionMode.Disable, builder.GssEncryptionMode);
+    }
 }

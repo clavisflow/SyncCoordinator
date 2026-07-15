@@ -1,0 +1,40 @@
+@page
+@model SyncCoordinator.Demo.Crm.Pages.WorkOrders.IndexModel
+@{
+    ViewData["Title"] = "作業指示";
+}
+
+<header class="page-header">
+    <div><p class="page-kicker">作業指示管理</p><h1>作業指示一覧</h1><p>訪問修理の手配と、現場から連携された作業状況を確認します。</p></div>
+</header>
+
+<partial name="_DataError" model="Model.DataError ?? string.Empty" />
+
+<section class="data-card">
+    <header class="data-card-header"><div><h2>作業指示</h2><p>訪問予定と担当者の状況</p></div><strong>@Model.WorkOrders.Count 件</strong></header>
+    @if (Model.WorkOrders.Count == 0 && Model.DataError is null)
+    {
+        <div class="empty-state"><strong>作業指示はありません</strong><p>問い合わせ詳細から作業指示を作成できます。</p><a class="button button-primary" asp-page="/Cases/Index">問い合わせを確認</a></div>
+    }
+    else if (Model.WorkOrders.Count > 0)
+    {
+        <div class="table-scroll">
+            <table class="data-table">
+                <thead><tr><th>作業指示番号</th><th>お客様・製品</th><th>訪問予定</th><th>担当者</th><th>ステータス</th><th class="action-column">操作</th></tr></thead>
+                <tbody>
+                @foreach (var item in Model.WorkOrders)
+                {
+                    <tr>
+                        <td><strong>@(item.Payload.WorkOrderNumber ?? "—")</strong><small>Case: @(item.Payload.CaseNumber ?? "—")</small></td>
+                        <td>@(item.Payload.CustomerName ?? "—")<small>@(item.Payload.ProductName ?? "製品未設定")</small></td>
+                        <td>@(item.Payload.ScheduledAt ?? "未定")</td>
+                        <td>@(item.Payload.TechnicianName ?? "未割当")</td>
+                        <td><span class="status status-@((item.Payload.Status ?? "unknown").ToLowerInvariant())">@StatusOptions.Label(item.Payload.Status)</span></td>
+                        <td class="action-column"><a class="record-link" asp-page="Edit" asp-route-id="@item.EntityId">開く</a></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>

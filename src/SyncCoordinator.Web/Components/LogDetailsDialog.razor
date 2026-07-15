@@ -1,0 +1,76 @@
+@inject IJSRuntime JS
+@inject DialogService DialogService
+@inject NotificationService NotificationService
+@inject IStringLocalizer<SharedResource> L
+
+<div class="log-details-dialog">
+    @if (Metadata.Count > 0 || !string.IsNullOrWhiteSpace(CorrelationId))
+    {
+        <dl class="log-details-metadata">
+            @foreach (var item in Metadata)
+            {
+                <div>
+                    <dt>@item.Key</dt>
+                    <dd>@item.Value</dd>
+                </div>
+            }
+            @if (!string.IsNullOrWhiteSpace(CorrelationId))
+            {
+                <div>
+                    <dt>@L["Operations_CorrelationId"]</dt>
+                    <dd><code>@CorrelationId</code></dd>
+                </div>
+            }
+        </dl>
+    }
+
+    <pre class="log-details-content">@Details</pre>
+
+    <div class="log-details-actions">
+        <RadzenButton Text="@L["Operations_CopyDetails"]" Icon="content_copy" ButtonStyle="ButtonStyle.Light" Click="@CopyAsync" />
+        <RadzenButton Text="@L["Common_Close"]" Click="@Close" />
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Details { get; set; } = string.Empty;
+
+    [Parameter]
+    public string? CorrelationId { get; set; }
+
+    [Parameter]
+    public IReadOnlyDictionary<string, string> Metadata { get; set; } = new Dictionary<string, string>();
+
+    private async Task CopyAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", BuildClipboardText());
+            NotificationService.ShowSuccess(L["Operations_DetailsCopied"], L["Common_Completed"]);
+        }
+        catch (Exception exception)
+        {
+            NotificationService.ShowError([exception.Message], L["Common_OperationFailed"]);
+        }
+    }
+
+    private string BuildClipboardText()
+    {
+        var lines = Metadata.Select(item => $"{item.Key}: {item.Value}").ToList();
+        if (!string.IsNullOrWhiteSpace(CorrelationId))
+        {
+            lines.Add($"{L["Operations_CorrelationId"]}: {CorrelationId}");
+        }
+
+        if (lines.Count > 0)
+        {
+            lines.Add(string.Empty);
+        }
+
+        lines.Add(Details);
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private void Close() => DialogService.Close();
+}

@@ -36,6 +36,8 @@ public static class DependencyInjection
         services.AddScoped<IDatabaseDeploymentService, DatabaseDeploymentService>();
         services.AddScoped<IWebhookAdminService, WebhookAdminService>();
         services.AddScoped<IWebhookDeliveryService, WebhookDeliveryService>();
+        services.AddSingleton<IOperationalEventRecorder, OperationalEventRecorder>();
+        services.AddScoped<IOperationalEventAdminService, OperationalEventAdminService>();
         services.AddScoped<WebhookOutboxWriter>();
         services.AddScoped<ProtectedWebhookSecretService>();
         services.AddHttpClient(WebhookDeliveryService.HttpClientName, client =>
@@ -57,25 +59,20 @@ public static class DependencyInjection
                 continue;
             }
 
-            services.AddSingleton<ISyncConnector>(provider =>
+            services.AddScoped<ISyncConnector>(provider =>
             {
                 var connectionString = configuration.GetConnectionString(system.ConnectionStringName) ??
                     throw new InvalidOperationException(
                         $"Connection string '{system.ConnectionStringName}' is not configured.");
-                InfrastructureLog.SampleConnectorEnabled(
-                    provider.GetRequiredService<ILogger<SampleJsonRelationalConnector>>(),
-                    system.SystemCode);
-                return new SampleJsonRelationalConnector(system, connectionString);
+                return new MappedRelationalConnector(
+                    system,
+                    connectionString,
+                    provider.GetRequiredService<RelationalMappingProvider>());
             });
         }
 
-        services.AddSingleton<IConnectorCatalog, ConnectorCatalog>();
+        services.AddScoped<RelationalMappingProvider>();
+        services.AddScoped<IConnectorCatalog, ConnectorCatalog>();
         return services;
     }
-}
-
-internal static partial class InfrastructureLog
-{
-    [LoggerMessage(LogLevel.Warning, "System {systemCode} uses the sample JSON connector; replace it before production")]
-    public static partial void SampleConnectorEnabled(ILogger logger, string systemCode);
 }

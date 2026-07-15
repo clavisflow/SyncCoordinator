@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Text.Json.Nodes;
 using SyncCoordinator.Contracts;
 
@@ -49,7 +50,8 @@ public enum InboxAcquireResult
 {
     Acquired = 0,
     AlreadyCompleted = 1,
-    Busy = 2
+    Busy = 2,
+    RoutePaused = 3
 }
 
 public sealed record SyncRouteDefinition(
@@ -67,6 +69,9 @@ public sealed record SyncRouteDefinition(
     IReadOnlyDictionary<string, ConflictPolicy> FieldPolicies)
 {
     public bool OperationallyPaused { get; init; }
+    public bool MappingMaintenance { get; init; }
+    public IReadOnlyDictionary<string, ColumnValueMappingDefinition> ValueMappings { get; init; } =
+        new Dictionary<string, ColumnValueMappingDefinition>(StringComparer.Ordinal);
 
     public string? ResolveDestination(string currentSystem, string originSystem)
     {
@@ -161,6 +166,7 @@ public sealed record RouteListItem(
     ConflictPolicy ConflictPolicy)
 {
     public bool OperationallyPaused { get; init; }
+    public bool MappingMaintenance { get; init; }
 }
 
 public sealed record DatabaseDeploymentPlan(
@@ -293,7 +299,7 @@ public sealed class DatabaseConnectionInput
     public bool HasStoredPassword { get; set; }
 }
 
-public sealed record ConnectionTestResult(bool Success, string Message);
+public sealed record ConnectionTestResult(bool Success, string Message, bool HasWarning = false);
 
 public sealed record DatabaseTableInfo(string Schema, string Name)
 {
@@ -305,10 +311,83 @@ public sealed record DatabaseColumnInfo(
     string DataType,
     bool IsNullable,
     int Ordinal,
-    bool IsPrimaryKey)
+    bool IsPrimaryKey,
+    int? MaxLength = null,
+    int? NumericPrecision = null,
+    int? NumericScale = null)
 {
-    public string DisplayName => $"{Name} ({DataType}{(IsNullable ? ", NULL" : string.Empty)})";
+    public ColumnValueContract Contract =>
+        new(DataType, IsNullable, MaxLength, NumericPrecision, NumericScale);
+
+    public string DisplayName => $"{Name} ({Contract.DisplayType}{(IsNullable ? ", NULL" : string.Empty)})";
 }
+
+public sealed record ColumnValueContract(
+    string DataType,
+    bool IsNullable,
+    int? MaxLength = null,
+    int? NumericPrecision = null,
+    int? NumericScale = null)
+{
+    public static ColumnValueContract Unknown { get; } = new(string.Empty, true);
+
+    [JsonIgnore]
+    public bool IsKnown => !string.IsNullOrWhiteSpace(DataType);
+
+    [JsonIgnore]
+    public string DisplayType => MaxLength is { } maxLength
+        ? $"{DataType}({maxLength})"
+        : NumericPrecision is { } precision
+            ? NumericScale is { } scale
+                ? $"{DataType}({precision},{scale})"
+                : $"{DataType}({precision})"
+            : DataType;
+}
+
+public enum StringOverflowBehavior
+{
+    Reject = 0,
+    Truncate = 1
+}
+
+public enum NumericScaleBehavior
+{
+    Reject = 0,
+    Round = 1
+}
+
+public sealed class ValueMapEntryInput
+{
+    public string SourceValue { get; set; } = string.Empty;
+    public string TargetValue { get; set; } = string.Empty;
+}
+
+public sealed class ValueTransformInput
+{
+    public bool UseNullFallback { get; set; }
+    public string NullFallback { get; set; } = string.Empty;
+    public StringOverflowBehavior StringOverflow { get; set; } = StringOverflowBehavior.Reject;
+    public NumericScaleBehavior NumericScale { get; set; } = NumericScaleBehavior.Reject;
+    public bool NormalizeDateTimeToUtc { get; set; }
+    public bool RejectUnmappedValues { get; set; }
+    public List<ValueMapEntryInput> ValueMap { get; set; } = [];
+
+    [JsonIgnore]
+    public bool IsIdentity => !UseNullFallback &&
+                              StringOverflow == StringOverflowBehavior.Reject &&
+                              NumericScale == NumericScaleBehavior.Reject &&
+                              !NormalizeDateTimeToUtc &&
+                              !RejectUnmappedValues &&
+                              ValueMap.Count == 0;
+}
+
+public sealed record ColumnValueMappingDefinition(
+    string FieldName,
+    string DestinationColumn,
+    ColumnValueContract SourceContract,
+    ColumnValueContract DestinationContract,
+    ValueTransformInput ForwardTransform,
+    ValueTransformInput ReverseTransform);
 
 public sealed record TableMappingListItem(
     Guid RouteId,
@@ -345,6 +424,10 @@ public sealed class ColumnMappingInput
     public string DestinationColumn { get; set; } = string.Empty;
     public bool IsKey { get; set; }
     public ConflictPolicy? ConflictPolicy { get; set; }
+    public ColumnValueContract SourceContract { get; set; } = ColumnValueContract.Unknown;
+    public ColumnValueContract DestinationContract { get; set; } = ColumnValueContract.Unknown;
+    public ValueTransformInput ForwardTransform { get; set; } = new();
+    public ValueTransformInput ReverseTransform { get; set; } = new();
 }
 
 public sealed class FixedValueMappingInput
@@ -352,6 +435,7 @@ public sealed class FixedValueMappingInput
     public MappingWriteDirection Direction { get; set; }
     public string TargetColumn { get; set; } = string.Empty;
     public string Value { get; set; } = string.Empty;
+    public ColumnValueContract TargetContract { get; set; } = ColumnValueContract.Unknown;
 }
 
 public sealed class SystemConfigurationInput
@@ -416,6 +500,56 @@ public sealed record ConfigurationAuditListItem(
     string Action,
     string ChangedBy,
     DateTimeOffset ChangedAtUtc);
+
+public enum OperationalEventSeverity
+{
+    Warning = 0,
+    Error = 1,
+    Critical = 2
+}
+
+public static class OperationalEventCategories
+{
+    public const string Application = "Application";
+    public const string Database = "Database";
+    public const string Synchronization = "Synchronization";
+    public const string Webhook = "Webhook";
+}
+
+public static class OperationalEventCodes
+{
+    public const string ApplicationUiOperationFailed = "application.ui-operation-failed";
+    public const string DatabaseConnectionTestFailed = "database.connection-test-failed";
+    public const string DatabaseDeploymentFailed = "database.deployment-failed";
+    public const string DatabaseVerificationFailed = "database.verification-failed";
+    public const string SynchronizationPollingFailed = "synchronization.polling-failed";
+    public const string SynchronizationValueValidationHeld = "synchronization.value-validation-held";
+    public const string WebhookDeliveryFailed = "webhook.delivery-failed";
+}
+
+public sealed record OperationalEventInput(
+    OperationalEventSeverity Severity,
+    string Category,
+    string Code,
+    string Source,
+    string? Target,
+    string? Details,
+    string? CorrelationId = null);
+
+public sealed record OperationalEventListItem(
+    Guid Id,
+    OperationalEventSeverity Severity,
+    string Category,
+    string Code,
+    string Source,
+    string? Target,
+    string? Details,
+    string? CorrelationId,
+    DateTimeOffset FirstOccurredAtUtc,
+    DateTimeOffset LastOccurredAtUtc,
+    int OccurrenceCount,
+    DateTimeOffset? AcknowledgedAtUtc,
+    string? AcknowledgedBy);
 
 public sealed class ConfigurationValidationException(IReadOnlyList<string> errors)
     : Exception(string.Join(Environment.NewLine, errors))

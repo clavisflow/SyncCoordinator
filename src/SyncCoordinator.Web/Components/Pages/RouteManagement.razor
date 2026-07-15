@@ -30,7 +30,7 @@
             <RadzenDataGridColumn TItem="RouteListItem" Title="@L["Routes_ConflictSettings"]" Sortable="false" Filterable="false">
                 <Template Context="route">@ConflictScopeText(route.ConflictScope) / @ConflictPolicyText(route.ConflictPolicy)</Template>
             </RadzenDataGridColumn>
-            <RadzenDataGridColumn TItem="RouteListItem" Property="Enabled" Title="@L["Common_Status"]" Width="110px">
+            <RadzenDataGridColumn TItem="RouteListItem" Property="Enabled" Title="@L["Common_Status"]" Width="180px">
                 <Template Context="route"><span class="status-pill @StatusClass(route)">@StatusText(route)</span></Template>
             </RadzenDataGridColumn>
             <RadzenDataGridColumn TItem="RouteListItem" Title="" Sortable="false" Filterable="false" Width="70px" TextAlign="TextAlign.Right">
@@ -50,13 +50,17 @@
     private void CreateRoute() => Navigation.NavigateTo("/routes/new");
     private void EditRoute(Guid id) => Navigation.NavigateTo($"/routes/{id}");
 
-    private string StatusText(RouteListItem route) => route.Enabled
-        ? route.OperationallyPaused ? L["Common_Paused"] : L["Common_Enabled"]
-        : route.DeploymentState == DatabaseDeploymentState.Prepared ? L["Common_DbPrepared"] : L["Common_Draft"];
+    private string StatusText(RouteListItem route) => route.MappingMaintenance
+        ? L["Common_MappingMaintenance"]
+        : route.Enabled
+            ? route.OperationallyPaused ? L["Common_Paused"] : L["Common_Enabled"]
+            : route.DeploymentState == DatabaseDeploymentState.Prepared ? L["Common_DbPrepared"] : L["Common_Draft"];
 
-    private static string StatusClass(RouteListItem route) => route.Enabled
-        ? route.OperationallyPaused ? "held" : "enabled"
-        : route.DeploymentState == DatabaseDeploymentState.Prepared ? "prepared" : "disabled";
+    private static string StatusClass(RouteListItem route) => route.MappingMaintenance
+        ? "held"
+        : route.Enabled
+            ? route.OperationallyPaused ? "held" : "enabled"
+            : route.DeploymentState == DatabaseDeploymentState.Prepared ? "prepared" : "disabled";
 
     private string ConflictScopeText(ConflictScope scope) =>
         scope == ConflictScope.Field ? L["Common_FieldScope"] : L["Common_RecordScope"];

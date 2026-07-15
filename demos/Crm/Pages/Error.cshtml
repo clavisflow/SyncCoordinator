@@ -1,0 +1,13 @@
+@page
+@model ErrorModel
+@{
+    ViewData["Title"] = "エラー";
+}
+
+<section class="error-page">
+    <strong class="error-code">エラー</strong>
+    <h1>処理を完了できませんでした</h1>
+    <p>時間をおいて再度お試しください。問題が続く場合は、アプリケーションログを確認してください。</p>
+    @if (Model.ShowRequestId) { <small>Request ID: <code>@Model.RequestId</code></small> }
+    <a class="button button-primary" asp-page="/Index">ダッシュボードへ戻る</a>
+</section>

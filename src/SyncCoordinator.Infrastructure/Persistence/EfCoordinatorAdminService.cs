@@ -12,6 +12,8 @@ public sealed class EfCoordinatorAdminService(
     TimeProvider timeProvider) : ICoordinatorAdminService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly TimeSpan MappingDrainTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan MappingDrainPollInterval = TimeSpan.FromMilliseconds(100);
 
     public async Task<IReadOnlyList<SystemListItem>> GetSystemsAsync(CancellationToken cancellationToken) =>
         await dbContext.Systems.AsNoTracking()
@@ -328,6 +330,7 @@ public sealed class EfCoordinatorAdminService(
         object? before = null;
         var action = "Created";
         var requiresDeployment = entity is null;
+        var requiresSnapshotReset = entity is null;
         if (entity is null)
         {
             entity = new RouteTableMappingEntity
@@ -353,13 +356,10 @@ public sealed class EfCoordinatorAdminService(
                     "DB反映済みルールの対象テーブルは変更できません。既存Triggerの廃止フローを実施してから変更してください。"
                 ]);
             }
-            var currentKeys = entity.Columns.Where(x => x.IsKey)
-                .Select(x => $"{x.SourceColumn}\u001f{x.DestinationColumn}")
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var incomingKeys = input.Columns.Where(x => x.IsKey)
-                .Select(x => $"{x.SourceColumn}\u001f{x.DestinationColumn}")
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-            requiresDeployment = tableChanged || !currentKeys.SetEquals(incomingKeys);
+            requiresDeployment = tableChanged ||
+                                 HasPhysicalColumnContractChanged(entity.Columns, input.Columns);
+            requiresSnapshotReset = requiresDeployment ||
+                                    HasValueSemanticsChanged(entity.Columns, input.Columns);
             var deleteConfigurationChanged =
                 entity.SyncDeletes != input.SyncDeletes ||
                 entity.SourceDeletionMode != input.SourceDeletionMode ||
@@ -369,7 +369,9 @@ public sealed class EfCoordinatorAdminService(
                 !string.Equals(entity.DestinationLogicalDeleteColumn ?? string.Empty, input.DestinationLogicalDeleteColumn, StringComparison.OrdinalIgnoreCase) ||
                 !string.Equals(entity.DestinationLogicalDeleteValue ?? string.Empty, input.DestinationLogicalDeleteValue, StringComparison.Ordinal);
             requiresDeployment |= deleteConfigurationChanged;
+            requiresSnapshotReset |= deleteConfigurationChanged;
             before = TableMappingSnapshot(entity);
+            await EnterMappingMaintenanceAsync(route, cancellationToken);
             dbContext.RouteColumnMappings.RemoveRange(entity.Columns);
             dbContext.RouteFixedValueMappings.RemoveRange(entity.FixedValues);
             entity.Columns = [];
@@ -394,7 +396,19 @@ public sealed class EfCoordinatorAdminService(
             SourceColumn = x.SourceColumn,
             DestinationColumn = x.DestinationColumn,
             IsKey = x.IsKey,
-            ConflictPolicy = x.ConflictPolicy
+            ConflictPolicy = x.ConflictPolicy,
+            SourceDataType = x.SourceContract.DataType,
+            SourceIsNullable = x.SourceContract.IsNullable,
+            SourceMaxLength = x.SourceContract.MaxLength,
+            SourceNumericPrecision = x.SourceContract.NumericPrecision,
+            SourceNumericScale = x.SourceContract.NumericScale,
+            DestinationDataType = x.DestinationContract.DataType,
+            DestinationIsNullable = x.DestinationContract.IsNullable,
+            DestinationMaxLength = x.DestinationContract.MaxLength,
+            DestinationNumericPrecision = x.DestinationContract.NumericPrecision,
+            DestinationNumericScale = x.DestinationContract.NumericScale,
+            ForwardTransformJson = SerializeTransform(x.ForwardTransform),
+            ReverseTransformJson = SerializeTransform(x.ReverseTransform)
         }));
         entity.FixedValues.AddRange(input.FixedValues.Select(x => new RouteFixedValueMappingEntity
         {
@@ -402,18 +416,108 @@ public sealed class EfCoordinatorAdminService(
             TableMappingId = entity.RouteId,
             Direction = x.Direction,
             TargetColumn = x.TargetColumn,
-            Value = x.Value
+            Value = x.Value,
+            TargetDataType = x.TargetContract.DataType,
+            TargetIsNullable = x.TargetContract.IsNullable,
+            TargetMaxLength = x.TargetContract.MaxLength,
+            TargetNumericPrecision = x.TargetContract.NumericPrecision,
+            TargetNumericScale = x.TargetContract.NumericScale
         }));
 
         route.Enabled = false;
-        if (requiresDeployment)
+        if (requiresSnapshotReset)
         {
             route.DeploymentState = DatabaseDeploymentState.Draft;
         }
 
         AddAudit("TableMapping", entity.RouteId.ToString("N"), route.Name, action, before, TableMappingSnapshot(entity));
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        if (requiresDeployment)
+        {
+            await dbContext.SyncSnapshots
+                .Where(x => x.RouteId == route.Id)
+                .ExecuteDeleteAsync(cancellationToken);
+        }
         await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return entity.RouteId;
+    }
+
+    private async Task EnterMappingMaintenanceAsync(
+        SyncRouteEntity route,
+        CancellationToken cancellationToken)
+    {
+        route.MappingMaintenanceStartedAtUtc ??= timeProvider.GetUtcNow();
+        route.Enabled = false;
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        var deadline = timeProvider.GetUtcNow().Add(MappingDrainTimeout);
+        while (true)
+        {
+            var now = timeProvider.GetUtcNow();
+            var deliveryInProgress = await dbContext.InboxMessages.AsNoTracking().AnyAsync(
+                x => x.RouteId == route.Id &&
+                     x.State == InboxState.Processing &&
+                     x.LockedUntilUtc > now,
+                cancellationToken);
+            if (!deliveryInProgress)
+            {
+                return;
+            }
+            if (now >= deadline)
+            {
+                throw new ConfigurationValidationException([
+                    "同期処理中の配送があるため、マッピング変更を保守状態で待機しています。少し待ってからもう一度保存してください。"
+                ]);
+            }
+
+            await Task.Delay(MappingDrainPollInterval, cancellationToken);
+        }
+    }
+
+    internal static bool HasPhysicalColumnContractChanged(
+        IEnumerable<RouteColumnMappingEntity> current,
+        IEnumerable<ColumnMappingInput> incoming)
+    {
+        var currentColumns = current
+            .Select(x => $"{x.SourceColumn}\u001f{x.DestinationColumn}\u001f{x.IsKey}")
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var incomingColumns = incoming
+            .Select(x => $"{x.SourceColumn}\u001f{x.DestinationColumn}\u001f{x.IsKey}")
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return !currentColumns.SetEquals(incomingColumns);
+    }
+
+    internal static bool HasValueSemanticsChanged(
+        IEnumerable<RouteColumnMappingEntity> current,
+        IEnumerable<ColumnMappingInput> incoming)
+    {
+        var currentBySource = current.ToDictionary(x => x.SourceColumn, StringComparer.OrdinalIgnoreCase);
+        var incomingBySource = incoming.ToDictionary(x => x.SourceColumn, StringComparer.OrdinalIgnoreCase);
+        if (!currentBySource.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase)
+                .SetEquals(incomingBySource.Keys))
+        {
+            return true;
+        }
+
+        foreach (var (sourceColumn, stored) in currentBySource)
+        {
+            var candidate = incomingBySource[sourceColumn];
+            if (SourceContract(stored) != candidate.SourceContract ||
+                DestinationContract(stored) != candidate.DestinationContract ||
+                !string.Equals(
+                    SerializeTransform(DeserializeTransform(stored.ForwardTransformJson)),
+                    SerializeTransform(candidate.ForwardTransform),
+                    StringComparison.Ordinal) ||
+                !string.Equals(
+                    SerializeTransform(DeserializeTransform(stored.ReverseTransformJson)),
+                    SerializeTransform(candidate.ReverseTransform),
+                    StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     public async Task<IReadOnlyList<InboxListItem>> GetRecentInboxAsync(
@@ -559,7 +663,8 @@ public sealed class EfCoordinatorAdminService(
         entity.ConflictScope,
         entity.DefaultConflictPolicy,
         entity.DeploymentState,
-        entity.Enabled
+        entity.Enabled,
+        entity.MappingMaintenanceStartedAtUtc
     };
 
     private static RouteConfigurationInput ToInput(SyncRouteEntity route) => new()
@@ -594,7 +699,11 @@ public sealed class EfCoordinatorAdminService(
                 SourceColumn = x.SourceColumn,
                 DestinationColumn = x.DestinationColumn,
                 IsKey = x.IsKey,
-                ConflictPolicy = x.ConflictPolicy
+                ConflictPolicy = x.ConflictPolicy,
+                SourceContract = SourceContract(x),
+                DestinationContract = DestinationContract(x),
+                ForwardTransform = DeserializeTransform(x.ForwardTransformJson),
+                ReverseTransform = DeserializeTransform(x.ReverseTransformJson)
             }).ToList(),
             FixedValues = entity.FixedValues
                 .OrderBy(x => x.Direction)
@@ -603,7 +712,8 @@ public sealed class EfCoordinatorAdminService(
                 {
                     Direction = x.Direction,
                     TargetColumn = x.TargetColumn,
-                    Value = x.Value
+                    Value = x.Value,
+                    TargetContract = TargetContract(x)
                 }).ToList()
         };
 
@@ -628,14 +738,47 @@ public sealed class EfCoordinatorAdminService(
                 x.SourceColumn,
                 x.DestinationColumn,
                 x.IsKey,
-                x.ConflictPolicy
+                x.ConflictPolicy,
+                SourceContract = SourceContract(x),
+                DestinationContract = DestinationContract(x),
+                ForwardTransform = DeserializeTransform(x.ForwardTransformJson),
+                ReverseTransform = DeserializeTransform(x.ReverseTransformJson)
             }).ToArray(),
         FixedValues = entity.FixedValues
             .OrderBy(x => x.Direction)
             .ThenBy(x => x.TargetColumn)
-            .Select(x => new { x.Direction, x.TargetColumn, x.Value })
+            .Select(x => new { x.Direction, x.TargetColumn, x.Value, TargetContract = TargetContract(x) })
             .ToArray()
     };
+
+    private static ColumnValueContract SourceContract(RouteColumnMappingEntity column) => new(
+        column.SourceDataType,
+        column.SourceIsNullable,
+        column.SourceMaxLength,
+        column.SourceNumericPrecision,
+        column.SourceNumericScale);
+
+    private static ColumnValueContract DestinationContract(RouteColumnMappingEntity column) => new(
+        column.DestinationDataType,
+        column.DestinationIsNullable,
+        column.DestinationMaxLength,
+        column.DestinationNumericPrecision,
+        column.DestinationNumericScale);
+
+    private static ColumnValueContract TargetContract(RouteFixedValueMappingEntity value) => new(
+        value.TargetDataType,
+        value.TargetIsNullable,
+        value.TargetMaxLength,
+        value.TargetNumericPrecision,
+        value.TargetNumericScale);
+
+    private static string? SerializeTransform(ValueTransformInput transform) =>
+        transform.IsIdentity ? null : JsonSerializer.Serialize(transform, JsonOptions);
+
+    private static ValueTransformInput DeserializeTransform(string? json) =>
+        string.IsNullOrWhiteSpace(json)
+            ? new ValueTransformInput()
+            : JsonSerializer.Deserialize<ValueTransformInput>(json, JsonOptions) ?? new ValueTransformInput();
 
     private static void Normalize(SystemConfigurationInput input)
     {

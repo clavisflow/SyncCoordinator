@@ -49,6 +49,14 @@ public sealed class DatabaseDeploymentSqlTests
     }
 
     [Fact]
+    public void MySqlRenderedScriptSetsUtf8Mb4ForExternalClients()
+    {
+        var sql = DatabaseDeploymentService.RenderMySqlScript(["SELECT 1"]);
+
+        Assert.StartsWith("SET NAMES utf8mb4;", sql, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void DestinationOfOneWayRuleOnlyNeedsSupportTables()
     {
         var batches = DatabaseDeploymentService.BuildSqlServerBatches(
@@ -119,6 +127,27 @@ public sealed class DatabaseDeploymentSqlTests
         Assert.Contains("AFTER INSERT OR UPDATE OR DELETE", sql, StringComparison.Ordinal);
         Assert.Contains("ON CONFLICT", sql, StringComparison.Ordinal);
         Assert.Equal(7, batches.Count);
+    }
+
+    [Fact]
+    public void PostgreSqlRenderedScriptSetsUtf8ClientEncoding()
+    {
+        var sql = DatabaseDeploymentService.RenderPostgreSqlScript(["SELECT 1"]);
+
+        Assert.StartsWith("SET client_encoding = 'UTF8';", sql, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("SqlServer", "name IN @names")]
+    [InlineData("MySql", "TRIGGER_NAME IN @names")]
+    [InlineData("PostgreSql", "trigger_name = ANY(@names)")]
+    public void TriggerVerificationUsesProviderAppropriateListComparison(
+        string provider,
+        string expectedComparison)
+    {
+        var sql = DatabaseDeploymentService.BuildTriggerVerificationSql(provider);
+
+        Assert.Contains(expectedComparison, sql, StringComparison.Ordinal);
     }
 
     [Fact]

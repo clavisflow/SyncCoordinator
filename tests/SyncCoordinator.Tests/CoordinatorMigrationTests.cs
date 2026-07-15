@@ -6,13 +6,32 @@ namespace SyncCoordinator.Tests;
 public sealed class CoordinatorMigrationTests
 {
     [Fact]
-    public void CoordinatorSchemaHasSingleBaselineMigration()
+    public void CoordinatorSchemaHasExpectedMigrations()
     {
         using var context = CreateContext();
 
-        var migration = Assert.Single(context.Database.GetMigrations());
+        Assert.Collection(
+            context.Database.GetMigrations(),
+            migration => Assert.EndsWith("_InitialCoordinatorSchema", migration, StringComparison.Ordinal),
+            migration => Assert.EndsWith("_AddOperationalEvents", migration, StringComparison.Ordinal),
+            migration => Assert.EndsWith("_AddMappingMaintenance", migration, StringComparison.Ordinal),
+            migration => Assert.EndsWith("_AddValueTransformations", migration, StringComparison.Ordinal));
+    }
 
-        Assert.EndsWith("_InitialCoordinatorSchema", migration, StringComparison.Ordinal);
+    [Fact]
+    public void OperationalEventsSupportAggregationAndAcknowledgement()
+    {
+        using var context = CreateContext();
+        var entity = context.Model.FindEntityType(typeof(OperationalEventEntity))!;
+
+        Assert.Equal(4000, entity.FindProperty(nameof(OperationalEventEntity.Details))!.GetMaxLength());
+        Assert.Contains(entity.GetIndexes(), index =>
+            index.Properties.Select(property => property.Name).SequenceEqual([
+                nameof(OperationalEventEntity.AcknowledgedAtUtc),
+                nameof(OperationalEventEntity.LastOccurredAtUtc)
+            ]));
+        Assert.NotNull(entity.FindProperty(nameof(OperationalEventEntity.OccurrenceCount)));
+        Assert.NotNull(entity.FindProperty(nameof(OperationalEventEntity.AcknowledgedBy)));
     }
 
     [Fact]
@@ -50,6 +69,7 @@ public sealed class CoordinatorMigrationTests
 
         Assert.Contains(nameof(SyncRouteEntity.SourceSystemId), foreignKeyProperties);
         Assert.Contains(nameof(SyncRouteEntity.DestinationSystemId), foreignKeyProperties);
+        Assert.NotNull(entity.FindProperty(nameof(SyncRouteEntity.MappingMaintenanceStartedAtUtc)));
     }
 
     private static CoordinatorDbContext CreateContext()

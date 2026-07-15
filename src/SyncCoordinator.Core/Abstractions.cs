@@ -66,6 +66,13 @@ public interface ICoordinatorStore
         string errorDetails,
         WebhookEventNotification webhookEvent,
         CancellationToken cancellationToken);
+    Task HoldInboxAsync(
+        Guid sourceMessageId,
+        Guid routeId,
+        string destinationSystem,
+        string errorDetails,
+        WebhookEventNotification webhookEvent,
+        CancellationToken cancellationToken);
     Task<SyncSnapshot?> GetSnapshotAsync(
         Guid routeId,
         string destinationSystem,
@@ -152,6 +159,19 @@ public interface IWebhookAdminService
 public interface IWebhookDeliveryService
 {
     Task<int> DeliverDueAsync(int take, CancellationToken cancellationToken);
+}
+
+public interface IOperationalEventRecorder
+{
+    Task RecordAsync(OperationalEventInput input, CancellationToken cancellationToken);
+}
+
+public interface IOperationalEventAdminService
+{
+    Task<IReadOnlyList<OperationalEventListItem>> GetRecentAsync(
+        int take,
+        CancellationToken cancellationToken);
+    Task AcknowledgeAsync(Guid id, string acknowledgedBy, CancellationToken cancellationToken);
 }
 
 public interface IConflictValueMerger

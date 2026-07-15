@@ -1,9 +1,11 @@
 <CascadingAuthenticationState>
     <Router AppAssembly="typeof(Program).Assembly" NotFoundPage="typeof(Pages.NotFound)">
         <Found Context="routeData">
-            <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
-                <NotAuthorized><RedirectToLogin /></NotAuthorized>
-            </AuthorizeRouteView>
+            <LoggingErrorBoundary>
+                <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
+                    <NotAuthorized><RedirectToLogin /></NotAuthorized>
+                </AuthorizeRouteView>
+            </LoggingErrorBoundary>
             <FocusOnNavigate RouteData="routeData" Selector="h1" />
         </Found>
     </Router>
