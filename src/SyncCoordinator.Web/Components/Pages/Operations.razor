@@ -45,8 +45,17 @@
                 <RadzenDataGridColumn TItem="InboxListItem" Property="RouteName" Title="@L["Operations_RouteDestination"]">
                     <Template Context="item">@item.RouteName<br /><small>→ @item.DestinationSystemName</small></Template>
                 </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="InboxListItem" Property="State" Title="@L["Common_Status"]" Width="110px">
-                    <Template Context="item"><span class="status-pill @StateClass(item.State)">@StateText(item.State)</span></Template>
+                <RadzenDataGridColumn TItem="InboxListItem" Property="State" Title="@L["Common_Status"]" Width="190px" Filterable="false">
+                    <Template Context="item">
+                        @if ((item.State is InboxState.Held or InboxState.Superseded or InboxState.WaitingForPrevious) && item.ConflictId is { } conflictId)
+                        {
+                            <a class="status-pill @StateClass(item) status-link" href="/conflicts/@conflictId" title="@L["Operations_OpenConflict"]">@StateText(item)</a>
+                        }
+                        else
+                        {
+                            <span class="status-pill @StateClass(item)">@StateText(item)</span>
+                        }
+                    </Template>
                 </RadzenDataGridColumn>
                 <RadzenDataGridColumn TItem="InboxListItem" Property="AttemptCount" Title="@L["Operations_Attempts"]" Width="80px" />
                 <RadzenDataGridColumn TItem="InboxListItem" Property="LastError" Title="@L["Common_Error"]" Sortable="false" Filterable="false" Width="100px">
@@ -161,8 +170,14 @@
         InboxState.Processing => L["Operations_Processing"],
         InboxState.Held => L["Operations_Held"],
         InboxState.Failed => L["Operations_Failed"],
+        InboxState.Superseded => L["Conflicts_StateSuperseded"],
+        InboxState.WaitingForPrevious => L["Conflicts_StateWaitingForPrevious"],
         _ => state.ToString()
     };
+
+    private string StateText(InboxListItem item) => item.State == InboxState.Held
+        ? item.ConflictId is null ? L["Operations_ValueTransformationError"] : L["Operations_Conflict"]
+        : StateText(item.State);
 
     private string AuditTypeText(string value) => value switch
     {
@@ -244,7 +259,7 @@
         {
             ["MessageId"] = item.SourceMessageId.ToString(),
             [L["Operations_RouteDestination"]] = $"{item.RouteName} → {item.DestinationSystemName}",
-            [L["Common_Status"]] = StateText(item.State),
+            [L["Common_Status"]] = StateText(item),
             [L["Operations_Attempts"]] = item.AttemptCount.ToString(),
             [L["Common_UpdatedAt"]] = FormatDate(item.UpdatedAtUtc)
         };
@@ -324,6 +339,11 @@
         InboxState.Processing => "processing",
         InboxState.Held => "held",
         InboxState.Failed => "failed",
+        InboxState.Superseded => "disabled",
+        InboxState.WaitingForPrevious => "disabled",
         _ => "disabled"
     };
+
+    private static string StateClass(InboxListItem item) =>
+        item.State == InboxState.Held && item.ConflictId is null ? "failed" : StateClass(item.State);
 }

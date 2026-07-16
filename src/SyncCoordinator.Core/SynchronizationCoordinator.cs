@@ -156,14 +156,14 @@ public sealed class SynchronizationCoordinator(
         try
         {
             var destination = await connectors.GetRequiredAsync(destinationSystem, cancellationToken);
-            var incoming = NormalizeToCanonical(message.Payload, route, message.SourceSystem);
+            var incoming = SyncPayloadTransformer.NormalizeToCanonical(message.Payload, route, message.SourceSystem);
             var destinationPayload = await destination.ReadCurrentAsync(
                 message.EntityType,
                 message.EntityId,
                 cancellationToken);
             var current = destinationPayload is null
                 ? null
-                : NormalizeToCanonical(destinationPayload, route, destinationSystem);
+                : SyncPayloadTransformer.NormalizeToCanonical(destinationPayload, route, destinationSystem);
             var snapshot = await store.GetSnapshotAsync(
                 route.Id,
                 destinationSystem,
@@ -183,10 +183,17 @@ public sealed class SynchronizationCoordinator(
                 route.Id,
                 destinationSystem);
 
+            ConflictHistory? conflictHistory = null;
+            WebhookEventNotification? conflictWebhook = null;
             if (resolution.Conflicts.Count > 0)
             {
                 var conflictId = WebhookEventId.Create("conflict.history", deliveryMessageId);
-                await store.SaveConflictAsync(new ConflictHistory(
+                var historyFields = resolution.Conflicts.Select(field => field with
+                {
+                    IncomingFieldName = PhysicalFieldName(route, field.FieldName, message.SourceSystem),
+                    CurrentFieldName = PhysicalFieldName(route, field.FieldName, destinationSystem)
+                }).ToArray();
+                conflictHistory = new ConflictHistory(
                     conflictId,
                     route.Id,
                     message.SourceMessageId,
@@ -195,22 +202,34 @@ public sealed class SynchronizationCoordinator(
                     destinationSystem,
                     message.EntityType,
                     message.EntityId,
+                    message.Operation,
                     route.ConflictScope,
-                    resolution.Conflicts,
-                    timeProvider.GetUtcNow()), new WebhookEventNotification(
+                    historyFields,
+                    resolution.IsHeld,
+                    snapshot,
+                    incoming,
+                    current,
+                    timeProvider.GetUtcNow());
+                conflictWebhook = new WebhookEventNotification(
                         WebhookEventId.Create(WebhookEventTypes.ConflictDetected, deliveryMessageId),
                         WebhookEventTypes.ConflictDetected,
                         timeProvider.GetUtcNow(),
                         route.Id, route.Name, message.SourceSystem, destinationSystem,
-                        message.EntityType, message.EntityId, message.SourceMessageId, deliveryMessageId),
-                    cancellationToken);
+                        message.EntityType, message.EntityId, message.SourceMessageId, deliveryMessageId);
+
+                // 手動判断が必要な競合は、部分的な自動採用の適用に失敗しても
+                // 解決対象を失わないよう、適用前に記録する。
+                if (resolution.IsHeld)
+                {
+                    await store.SaveConflictAsync(conflictHistory, conflictWebhook, cancellationToken);
+                }
             }
 
             if (resolution.ShouldApply)
             {
                 var payloadToWrite = message.Operation == ChangeOperation.Delete
                     ? resolution.AdoptedPayload
-                    : TransformFromCanonical(resolution.AdoptedPayload, route, destinationSystem);
+                    : SyncPayloadTransformer.TransformFromCanonical(resolution.AdoptedPayload, route, destinationSystem);
                 await destination.ApplyAsync(new ApplyRequest(
                     deliveryMessageId,
                     message.SourceMessageId,
@@ -221,6 +240,13 @@ public sealed class SynchronizationCoordinator(
                     message.Operation,
                     deletionBehavior,
                     payloadToWrite), cancellationToken);
+            }
+
+            // 自動解決の履歴確定と既存競合の後続優先化は、同期先への適用成功後に行う。
+            // これにより適用失敗時に未解決の既存競合が操作不能になることを防ぐ。
+            if (conflictHistory is not null && !resolution.IsHeld)
+            {
+                await store.SaveConflictAsync(conflictHistory, conflictWebhook!, cancellationToken);
             }
 
             await store.SaveSnapshotAsync(new SyncSnapshot(
@@ -303,54 +329,14 @@ public sealed class SynchronizationCoordinator(
         }
     }
 
-    private static EntityPayload NormalizeToCanonical(
-        EntityPayload payload,
+    private static string PhysicalFieldName(
         SyncRouteDefinition route,
+        string canonicalFieldName,
         string physicalSystem) =>
-        TransformPayload(
-            payload,
-            route,
-            mapping => string.Equals(physicalSystem, route.DestinationSystem, StringComparison.OrdinalIgnoreCase)
-                ? (mapping.ReverseTransform, mapping.SourceContract, mapping.FieldName)
-                : (new ValueTransformInput(), mapping.SourceContract, mapping.FieldName));
-
-    private static EntityPayload TransformFromCanonical(
-        EntityPayload payload,
-        SyncRouteDefinition route,
-        string physicalSystem) =>
-        TransformPayload(
-            payload,
-            route,
-            mapping => string.Equals(physicalSystem, route.DestinationSystem, StringComparison.OrdinalIgnoreCase)
-                ? (mapping.ForwardTransform, mapping.DestinationContract, mapping.DestinationColumn)
-                : (new ValueTransformInput(), mapping.SourceContract, mapping.FieldName));
-
-    private static EntityPayload TransformPayload(
-        EntityPayload payload,
-        SyncRouteDefinition route,
-        Func<ColumnValueMappingDefinition, (ValueTransformInput Transform, ColumnValueContract Contract, string TargetColumn)> select)
-    {
-        var fields = payload.Fields.ToDictionary(
-            pair => pair.Key,
-            pair => pair.Value?.DeepClone(),
-            StringComparer.Ordinal);
-        foreach (var mapping in route.ValueMappings.Values)
-        {
-            if (!payload.Fields.TryGetValue(mapping.FieldName, out var value))
-            {
-                continue;
-            }
-
-            var target = select(mapping);
-            fields[mapping.FieldName] = ValueTransformEngine.Transform(
-                value,
-                target.Transform,
-                target.Contract,
-                mapping.FieldName,
-                target.TargetColumn);
-        }
-        return new EntityPayload(fields);
-    }
+        route.ValueMappings.TryGetValue(canonicalFieldName, out var mapping) &&
+        string.Equals(physicalSystem, route.DestinationSystem, StringComparison.OrdinalIgnoreCase)
+            ? mapping.DestinationColumn
+            : canonicalFieldName;
 
     private WebhookEventNotification FailureWebhook(
         SyncMessage message,

@@ -1,9 +1,12 @@
 @page "/conflicts/{Id:guid}"
 @attribute [Authorize]
 @using System.Text.Json.Nodes
+@using SyncCoordinator.Contracts
 @using SyncCoordinator.Core
-@inject ICoordinatorAdminService AdminService
+@inject IConflictResolutionService ResolutionService
 @inject NavigationManager Navigation
+@inject NotificationService NotificationService
+@inject DialogService DialogService
 @inject IStringLocalizer<SharedResource> L
 
 <PageTitle>@L["ConflictDetail_PageTitle"]</PageTitle>
@@ -15,100 +18,335 @@
 else if (details is null)
 {
     <section class="page-heading compact">
-        <div>
-            <p class="kicker">CONFLICT DETAIL</p>
-            <PageHeadingTitle Icon="search_off">@L["ConflictDetail_NotFoundTitle"]</PageHeadingTitle>
-            <p>@L["ConflictDetail_NotFoundDescription"]</p>
-        </div>
+        <div><p class="kicker">CONFLICT DETAIL</p><PageHeadingTitle Icon="search_off">@L["ConflictDetail_NotFoundTitle"]</PageHeadingTitle><p>@L["ConflictDetail_NotFoundDescription"]</p></div>
         <RadzenButton Text="@L["Common_BackToList"]" Icon="arrow_back" ButtonStyle="ButtonStyle.Primary" Variant="Variant.Text" Click="@BackToList" />
     </section>
 }
 else
 {
     <section class="page-heading compact">
-        <div>
-            <p class="kicker">CONFLICT DETAIL</p>
-            <PageHeadingTitle Icon="rule">@L["ConflictDetail_Target", details.EntityId]</PageHeadingTitle>
-            <p>@details.RouteName</p>
+        <div><p class="kicker">CONFLICT DETAIL</p><PageHeadingTitle Icon="rule">@L["ConflictDetail_RecordKey", details.EntityId]</PageHeadingTitle><p>@details.RouteName</p></div>
+        <div class="heading-actions">
+            <span class="conflict-kind @(details.Operation == ChangeOperation.Delete ? "delete" : "update")">
+                @(details.Operation == ChangeOperation.Delete ? L["ConflictDetail_DeleteConflict"] : L["ConflictDetail_UpdateConflict"])
+            </span>
+            <span class="status-pill @StateClass(details.ResolutionState)">@StateText(details.ResolutionState)</span>
+            <RadzenButton Text="@L["Common_BackToList"]" Icon="arrow_back" ButtonStyle="ButtonStyle.Primary" Variant="Variant.Text" Click="@BackToList" />
         </div>
-        <RadzenButton Text="@L["Common_BackToList"]" Icon="arrow_back" ButtonStyle="ButtonStyle.Primary" Variant="Variant.Text" Click="@BackToList" />
     </section>
 
     <div class="content-stack">
+        @if (details.ResolutionState == ConflictResolutionState.Superseded)
+        {
+            <div class="inline-alert info">
+                <strong>@L["ConflictDetail_SupersededTitle"]</strong>
+                <span>
+                    @L["ConflictDetail_SupersededHelp"]
+                    @if (details.SupersededByConflictId is { } latestConflictId)
+                    {
+                        <a href="/conflicts/@latestConflictId">@L["ConflictDetail_OpenLatest"]</a>
+                    }
+                </span>
+            </div>
+        }
+        else if (details.ResolutionState == ConflictResolutionState.WaitingForPrevious)
+        {
+            <div class="inline-alert info">
+                <strong>@L["ConflictDetail_WaitingForPreviousTitle"]</strong>
+                <span>
+                    @L["ConflictDetail_WaitingForPreviousHelp"]
+                    @if (details.OldestActiveConflictId is { } oldestConflictId)
+                    {
+                        <a href="/conflicts/@oldestConflictId">@L["ConflictDetail_OpenOldest"]</a>
+                    }
+                    @if (details.LatestActiveConflictId is { } latestConflictId)
+                    {
+                        <a href="/conflicts/@latestConflictId">@L["ConflictDetail_OpenLatest"]</a>
+                    }
+                </span>
+            </div>
+        }
+        else if (details.CanResolve && details.NewerActiveConflictCount > 0)
+        {
+            <div class="inline-alert warning">
+                <strong>@L["ConflictDetail_NewerConflictsTitle"]</strong>
+                <span>
+                    @L["ConflictDetail_NewerConflictsHelp", details.NewerActiveConflictCount]
+                    @if (details.LatestActiveConflictId is { } latestConflictId)
+                    {
+                        <a href="/conflicts/@latestConflictId">@L["ConflictDetail_OpenLatest"]</a>
+                    }
+                </span>
+            </div>
+        }
+        else if (details.CanResolve && details.OlderActiveConflictCount > 0)
+        {
+            <div class="inline-alert warning">
+                <strong>@L["ConflictDetail_OlderConflictsTitle"]</strong>
+                <span>
+                    @L["ConflictDetail_OlderConflictsHelp", details.OlderActiveConflictCount]
+                    @if (details.OldestActiveConflictId is { } oldestConflictId)
+                    {
+                        <a href="/conflicts/@oldestConflictId">@L["ConflictDetail_OpenOldest"]</a>
+                    }
+                </span>
+            </div>
+        }
+        @if (details.ResolutionState is not (ConflictResolutionState.Superseded or ConflictResolutionState.WaitingForPrevious) &&
+             !string.IsNullOrWhiteSpace(details.ResolutionLastError))
+        {
+            <div class="inline-alert danger"><strong>@L["ConflictDetail_Attention"]</strong><span>@details.ResolutionLastError</span></div>
+        }
+        else if (details.NewerActiveConflictCount == 0 && details.Fields.Any(x => x.CurrentChanged))
+        {
+            <div class="inline-alert warning"><strong>@L["ConflictDetail_CurrentChanged"]</strong><span>@L["ConflictDetail_CurrentChangedHelp"]</span></div>
+        }
+
         <section class="detail-grid">
-        <RadzenCard class="detail-card"><span>@L["Common_Direction"]</span><strong>@details.SourceSystemName → @details.DestinationSystemName</strong></RadzenCard>
-        <RadzenCard class="detail-card"><span>@L["Common_Scope"]</span><strong>@ScopeText(details.Scope)</strong></RadzenCard>
-        <RadzenCard class="detail-card"><span>@L["Common_DetectedAt"]</span><strong>@UiFormat.LocalDateTime(details.DetectedAtUtc)</strong></RadzenCard>
+            <RadzenCard class="detail-card"><span>@L["Conflicts_SyncPath"]</span><strong>@details.SourceSystemName → @details.DestinationSystemName</strong></RadzenCard>
+            <RadzenCard class="detail-card"><span>@L["Common_Scope"]</span><strong>@(details.Operation == ChangeOperation.Delete ? L["Common_RecordScope"] : ScopeText(details.Scope))</strong></RadzenCard>
+            <RadzenCard class="detail-card"><span>@L["Common_DetectedAt"]</span><strong>@UiFormat.LocalDateTime(details.DetectedAtUtc)</strong></RadzenCard>
         </section>
 
-        <details class="technical-details">
-            <summary>@L["Common_TechnicalDetails"]</summary>
-            <dl class="metadata-list">
-                <dt>@L["ConflictDetail_SourceMessageId"]</dt><dd><code>@details.SourceMessageId</code></dd>
-                <dt>@L["ConflictDetail_DeliveryMessageId"]</dt><dd><code>@details.DeliveryMessageId</code></dd>
-            </dl>
-        </details>
+        @if (details.ResolutionState == ConflictResolutionState.Pending)
+        {
+            <div class="inline-alert info"><strong>@L["ConflictDetail_PendingTitle"]</strong><span>@L["ConflictDetail_PendingHelp"]</span></div>
+        }
+        else if (details.ResolutionState == ConflictResolutionState.Processing)
+        {
+            <div class="inline-alert info"><strong>@L["ConflictDetail_QueuedTitle"]</strong><span>@L["ConflictDetail_QueuedHelp"]</span></div>
+        }
+        else if (details.ResolutionState == ConflictResolutionState.Resolved && details.ResolvedAtUtc is { } resolvedAt)
+        {
+            <div class="inline-alert success"><strong>@L["ConflictDetail_ResolvedTitle"]</strong><span>@L["ConflictDetail_ResolvedSummary", details.ResolvedBy ?? "-", UiFormat.LocalDateTime(resolvedAt)]</span></div>
+        }
 
         <RadzenCard>
-        <div class="panel-title"><h2>@L["ConflictDetail_Fields"]</h2><span>@L["Common_ItemCount", details.Fields.Count]</span></div>
-        <RadzenDataGrid Data="@details.Fields" TItem="FieldConflict" AllowSorting="true" EmptyText="@L["ConflictDetail_Empty"]" Density="Density.Compact">
-                <Columns>
-                <RadzenDataGridColumn TItem="FieldConflict" Property="FieldName" Title="@L["Common_Field"]" Frozen="true" />
-                <RadzenDataGridColumn TItem="FieldConflict" Title="@L["ConflictDetail_Previous"]" Sortable="false"><Template Context="field"><pre class="json-value">@Format(field.BaseValue)</pre></Template></RadzenDataGridColumn>
-                    <RadzenDataGridColumn TItem="FieldConflict" Title="@L["ConflictDetail_Incoming"]" Sortable="false"><Template Context="field"><pre class="json-value">@Format(field.IncomingValue)</pre></Template></RadzenDataGridColumn>
-                    <RadzenDataGridColumn TItem="FieldConflict" Title="@L["ConflictDetail_Current"]" Sortable="false"><Template Context="field"><pre class="json-value">@Format(field.CurrentValue)</pre></Template></RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="FieldConflict" Title="@L["ConflictDetail_Adopted"]" Sortable="false"><Template Context="field"><pre class="json-value adopted">@Format(field.AdoptedValue)</pre></Template></RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="FieldConflict" Property="Policy" Title="@L["Common_Policy"]"><Template Context="field">@PolicyText(field.Policy)</Template></RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="FieldConflict" Property="Resolution" Title="@L["Common_Result"]"><Template Context="field">@ResolutionText(field.Resolution)</Template></RadzenDataGridColumn>
-                </Columns>
-            </RadzenDataGrid>
+            <div class="panel-title conflict-fields-heading">
+                <div><h2>@(details.Operation == ChangeOperation.Delete ? L["ConflictDetail_DeleteFields"] : L["ConflictDetail_Fields"])</h2><span>@L["Common_ItemCount", details.Fields.Count]</span></div>
+                @if (CanResolve && details.Operation != ChangeOperation.Delete)
+                {
+                    <div class="compact-actions">
+                        <RadzenButton Text="@L["ConflictDetail_AllIncoming"]" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" Click="@(() => SelectAll(ManualConflictChoice.Incoming))" />
+                        <RadzenButton Text="@L["ConflictDetail_AllCurrent"]" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" Click="@(() => SelectAll(ManualConflictChoice.Current))" />
+                    </div>
+                }
+            </div>
+            @if (details.Operation == ChangeOperation.Delete)
+            {
+                <p class="delete-conflict-explanation">@L["ConflictDetail_DeleteExplanation"]</p>
+            }
+            <div class="conflict-table-scroll">
+                <table class="conflict-resolution-table">
+                    <thead>
+                    <tr>
+                        <th>@L["Common_Field"]</th>
+                        <th>@L["ConflictDetail_Previous"]</th>
+                        @if (details.Operation != ChangeOperation.Delete)
+                        {
+                            <th>@L["ConflictDetail_Incoming"]</th>
+                        }
+                        <th>@L["ConflictDetail_Current"]</th>
+                        @if (details.Operation != ChangeOperation.Delete)
+                        {
+                            <th class="adopted-column">@L["ConflictDetail_Adopted"]</th>
+                        }
+                    </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var field in details.Fields)
+                    {
+                        editors.TryGetValue(field.FieldName, out var editor);
+                        var hasEditor = CanResolve && details.Operation != ChangeOperation.Delete &&
+                                        RequiresManualDecision(field) && editor is not null;
+                        var incomingSelected = hasEditor && editor!.Choice == ManualConflictChoice.Incoming;
+                        var currentSelected = hasEditor && editor!.Choice == ManualConflictChoice.Current;
+                        <tr>
+                            <th scope="row"><strong>@(field.CurrentFieldName ?? field.FieldName)</strong><small>@(field.IncomingFieldName ?? field.FieldName) → @(field.CurrentFieldName ?? field.FieldName)</small></th>
+                            <td><pre class="json-value">@UiFormat.JsonValue(field.BaseValue)</pre></td>
+                            @if (details.Operation != ChangeOperation.Delete)
+                            {
+                                <td>
+                                    <pre class="json-value @(incomingSelected ? "selected-value" : null)">@UiFormat.JsonValue(field.IncomingValue)</pre>
+                                </td>
+                            }
+                            <td>
+                                <pre class="json-value @(currentSelected ? "selected-value" : null)">@UiFormat.JsonValue(details.CurrentVersionToken is null ? field.CurrentValue : field.LatestCurrentValue)</pre>
+                            </td>
+                            @if (details.Operation != ChangeOperation.Delete)
+                            {
+                                <td class="adopted-column">
+                                    @if (hasEditor)
+                                    {
+                                        <select class="resolution-choice" @bind="editor!.Choice">
+                                            <option value="@ManualConflictChoice.Incoming">@L["ConflictDetail_ChooseIncoming"]</option>
+                                            <option value="@ManualConflictChoice.Current">@L["ConflictDetail_ChooseCurrent"]</option>
+                                            <option value="@ManualConflictChoice.Custom">@L["ConflictDetail_ChooseCustom"]</option>
+                                        </select>
+                                    }
+                                    else
+                                    {
+                                        <pre class="json-value adopted">@UiFormat.JsonValue(field.AdoptedValue)</pre><small>@ResolutionText(field.Resolution)</small>
+                                    }
+                                </td>
+                            }
+                        </tr>
+                        @if (CanResolve && details.Operation != ChangeOperation.Delete &&
+                             RequiresManualDecision(field) &&
+                             editors.TryGetValue(field.FieldName, out var customEditor) &&
+                             customEditor.Choice == ManualConflictChoice.Custom)
+                        {
+                            <tr class="custom-value-row">
+                                <td colspan="5">
+                                    <div class="custom-value-wide">
+                                        <div class="custom-value-wide-heading">
+                                            <RadzenButton Text="@L["Common_Edit"]" Icon="edit" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" Click="@(() => EditCustomValueAsync(field, customEditor))" />
+                                        </div>
+                                        <pre class="custom-value-full @(string.IsNullOrEmpty(customEditor.CustomText) ? "empty" : null)">@CustomValuePreview(customEditor.CustomText)</pre>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                    </tbody>
+                </table>
+            </div>
         </RadzenCard>
+
+        @if (CanResolve)
+        {
+            <RadzenCard class="resolution-panel">
+                <div class="panel-title"><h2>@(details.Operation == ChangeOperation.Delete ? L["ConflictDetail_Resolution"] : L["ConflictDetail_Comment"])</h2></div>
+                @if (details.Operation == ChangeOperation.Delete)
+                {
+                    <fieldset class="delete-choice"><legend>@L["ConflictDetail_DeleteChoice"]</legend>
+                        <label><input type="radio" name="deleteChoice" checked="@(deleteChoice == ManualConflictChoice.Incoming)" @onchange="@(() => deleteChoice = ManualConflictChoice.Incoming)" /> <span>@L["ConflictDetail_ApplyDelete"]</span></label>
+                        <label><input type="radio" name="deleteChoice" checked="@(deleteChoice == ManualConflictChoice.Current)" @onchange="@(() => deleteChoice = ManualConflictChoice.Current)" /> <span>@L["ConflictDetail_KeepRecord"]</span></label>
+                    </fieldset>
+                }
+                <textarea @bind="comment" maxlength="1000" rows="3" aria-label="@L["ConflictDetail_Comment"]" placeholder="@L["ConflictDetail_CommentPlaceholder"]"></textarea>
+                <div class="form-actions"><RadzenButton Text="@(submitting ? L["ConflictDetail_Submitting"] : L["ConflictDetail_Submit"])" Icon="task_alt" Disabled="@(submitting || string.IsNullOrWhiteSpace(details.CurrentVersionToken))" Click="@SubmitAsync" /></div>
+            </RadzenCard>
+        }
+
+        <details class="technical-details"><summary>@L["Common_TechnicalDetails"]</summary><dl class="metadata-list"><dt>@L["ConflictDetail_SourceMessageId"]</dt><dd><code>@details.SourceMessageId</code></dd><dt>@L["ConflictDetail_DeliveryMessageId"]</dt><dd><code>@details.DeliveryMessageId</code></dd></dl></details>
     </div>
 }
 
 @code {
     [Parameter] public Guid Id { get; set; }
     private ConflictDetails? details;
+    private readonly Dictionary<string, ResolutionEditor> editors = new(StringComparer.Ordinal);
+    private ManualConflictChoice deleteChoice = ManualConflictChoice.Current;
+    private string? comment;
     private bool loading = true;
+    private bool submitting;
+    private bool CanResolve => details?.CanResolve == true;
 
-    protected override async Task OnParametersSetAsync()
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
     {
         loading = true;
         details = null;
+        editors.Clear();
         try
         {
-            details = await AdminService.GetConflictAsync(Id, CancellationToken.None);
+            details = await ResolutionService.GetAsync(Id, CancellationToken.None);
+            if (details is not null)
+            {
+                comment = details.ResolutionComment;
+                foreach (var field in details.Fields.Where(RequiresManualDecision))
+                {
+                    editors[field.FieldName] = new ResolutionEditor { Choice = ManualConflictChoice.Current };
+                }
+            }
         }
-        finally
+        finally { loading = false; }
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (details?.CurrentVersionToken is null) return;
+        var confirmationMessage = details.OlderActiveConflictCount > 0 && details.NewerActiveConflictCount == 0
+            ? L["ConflictDetail_ConfirmLatestMessage", details.OlderActiveConflictCount]
+            : L["ConflictDetail_ConfirmMessage"];
+        var confirmed = await DialogService.Confirm(confirmationMessage, L["ConflictDetail_ConfirmTitle"], new ConfirmOptions { OkButtonText = L["ConflictDetail_Submit"], CancelButtonText = L["Common_Cancel"] });
+        if (confirmed != true) return;
+        submitting = true;
+        try
         {
-            loading = false;
+            var input = new ConflictResolutionInput { ExpectedCurrentVersionToken = details.CurrentVersionToken, Comment = comment };
+            if (details.Operation == ChangeOperation.Delete)
+            {
+                input.DeleteChoice = deleteChoice;
+            }
+            else
+            {
+                input.Fields = editors.Select(pair => new FieldResolutionInput
+                {
+                    FieldName = pair.Key,
+                    Choice = pair.Value.Choice,
+                    CustomValue = pair.Value.Choice == ManualConflictChoice.Custom ? ParseCustomValue(pair.Value.CustomText) : null
+                }).ToList();
+            }
+            await ResolutionService.QueueAsync(Id, input, "admin", CancellationToken.None);
+            NotificationService.ShowSuccess(L["ConflictDetail_Queued"], L["Common_Completed"]);
+            await LoadAsync();
+        }
+        catch (Exception exception)
+        {
+            NotificationService.ShowError([exception.Message], L["Common_OperationFailed"]);
+        }
+        finally { submitting = false; }
+    }
+
+    private async Task EditCustomValueAsync(FieldConflict field, ResolutionEditor editor)
+    {
+        var result = await DialogService.OpenAsync<ConflictValueEditorDialog>(
+            L["ConflictDetail_EditValueTitle", field.CurrentFieldName ?? field.FieldName],
+            new Dictionary<string, object?>
+            {
+                [nameof(ConflictValueEditorDialog.Value)] = editor.CustomText ?? string.Empty
+            },
+            new DialogOptions
+            {
+                Width = "min(820px, 92vw)",
+                CloseDialogOnOverlayClick = false,
+                Draggable = true,
+                Resizable = true
+            });
+        if (result is string value)
+        {
+            editor.CustomText = value;
         }
     }
 
-    private void BackToList() => Navigation.NavigateTo("/conflicts");
-    private static string Format(JsonNode? value) => value?.ToJsonString() ?? "null";
-    private string ScopeText(ConflictScope scope) => scope == ConflictScope.Field ? L["Common_FieldScope"] : L["Common_RecordScope"];
-    private string PolicyText(ConflictPolicy policy) => policy switch
+    private static JsonNode? ParseCustomValue(string? text)
     {
-        ConflictPolicy.ApplyIncomingAndNotify => L["Common_UseSource"],
-        ConflictPolicy.KeepCurrentAndNotify => L["Common_KeepDestination"],
-        ConflictPolicy.MergeAndNotify => L["Common_Merge"],
-        ConflictPolicy.HoldAndNotify => L["Common_Hold"],
-        _ => policy.ToString()
-    };
+        var value = text?.Trim() ?? string.Empty;
+        if (value.Length == 0) return JsonValue.Create(string.Empty);
+        try { return JsonNode.Parse(value); }
+        catch (System.Text.Json.JsonException) { return JsonValue.Create(value); }
+    }
 
+    private string CustomValuePreview(string? value) => string.IsNullOrEmpty(value)
+        ? L["ConflictDetail_CustomValueEmpty"]
+        : value;
+
+    private void SelectAll(ManualConflictChoice choice) { foreach (var editor in editors.Values) editor.Choice = choice; }
+    private void BackToList() => Navigation.NavigateTo("/conflicts");
+    private static bool RequiresManualDecision(FieldConflict field) => field.Resolution is "Held" or "MergeUnavailableHeld" or "RecordHeld" or "DeleteHeld" or "DeleteMergeUnavailableHeld";
+    private string ScopeText(ConflictScope scope) => scope == ConflictScope.Field ? L["Common_FieldScope"] : L["Common_RecordScope"];
+    private string StateText(ConflictResolutionState state) => state switch { ConflictResolutionState.AwaitingDecision => L["Conflicts_StateAwaiting"], ConflictResolutionState.Pending => L["Conflicts_StatePending"], ConflictResolutionState.Processing => L["Conflicts_StateProcessing"], ConflictResolutionState.Failed => L["Conflicts_StateFailed"], ConflictResolutionState.Superseded => L["Conflicts_StateSuperseded"], ConflictResolutionState.WaitingForPrevious => L["Conflicts_StateWaitingForPrevious"], _ => L["Conflicts_StateResolved"] };
+    private static string StateClass(ConflictResolutionState state) => state switch { ConflictResolutionState.AwaitingDecision => "held", ConflictResolutionState.Pending or ConflictResolutionState.Processing => "processing", ConflictResolutionState.Failed => "failed", ConflictResolutionState.Superseded or ConflictResolutionState.WaitingForPrevious => "disabled", _ => "enabled" };
     private string ResolutionText(string resolution) => resolution switch
     {
-        "KeptCurrent" => L["Common_KeepDestination"],
-        "AppliedIncoming" => L["Common_UseSource"],
-        "Merged" => L["Common_Merge"],
-        "Held" => L["Common_Hold"],
-        "MergeUnavailableHeld" => L["ConflictDetail_MergeUnavailableHeld"],
-        "RecordHeld" => L["ConflictDetail_RecordHeld"],
-        "AppliedIncomingDelete" => L["ConflictDetail_DeleteApplied"],
-        "DeleteKeptCurrent" => L["ConflictDetail_DeleteKeptCurrent"],
-        "DeleteHeld" => L["ConflictDetail_DeleteHeld"],
-        "DeleteMergeUnavailableHeld" => L["ConflictDetail_DeleteMergeUnavailableHeld"],
-        _ => resolution
+        "KeptCurrent" => L["Common_KeepDestination"], "AppliedIncoming" => L["Common_UseSource"], "Merged" => L["Common_Merge"], "Held" => L["Common_Hold"],
+        "MergeUnavailableHeld" => L["ConflictDetail_MergeUnavailableHeld"], "RecordHeld" => L["ConflictDetail_RecordHeld"], "AppliedIncomingDelete" => L["ConflictDetail_DeleteApplied"],
+        "DeleteKeptCurrent" => L["ConflictDetail_DeleteKeptCurrent"], "DeleteHeld" => L["ConflictDetail_DeleteHeld"], "DeleteMergeUnavailableHeld" => L["ConflictDetail_DeleteMergeUnavailableHeld"],
+        "ManuallyAppliedIncoming" => L["ConflictDetail_ManuallyIncoming"], "ManuallyKeptCurrent" => L["ConflictDetail_ManuallyCurrent"], "ManuallyEntered" => L["ConflictDetail_ManuallyCustom"],
+        "ManuallyAppliedDelete" => L["ConflictDetail_ManuallyDelete"], "ManuallyKeptDeleteTarget" => L["ConflictDetail_ManuallyKeptRecord"], _ => resolution
     };
+    private sealed class ResolutionEditor { public ManualConflictChoice Choice { get; set; } public string? CustomText { get; set; } }
 }

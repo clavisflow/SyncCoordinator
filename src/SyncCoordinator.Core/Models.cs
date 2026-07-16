@@ -38,12 +38,32 @@ public enum ConflictScope
     Record = 1
 }
 
+public enum ConflictResolutionState
+{
+    Resolved = 0,
+    AwaitingDecision = 1,
+    Pending = 2,
+    Processing = 3,
+    Failed = 4,
+    Superseded = 5,
+    WaitingForPrevious = 6
+}
+
+public enum ManualConflictChoice
+{
+    Incoming = 0,
+    Current = 1,
+    Custom = 2
+}
+
 public enum InboxState
 {
     Processing = 0,
     Completed = 1,
     Held = 2,
-    Failed = 3
+    Failed = 3,
+    Superseded = 4,
+    WaitingForPrevious = 5
 }
 
 public enum InboxAcquireResult
@@ -110,7 +130,13 @@ public sealed record FieldConflict(
     JsonNode? CurrentValue,
     JsonNode? AdoptedValue,
     ConflictPolicy Policy,
-    string Resolution);
+    string Resolution)
+{
+    public string? IncomingFieldName { get; init; }
+    public string? CurrentFieldName { get; init; }
+    public JsonNode? LatestCurrentValue { get; init; }
+    public bool CurrentChanged { get; init; }
+}
 
 public sealed record ConflictResolution(
     EntityPayload AdoptedPayload,
@@ -128,15 +154,21 @@ public sealed record ConflictHistory(
     string DestinationSystem,
     string EntityType,
     string EntityId,
+    ChangeOperation Operation,
     ConflictScope Scope,
     IReadOnlyList<FieldConflict> Fields,
+    bool RequiresDecision,
+    SyncSnapshot? Baseline,
+    EntityPayload IncomingPayload,
+    EntityPayload? CurrentPayload,
     DateTimeOffset DetectedAtUtc);
 
 public sealed record DashboardSummary(
     int EnabledSystems,
     int EnabledRoutes,
     int ProcessingMessages,
-    int HeldMessages,
+    int AttentionConflicts,
+    int ValueTransformationErrors,
     int FailedMessages);
 
 public sealed class ManagementSettings
@@ -182,7 +214,19 @@ public sealed record ConflictListItem(
     string DestinationSystemName,
     string EntityType,
     string EntityId,
-    DateTimeOffset DetectedAtUtc);
+    ChangeOperation Operation,
+    DateTimeOffset DetectedAtUtc,
+    ConflictResolutionState ResolutionState,
+    DateTimeOffset? ResolvedAtUtc);
+
+public sealed record ConflictStateCounts(
+    long AwaitingDecision,
+    long WaitingForPrevious,
+    long Pending,
+    long Processing,
+    long Failed,
+    long Resolved,
+    long Superseded);
 
 public sealed record RouteListItem(
     Guid Id,
@@ -501,7 +545,8 @@ public sealed record InboxListItem(
     int AttemptCount,
     DateTimeOffset FirstSeenAtUtc,
     DateTimeOffset UpdatedAtUtc,
-    string? LastError);
+    string? LastError,
+    Guid? ConflictId);
 
 public sealed record CheckpointListItem(
     string SystemCode,
@@ -520,9 +565,41 @@ public sealed record ConflictDetails(
     string DestinationSystemName,
     string EntityType,
     string EntityId,
+    ChangeOperation Operation,
     ConflictScope Scope,
     IReadOnlyList<FieldConflict> Fields,
-    DateTimeOffset DetectedAtUtc);
+    DateTimeOffset DetectedAtUtc,
+    ConflictResolutionState ResolutionState,
+    string? CurrentVersionToken,
+    string? ResolutionComment,
+    string? ResolutionLastError,
+    string? RequestedBy,
+    DateTimeOffset? RequestedAtUtc,
+    string? ResolvedBy,
+    DateTimeOffset? ResolvedAtUtc,
+    Guid? SupersededByConflictId,
+    DateTimeOffset? SupersededAtUtc,
+    Guid? PreviousConflictId,
+    Guid? OldestActiveConflictId,
+    Guid? LatestActiveConflictId,
+    int OlderActiveConflictCount,
+    int NewerActiveConflictCount,
+    bool CanResolve);
+
+public sealed class ConflictResolutionInput
+{
+    public string ExpectedCurrentVersionToken { get; set; } = string.Empty;
+    public ManualConflictChoice? DeleteChoice { get; set; }
+    public List<FieldResolutionInput> Fields { get; set; } = [];
+    public string? Comment { get; set; }
+}
+
+public sealed class FieldResolutionInput
+{
+    public string FieldName { get; set; } = string.Empty;
+    public ManualConflictChoice Choice { get; set; }
+    public JsonNode? CustomValue { get; set; }
+}
 
 public sealed record ConfigurationAuditListItem(
     Guid Id,

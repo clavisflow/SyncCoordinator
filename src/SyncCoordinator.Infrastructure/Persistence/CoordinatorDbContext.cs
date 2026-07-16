@@ -119,7 +119,7 @@ public sealed class CoordinatorDbContext(DbContextOptions<CoordinatorDbContext> 
             entity.HasKey(x => new { x.SourceMessageId, x.RouteId, x.DestinationSystem });
             entity.HasIndex(x => new { x.State, x.UpdatedAtUtc });
             entity.Property(x => x.DestinationSystem).HasMaxLength(64);
-            entity.Property(x => x.State).HasConversion<string>().HasMaxLength(16);
+            entity.Property(x => x.State).HasConversion<string>().HasMaxLength(24);
             entity.Property(x => x.LastError).HasMaxLength(4000);
         });
 
@@ -145,13 +145,33 @@ public sealed class CoordinatorDbContext(DbContextOptions<CoordinatorDbContext> 
         {
             entity.ToTable("SyncConflict");
             entity.HasKey(x => x.Id);
-            entity.HasIndex(x => new { x.ResolvedAtUtc, x.DetectedAtUtc });
+            entity.HasIndex(x => new { x.ResolutionState, x.DetectedAtUtc });
+            entity.HasIndex(x => new
+                {
+                    x.RouteId,
+                    x.DestinationSystem,
+                    x.EntityType,
+                    x.EntityId
+                })
+                .HasDatabaseName("IX_SyncConflict_RecordChain");
             entity.Property(x => x.SourceSystem).HasMaxLength(64);
             entity.Property(x => x.DestinationSystem).HasMaxLength(64);
             entity.Property(x => x.EntityType).HasMaxLength(128);
             entity.Property(x => x.EntityId).HasMaxLength(256);
+            entity.Property(x => x.Operation).HasConversion<string>().HasMaxLength(16);
             entity.Property(x => x.Scope).HasConversion<string>().HasMaxLength(16);
+            entity.Property(x => x.ResolutionState).HasConversion<string>().HasMaxLength(24);
             entity.Property(x => x.FieldsJson).HasColumnType("nvarchar(max)");
+            entity.Property(x => x.BaselineSourcePayloadJson).HasColumnType("nvarchar(max)");
+            entity.Property(x => x.BaselineDestinationPayloadJson).HasColumnType("nvarchar(max)");
+            entity.Property(x => x.IncomingPayloadJson).HasColumnType("nvarchar(max)");
+            entity.Property(x => x.CurrentPayloadJson).HasColumnType("nvarchar(max)");
+            entity.Property(x => x.ResolutionRequestJson).HasColumnType("nvarchar(max)");
+            entity.Property(x => x.ResolutionComment).HasMaxLength(1000);
+            entity.Property(x => x.RequestedBy).HasMaxLength(200);
+            entity.Property(x => x.ResolutionLastError).HasMaxLength(4000);
+            entity.Property(x => x.ResolvedBy).HasMaxLength(200);
+            entity.Property(x => x.RowVersion).IsRowVersion();
             entity.HasOne(x => x.Route).WithMany().HasForeignKey(x => x.RouteId);
         });
 

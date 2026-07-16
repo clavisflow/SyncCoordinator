@@ -4,6 +4,7 @@ using Dapper;
 using SyncCoordinator.Core;
 using SyncCoordinator.Demo.Crm.Models;
 using SyncCoordinator.Infrastructure.Persistence;
+using SyncCoordinator.Contracts;
 using CrmSupportCase = SyncCoordinator.Demo.Crm.Models.SupportCasePayload;
 using CrmWorkOrder = SyncCoordinator.Demo.Crm.Models.WorkOrderPayload;
 
@@ -11,6 +12,24 @@ namespace SyncCoordinator.Tests;
 
 public sealed class DemoPayloadContractTests
 {
+    [Fact]
+    public void DemoConflictScenariosUseFourDistinctRecordKeys()
+    {
+        string[] recordKeys =
+        [
+            DemoConflictSeeder.EntityId,
+            DemoConflictSeeder.DeleteEntityId,
+            DemoConflictSeeder.UpdateThenDeleteEntityId,
+            DemoConflictSeeder.DeleteThenUpdateEntityId
+        ];
+
+        Assert.Equal(4, recordKeys.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal("CASE-UPDATE-1001", DemoConflictSeeder.EntityId);
+        Assert.Equal("CASE-DELETE-1001", DemoConflictSeeder.DeleteEntityId);
+        Assert.Equal("CASE-UPDATE-THEN-DELETE-1001", DemoConflictSeeder.UpdateThenDeleteEntityId);
+        Assert.Equal("CASE-DELETE-THEN-UPDATE-1001", DemoConflictSeeder.DeleteThenUpdateEntityId);
+    }
+
     [Fact]
     public void DemoSeedContainsConfigurationButLeavesDeploymentToTheUi()
     {
@@ -41,6 +60,55 @@ public sealed class DemoPayloadContractTests
                 Assert.Contains(route.TableMapping.Columns, column => column.DestinationColumn.Contains('_'));
                 Assert.Contains(route.TableMapping.Columns, column => column.ForwardTransformJson is not null);
             });
+    }
+
+    [Fact]
+    public void DemoConflictScenarioCreatesTwoHeldFieldConflicts()
+    {
+        var route = DemoSupportCaseRoute();
+        var template = new EntityPayload(new Dictionary<string, System.Text.Json.Nodes.JsonNode?>
+        {
+            ["CaseNumber"] = System.Text.Json.Nodes.JsonValue.Create(DemoConflictSeeder.EntityId),
+            ["Subject"] = System.Text.Json.Nodes.JsonValue.Create("original"),
+            ["Description"] = System.Text.Json.Nodes.JsonValue.Create("original")
+        });
+        var scenario = DemoConflictSeeder.CreateScenario(template);
+        var baseline = new SyncSnapshot(
+            route.Id, route.DestinationSystem, route.EntityType, DemoConflictSeeder.EntityId,
+            scenario.Baseline, scenario.Baseline);
+
+        var resolution = new ConflictResolver(new NoOpConflictValueMerger()).Resolve(
+            route.EntityType, baseline, scenario.Incoming, scenario.Current, route);
+
+        Assert.True(resolution.IsHeld);
+        Assert.Equal(["Description", "Subject"], resolution.Conflicts.Select(x => x.FieldName));
+        Assert.All(resolution.Conflicts, conflict => Assert.Equal("Held", conflict.Resolution));
+        Assert.Equal(DemoConflictSeeder.EntityId, scenario.Baseline.Fields["CaseNumber"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void DemoDeleteConflictScenarioCreatesHeldDeleteConflict()
+    {
+        var route = DemoSupportCaseRoute();
+        var template = new EntityPayload(new Dictionary<string, System.Text.Json.Nodes.JsonNode?>
+        {
+            ["CaseNumber"] = System.Text.Json.Nodes.JsonValue.Create(DemoConflictSeeder.EntityId),
+            ["Subject"] = System.Text.Json.Nodes.JsonValue.Create("original"),
+            ["Description"] = System.Text.Json.Nodes.JsonValue.Create("original")
+        });
+        var scenario = DemoConflictSeeder.CreateDeleteScenario(template);
+        var baseline = new SyncSnapshot(
+            route.Id, route.DestinationSystem, route.EntityType, DemoConflictSeeder.DeleteEntityId,
+            scenario.Baseline, scenario.Baseline);
+
+        var resolution = ConflictResolver.ResolveDelete(
+            baseline, scenario.Baseline, scenario.Current, route);
+
+        Assert.True(resolution.IsHeld);
+        Assert.False(resolution.ShouldApply);
+        Assert.Equal(["Description", "Subject"], resolution.Conflicts.Select(x => x.FieldName));
+        Assert.All(resolution.Conflicts, conflict => Assert.Equal("DeleteHeld", conflict.Resolution));
+        Assert.Equal(DemoConflictSeeder.DeleteEntityId, scenario.Baseline.Fields["CaseNumber"]!.GetValue<string>());
     }
 
     [Theory]
@@ -120,6 +188,37 @@ public sealed class DemoPayloadContractTests
 
     private static IEnumerable<string> PropertyNames<T>() =>
         typeof(T).GetProperties().Select(property => property.Name).Order();
+
+    private static SyncRouteDefinition DemoSupportCaseRoute()
+    {
+        var seed = CoordinatorDatabaseInitializer.CreateDemoSeed();
+        var routeEntity = seed.Routes.Single(x => x.EntityType == DemoConflictSeeder.EntityType);
+        return new SyncRouteDefinition(
+            routeEntity.Id,
+            routeEntity.Name,
+            routeEntity.SourceSystem.Code,
+            routeEntity.DestinationSystem.Code,
+            routeEntity.EntityType,
+            routeEntity.Direction,
+            new DeletionBehavior(DeletionMode.Physical),
+            new DeletionBehavior(DeletionMode.Physical),
+            routeEntity.ConflictScope,
+            routeEntity.DefaultConflictPolicy,
+            true,
+            new Dictionary<string, ConflictPolicy>())
+        {
+            ValueMappings = routeEntity.TableMapping!.Columns.ToDictionary(
+                x => x.SourceColumn,
+                x => new ColumnValueMappingDefinition(
+                    x.SourceColumn,
+                    x.DestinationColumn,
+                    ColumnValueContract.Unknown,
+                    ColumnValueContract.Unknown,
+                    new ValueTransformInput(),
+                    new ValueTransformInput()),
+                StringComparer.Ordinal)
+        };
+    }
 
     private static string[] ContractFieldsFromSource(
         string relativePath,

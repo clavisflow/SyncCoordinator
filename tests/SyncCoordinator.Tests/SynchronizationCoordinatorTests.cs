@@ -122,6 +122,134 @@ public sealed class SynchronizationCoordinatorTests
     }
 
     [Fact]
+    public async Task HeldConflictPersistsPayloadsAndPhysicalFieldNamesForManualResolution()
+    {
+        var baseline = Payload("base");
+        var incoming = Payload("incoming");
+        var current = Payload("current");
+        var source = new FakeConnector
+        {
+            SystemCode = "A",
+            Message = new SyncMessage(Guid.NewGuid(), "A", "A", "Sample", "1", ChangeOperation.Upsert, DateTimeOffset.UtcNow, incoming)
+        };
+        var destination = new FakeConnector { SystemCode = "C", EmitChange = false, Current = current };
+        var route = Route() with
+        {
+            ValueMappings = new Dictionary<string, ColumnValueMappingDefinition>(StringComparer.Ordinal)
+            {
+                ["Value"] = new(
+                    "Value", "value_text", ColumnValueContract.Unknown, ColumnValueContract.Unknown,
+                    new ValueTransformInput(), new ValueTransformInput())
+            }
+        };
+        var store = new RecordingStore(route, Snapshot(route, baseline));
+
+        await Coordinator(source, destination, store).RunOnceAsync(10, CancellationToken.None);
+
+        var conflict = Assert.IsType<ConflictHistory>(store.SavedConflict);
+        Assert.True(conflict.RequiresDecision);
+        Assert.Equal(ChangeOperation.Upsert, conflict.Operation);
+        Assert.Equal("incoming", conflict.IncomingPayload.Fields["Value"]!.GetValue<string>());
+        Assert.Equal("current", conflict.CurrentPayload!.Fields["Value"]!.GetValue<string>());
+        Assert.NotNull(conflict.Baseline);
+        var field = Assert.Single(conflict.Fields);
+        Assert.Equal("Value", field.IncomingFieldName);
+        Assert.Equal("value_text", field.CurrentFieldName);
+    }
+
+    [Fact]
+    public async Task AutomaticConflictIsPersistedOnlyAfterDestinationApplySucceeds()
+    {
+        var events = new List<string>();
+        var baseline = Payload("base");
+        var incoming = Payload("incoming");
+        var current = Payload("current");
+        var source = new FakeConnector
+        {
+            SystemCode = "A",
+            Message = new SyncMessage(Guid.NewGuid(), "A", "A", "Sample", "1", ChangeOperation.Upsert, DateTimeOffset.UtcNow, incoming)
+        };
+        var destination = new FakeConnector { SystemCode = "C", EmitChange = false, Current = current, Events = events };
+        var route = Route() with { DefaultConflictPolicy = ConflictPolicy.ApplyIncomingAndNotify };
+        var store = new RecordingStore(route, Snapshot(route, baseline)) { Events = events };
+
+        var processed = await Coordinator(source, destination, store).RunOnceAsync(10, CancellationToken.None);
+
+        Assert.Equal(1, processed);
+        Assert.Equal(["apply", "save-conflict"], events);
+        Assert.False(Assert.IsType<ConflictHistory>(store.SavedConflict).RequiresDecision);
+    }
+
+    [Fact]
+    public async Task AutomaticConflictIsNotFinalizedWhenDestinationApplyFails()
+    {
+        var baseline = Payload("base");
+        var incoming = Payload("incoming");
+        var current = Payload("current");
+        var source = new FakeConnector
+        {
+            SystemCode = "A",
+            Message = new SyncMessage(Guid.NewGuid(), "A", "A", "Sample", "1", ChangeOperation.Upsert, DateTimeOffset.UtcNow, incoming)
+        };
+        var destination = new FakeConnector
+        {
+            SystemCode = "C",
+            EmitChange = false,
+            Current = current,
+            ApplyException = new InvalidOperationException("destination unavailable")
+        };
+        var route = Route() with { DefaultConflictPolicy = ConflictPolicy.ApplyIncomingAndNotify };
+        var store = new RecordingStore(route, Snapshot(route, baseline));
+
+        var processed = await Coordinator(source, destination, store).RunOnceAsync(10, CancellationToken.None);
+
+        Assert.Equal(0, processed);
+        Assert.Null(store.SavedConflict);
+        Assert.Equal(1, store.FailedDeliveries);
+    }
+
+    [Fact]
+    public async Task FieldConflictAppliesAutomaticFieldsBeforeHoldingManualFields()
+    {
+        var events = new List<string>();
+        static EntityPayload Fields(string automatic, string manual) =>
+            new(new Dictionary<string, System.Text.Json.Nodes.JsonNode?>
+            {
+                ["Automatic"] = System.Text.Json.Nodes.JsonValue.Create(automatic),
+                ["Manual"] = System.Text.Json.Nodes.JsonValue.Create(manual)
+            });
+
+        var baseline = Fields("base-auto", "base-manual");
+        var incoming = Fields("incoming-auto", "incoming-manual");
+        var current = Fields("current-auto", "current-manual");
+        var source = new FakeConnector
+        {
+            SystemCode = "A",
+            Message = new SyncMessage(Guid.NewGuid(), "A", "A", "Sample", "1", ChangeOperation.Upsert, DateTimeOffset.UtcNow, incoming)
+        };
+        var destination = new FakeConnector { SystemCode = "C", EmitChange = false, Current = current, Events = events };
+        var route = Route() with
+        {
+            FieldPolicies = new Dictionary<string, ConflictPolicy>(StringComparer.Ordinal)
+            {
+                ["Automatic"] = ConflictPolicy.ApplyIncomingAndNotify,
+                ["Manual"] = ConflictPolicy.HoldAndNotify
+            }
+        };
+        var store = new RecordingStore(route, Snapshot(route, baseline)) { Events = events };
+
+        await Coordinator(source, destination, store).RunOnceAsync(10, CancellationToken.None);
+
+        Assert.Equal(["save-conflict", "apply"], events);
+        Assert.Equal("incoming-auto", destination.AppliedRequest!.Payload.Fields["Automatic"]!.GetValue<string>());
+        Assert.Equal("current-manual", destination.AppliedRequest.Payload.Fields["Manual"]!.GetValue<string>());
+        var snapshot = Assert.Single(store.SavedSnapshots);
+        Assert.Equal("incoming-auto", snapshot.DestinationPayload!.Fields["Automatic"]!.GetValue<string>());
+        Assert.Equal("current-manual", snapshot.DestinationPayload.Fields["Manual"]!.GetValue<string>());
+        Assert.True(Assert.IsType<ConflictHistory>(store.SavedConflict).RequiresDecision);
+    }
+
+    [Fact]
     public async Task RunOnceUsesLatestDeleteResolvedFromOlderUpsertNotification()
     {
         var upsertMessageId = Guid.NewGuid();
@@ -401,6 +529,7 @@ public sealed class SynchronizationCoordinatorTests
         public EntityPayload? Current { get; init; }
         public ApplyRequest? AppliedRequest { get; private set; }
         public Exception? ApplyException { get; init; }
+        public List<string>? Events { get; init; }
         public int ApplyCalls { get; private set; }
         public int ReadMessageCalls { get; private set; }
         public int ReadChangesCalls { get; private set; }
@@ -432,6 +561,7 @@ public sealed class SynchronizationCoordinatorTests
         public Task<ApplyResult> ApplyAsync(ApplyRequest request, CancellationToken cancellationToken)
         {
             ApplyCalls++;
+            Events?.Add("apply");
             if (ApplyException is not null)
             {
                 return Task.FromException<ApplyResult>(ApplyException);
@@ -451,8 +581,10 @@ public sealed class SynchronizationCoordinatorTests
         public bool SystemPaused { get; init; }
         public bool RoutePaused { get; set; }
         public List<SyncSnapshot> SavedSnapshots { get; } = [];
+        public ConflictHistory? SavedConflict { get; private set; }
         public WebhookEventNotification? CompletedWebhook { get; private set; }
         public WebhookEventNotification? FailedWebhook { get; private set; }
+        public List<string>? Events { get; init; }
 
         public Task<bool> IsGloballyPausedAsync(CancellationToken cancellationToken) =>
             Task.FromResult(GlobalPaused);
@@ -511,8 +643,12 @@ public sealed class SynchronizationCoordinatorTests
             return Task.CompletedTask;
         }
 
-        public Task SaveConflictAsync(ConflictHistory conflict, WebhookEventNotification webhookEvent, CancellationToken cancellationToken) =>
-            Task.CompletedTask;
+        public Task SaveConflictAsync(ConflictHistory conflict, WebhookEventNotification webhookEvent, CancellationToken cancellationToken)
+        {
+            Events?.Add("save-conflict");
+            SavedConflict = conflict;
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class FakeStore : ICoordinatorStore

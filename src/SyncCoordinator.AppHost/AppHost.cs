@@ -76,6 +76,7 @@ if (demoEnabled)
 
     builder.AddProject<Projects.SyncCoordinator_Worker>("coordinator-worker")
         .WithReference(coordinatorDatabase)
+        .WithEnvironment("CoordinatorDatabase__SeedDemoData", "true")
         .WaitFor(web)
         .WaitFor(crmDatabase)
         .WaitFor(portalDatabase)

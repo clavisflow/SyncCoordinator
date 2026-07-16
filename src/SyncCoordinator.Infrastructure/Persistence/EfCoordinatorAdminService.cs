@@ -566,7 +566,13 @@ public sealed class EfCoordinatorAdminService(
                    inbox.AttemptCount,
                    inbox.FirstSeenAtUtc,
                    inbox.UpdatedAtUtc,
-                   inbox.LastError))
+                   inbox.LastError,
+                   dbContext.SyncConflicts
+                       .Where(conflict => conflict.SourceMessageId == inbox.SourceMessageId &&
+                                          conflict.RouteId == inbox.RouteId &&
+                                          conflict.DestinationSystem == inbox.DestinationSystem)
+                       .Select(conflict => (Guid?)conflict.Id)
+                       .FirstOrDefault()))
             .Take(Math.Clamp(take, 1, 500))
             .ToListAsync(cancellationToken);
 
@@ -617,9 +623,26 @@ public sealed class EfCoordinatorAdminService(
             conflict.DestinationSystemName,
             conflict.Conflict.EntityType,
             conflict.Conflict.EntityId,
+            conflict.Conflict.Operation,
             conflict.Conflict.Scope,
             fields,
-            conflict.Conflict.DetectedAtUtc);
+            conflict.Conflict.DetectedAtUtc,
+            conflict.Conflict.ResolutionState,
+            null,
+            conflict.Conflict.ResolutionComment,
+            conflict.Conflict.ResolutionLastError,
+            conflict.Conflict.RequestedBy,
+            conflict.Conflict.RequestedAtUtc,
+            conflict.Conflict.ResolvedBy,
+            conflict.Conflict.ResolvedAtUtc,
+            conflict.Conflict.SupersededByConflictId,
+            conflict.Conflict.SupersededAtUtc,
+            conflict.Conflict.PreviousConflictId,
+            null,
+            null,
+            0,
+            0,
+            false);
     }
 
     public async Task<IReadOnlyList<ConfigurationAuditListItem>> GetRecentConfigurationAuditsAsync(

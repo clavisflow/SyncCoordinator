@@ -56,14 +56,26 @@ AppHostは既定でこのデモ一式を起動します。AppHostを終了する
 
 ## Demo scenario
 
-1. Customer Portalに初期登録された `CASE-1001` を開き、内容を更新して最初の変更通知を作る。
-2. CRMに問い合わせが同期されたことを確認し、受付状態と顧客への回答を更新する。
-3. Customer PortalにCRMの更新が戻ったことを確認する。
-4. CRMの問い合わせ詳細からWork Orderを発行する。
-5. Field ServiceにWork Orderが同期されたことを確認する。
-6. Field Serviceで訪問予定、担当者、状態、作業結果を更新する。
-7. CRMに作業結果が戻ったことを確認する。
-8. CRMでSupport Caseを完了にし、Customer Portalへの反映を確認する。
+1. `Customer Portal - CRM`ルートをDB反映・検証して有効化する。Workerが次の4レコードに6件の競合履歴を生成する。
+
+   | レコードキー | シナリオ | 期待状態 |
+   |---|---|---|
+   | `CASE-UPDATE-1001` | 更新競合 | 更新が「要対応」 |
+   | `CASE-DELETE-1001` | 削除競合 | 削除が「要対応」 |
+   | `CASE-UPDATE-THEN-DELETE-1001` | 更新競合後に削除競合 | 更新と削除が「要対応」 |
+   | `CASE-DELETE-THEN-UPDATE-1001` | 削除競合後に更新競合 | 削除と更新が「要対応」 |
+
+2. コンフリクト履歴の状態別件数が「要対応 6件」になっていることを確認する。
+3. `CASE-UPDATE-1001`を開き、受信値、同期先の現在値、または手入力値を選んで解決する。
+4. `CASE-DELETE-1001`を開き、削除をCRMへ適用するかCRMのレコードを維持するか選んで解決する。
+5. 重複シナリオの古い競合には後続、最新の競合には古い未解決競合の案内が表示され、相互に移動できることを確認する。
+6. 古い競合から解決した場合は次の競合が最新値で再評価され、最新の競合から解決した場合は古い競合が「対応不要（後続優先）」になることを確認する。
+7. CRMで受付状態と顧客への回答を更新し、Customer Portalへ戻ることを確認する。
+8. CRMの問い合わせ詳細からWork Orderを発行する。
+9. Field ServiceにWork Orderが同期されたことを確認する。
+10. Field Serviceで訪問予定、担当者、状態、作業結果を更新する。
+11. CRMに作業結果が戻ったことを確認する。
+12. CRMでSupport Caseを完了にし、Customer Portalへの反映を確認する。
 
 ## Database initialization
 
@@ -75,6 +87,8 @@ AppHostは既定でこのデモ一式を起動します。AppHostを終了する
 - PostgreSQLのlower_snake_caseな`work_order`業務テーブル
 - `PORTAL`、`CRM`、`FIELD`のシステム定義と接続情報
 - `SupportCase`と`WorkOrder`の無効な双方向同期ルールとテーブル／列マッピング
+
+`Customer Portal - CRM`ルートをDB反映・検証して有効化すると、デモWorkerはCRM側の行がまだなくても作成し、更新競合と削除競合を一度ずつ生成します。通常構成や`Core`起動プロファイルでは生成しません。
 
 同期補助テーブルとTriggerは初期化SQLでは作りません。管理画面でDBへ反映し、検証した後にルールを有効化します。初期問い合わせはTrigger配備前に存在するため、配備後にCustomer Portalで更新して最初の同期を開始します。
 

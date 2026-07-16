@@ -158,10 +158,29 @@ public sealed class SyncConflictEntity
     public required string DestinationSystem { get; set; }
     public required string EntityType { get; set; }
     public required string EntityId { get; set; }
+    public ChangeOperation Operation { get; set; }
     public ConflictScope Scope { get; set; }
     public required string FieldsJson { get; set; }
+    public bool HadBaseline { get; set; }
+    public string? BaselineSourcePayloadJson { get; set; }
+    public string? BaselineDestinationPayloadJson { get; set; }
+    public required string IncomingPayloadJson { get; set; }
+    public string? CurrentPayloadJson { get; set; }
     public DateTimeOffset DetectedAtUtc { get; set; }
+    public ConflictResolutionState ResolutionState { get; set; }
+    public string? ResolutionRequestJson { get; set; }
+    public string? ResolutionComment { get; set; }
+    public string? RequestedBy { get; set; }
+    public DateTimeOffset? RequestedAtUtc { get; set; }
+    public DateTimeOffset? ResolutionLockedUntilUtc { get; set; }
+    public int ResolutionAttemptCount { get; set; }
+    public string? ResolutionLastError { get; set; }
+    public string? ResolvedBy { get; set; }
     public DateTimeOffset? ResolvedAtUtc { get; set; }
+    public Guid? PreviousConflictId { get; set; }
+    public Guid? SupersededByConflictId { get; set; }
+    public DateTimeOffset? SupersededAtUtc { get; set; }
+    public byte[] RowVersion { get; set; } = [];
     public SyncRouteEntity Route { get; set; } = null!;
 }
 

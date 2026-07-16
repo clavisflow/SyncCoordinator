@@ -1,3 +1,4 @@
+using System.Data;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
@@ -153,7 +154,7 @@ public sealed class EfCoordinatorStore(
         }
         else
         {
-            if (item.State is InboxState.Completed or InboxState.Held)
+            if (item.State is InboxState.Completed or InboxState.Held or InboxState.Superseded or InboxState.WaitingForPrevious)
             {
                 return InboxAcquireResult.AlreadyCompleted;
             }
@@ -267,8 +268,42 @@ public sealed class EfCoordinatorStore(
         WebhookEventNotification webhookEvent,
         CancellationToken cancellationToken)
     {
+        await using var transaction = dbContext.Database.CurrentTransaction is null
+            ? await dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
+            : null;
+
         if (!await dbContext.SyncConflicts.AnyAsync(x => x.Id == conflict.Id, cancellationToken))
         {
+            var olderActiveConflicts = await dbContext.SyncConflicts
+                .Where(x => x.RouteId == conflict.RouteId &&
+                            x.DestinationSystem == conflict.DestinationSystem &&
+                            x.EntityType == conflict.EntityType &&
+                            x.EntityId == conflict.EntityId &&
+                            (x.ResolutionState == ConflictResolutionState.AwaitingDecision ||
+                             x.ResolutionState == ConflictResolutionState.Pending ||
+                             x.ResolutionState == ConflictResolutionState.Processing ||
+                             x.ResolutionState == ConflictResolutionState.Failed ||
+                             x.ResolutionState == ConflictResolutionState.WaitingForPrevious))
+                .OrderBy(x => x.DetectedAtUtc)
+                .ThenBy(x => x.Id)
+                .ToListAsync(cancellationToken);
+
+            var now = timeProvider.GetUtcNow();
+            if (!conflict.RequiresDecision)
+            {
+                await SupersedeConflictsAsync(olderActiveConflicts, conflict.Id, now, cancellationToken);
+            }
+            else if (olderActiveConflicts.Count >= 2)
+            {
+                // 最古と最新だけを操作可能にし、間の競合は前の解決を待つ。
+                var previousLatest = olderActiveConflicts[^1];
+                previousLatest.ResolutionState = ConflictResolutionState.WaitingForPrevious;
+                previousLatest.ResolutionRequestJson = null;
+                previousLatest.ResolutionLastError = null;
+                previousLatest.ResolutionLockedUntilUtc = null;
+                await SetInboxStateAsync(previousLatest, InboxState.WaitingForPrevious, now, cancellationToken);
+            }
+
             dbContext.SyncConflicts.Add(new SyncConflictEntity
             {
                 Id = conflict.Id,
@@ -279,13 +314,65 @@ public sealed class EfCoordinatorStore(
                 DestinationSystem = conflict.DestinationSystem,
                 EntityType = conflict.EntityType,
                 EntityId = conflict.EntityId,
+                Operation = conflict.Operation,
                 Scope = conflict.Scope,
                 FieldsJson = JsonSerializer.Serialize(conflict.Fields, JsonOptions),
-                DetectedAtUtc = conflict.DetectedAtUtc
+                HadBaseline = conflict.Baseline is not null,
+                BaselineSourcePayloadJson = SerializePayload(conflict.Baseline?.SourcePayload),
+                BaselineDestinationPayloadJson = SerializePayload(conflict.Baseline?.DestinationPayload),
+                IncomingPayloadJson = SerializePayload(conflict.IncomingPayload)!,
+                CurrentPayloadJson = SerializePayload(conflict.CurrentPayload),
+                DetectedAtUtc = conflict.DetectedAtUtc,
+                PreviousConflictId = olderActiveConflicts.LastOrDefault()?.Id,
+                ResolutionState = conflict.RequiresDecision
+                    ? ConflictResolutionState.AwaitingDecision
+                    : ConflictResolutionState.Resolved,
+                ResolvedAtUtc = conflict.RequiresDecision ? null : conflict.DetectedAtUtc,
+                ResolvedBy = conflict.RequiresDecision ? null : "automatic-policy"
             });
         }
         await webhookOutbox.AddAsync(webhookEvent, cancellationToken);
         await dbContext.SaveChangesAsync(cancellationToken);
+        if (transaction is not null)
+        {
+            await transaction.CommitAsync(cancellationToken);
+        }
+    }
+
+    private async Task SupersedeConflictsAsync(
+        IReadOnlyCollection<SyncConflictEntity> conflicts,
+        Guid supersededByConflictId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        foreach (var older in conflicts)
+        {
+            older.ResolutionState = ConflictResolutionState.Superseded;
+            older.SupersededByConflictId = supersededByConflictId;
+            older.SupersededAtUtc = now;
+            older.ResolutionRequestJson = null;
+            older.ResolutionLockedUntilUtc = null;
+            await SetInboxStateAsync(older, InboxState.Superseded, now, cancellationToken);
+        }
+    }
+
+    private async Task SetInboxStateAsync(
+        SyncConflictEntity conflict,
+        InboxState state,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var inbox = await dbContext.InboxMessages.FindAsync(
+            [conflict.SourceMessageId, conflict.RouteId, conflict.DestinationSystem],
+            cancellationToken);
+        if (inbox is null)
+        {
+            return;
+        }
+
+        inbox.State = state;
+        inbox.UpdatedAtUtc = now;
+        inbox.LockedUntilUtc = null;
     }
 
     private async Task UpdateInboxAsync(

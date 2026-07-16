@@ -1,0 +1,148 @@
+@page "/help"
+@attribute [Authorize]
+@implements IAsyncDisposable
+@inject HelpContentService HelpContent
+@inject UiErrorReporter ErrorReporter
+@inject IStringLocalizer<SharedResource> L
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<PageTitle>@L["Help_PageTitle"]</PageTitle>
+
+<section class="page-heading">
+    <div>
+        <p class="kicker">GUIDE</p>
+        <PageHeadingTitle Icon="help">@L["Help_Title"]</PageHeadingTitle>
+        <p>@L["Help_Description"]</p>
+    </div>
+</section>
+
+@if (loading)
+{
+    <div class="loading-state">
+        <RadzenProgressBar Mode="ProgressBarMode.Indeterminate" ShowValue="false" Style="width: 8rem" />
+        <span>@L["Help_Loading"]</span>
+    </div>
+}
+else if (html is null)
+{
+    <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat">
+        @L["Help_LoadFailed"]
+    </RadzenAlert>
+}
+else
+{
+    <article class="help-article">
+        @((MarkupString)html)
+    </article>
+}
+
+@code {
+    private string? html;
+    private bool loading = true;
+    private IJSObjectReference? module;
+    private bool navigationInitialized;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+
+        try
+        {
+            html = await HelpContent.GetHtmlAsync(CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            await ErrorReporter.ReportAsync(exception, "Help.Load");
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (loading || html is null)
+        {
+            return;
+        }
+
+        try
+        {
+            module ??= await JS.InvokeAsync<IJSObjectReference>(
+                "import",
+                "./Components/Pages/Help.razor.js");
+            if (!navigationInitialized)
+            {
+                await module.InvokeVoidAsync("initializeHelpNavigation");
+                navigationInitialized = true;
+            }
+            else
+            {
+                await module.InvokeVoidAsync("scrollToCurrentFragment");
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // The browser has already left the current interactive circuit.
+        }
+        catch (Exception exception)
+        {
+            await ErrorReporter.ReportAsync(exception, "Help.Scroll");
+        }
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs args)
+    {
+        var path = Navigation.ToAbsoluteUri(args.Location).AbsolutePath;
+        if (string.Equals(path, "/help", StringComparison.OrdinalIgnoreCase))
+        {
+            _ = InvokeAsync(ScrollToCurrentFragmentAsync);
+        }
+    }
+
+    private async Task ScrollToCurrentFragmentAsync()
+    {
+        if (module is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await module.InvokeVoidAsync("scrollToCurrentFragment");
+        }
+        catch (JSDisconnectedException)
+        {
+            // The browser has already left the current interactive circuit.
+        }
+        catch (Exception exception)
+        {
+            await ErrorReporter.ReportAsync(exception, "Help.Scroll");
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+        if (module is null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (navigationInitialized)
+            {
+                await module.InvokeVoidAsync("disposeHelpNavigation");
+            }
+
+            await module.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+            // The browser has already left the current interactive circuit.
+        }
+    }
+}

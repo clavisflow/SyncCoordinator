@@ -1,35 +1,69 @@
 @page "/conflicts"
 @attribute [Authorize]
+@using SyncCoordinator.Contracts
 @using SyncCoordinator.Core
 @inject ICoordinatorReadService ReadService
-@inject NavigationManager Navigation
 @inject IStringLocalizer<SharedResource> L
 
 <PageTitle>@L["Conflicts_PageTitle"]</PageTitle>
 
 <section class="page-heading">
     <div>
-        <p class="kicker">HISTORY</p>
+        <p class="kicker">CONFLICTS</p>
         <PageHeadingTitle Icon="rule">@L["Conflicts_Title"]</PageHeadingTitle>
         <p>@L["Conflicts_Description"]</p>
     </div>
     <RadzenButton Text="@(loading ? L["Action_Refreshing"] : L["Action_Reload"])" Icon="refresh" Click="@LoadAsync" Disabled="@loading" />
 </section>
 
+<section class="conflict-state-summary" aria-label="@L["Conflicts_StateSummary"]">
+    <div class="conflict-state-count"><span class="status-pill held">@L["Conflicts_StateAwaiting"]</span><strong>@stateCounts.AwaitingDecision</strong></div>
+    <div class="conflict-state-count"><span class="status-pill disabled">@L["Conflicts_StateWaitingForPrevious"]</span><strong>@stateCounts.WaitingForPrevious</strong></div>
+    <div class="conflict-state-count"><span class="status-pill processing">@L["Conflicts_StatePending"]</span><strong>@stateCounts.Pending</strong></div>
+    <div class="conflict-state-count"><span class="status-pill processing">@L["Conflicts_StateProcessing"]</span><strong>@stateCounts.Processing</strong></div>
+    <div class="conflict-state-count"><span class="status-pill failed">@L["Conflicts_StateFailed"]</span><strong>@stateCounts.Failed</strong></div>
+    <div class="conflict-state-count"><span class="status-pill enabled">@L["Conflicts_StateResolved"]</span><strong>@stateCounts.Resolved</strong></div>
+    <div class="conflict-state-count"><span class="status-pill disabled">@L["Conflicts_StateSuperseded"]</span><strong>@stateCounts.Superseded</strong></div>
+</section>
+
 <RadzenCard>
-    <div class="panel-title"><h2>@L["Conflicts_Recent"]</h2><span>@L["Common_Count", conflicts.Count]</span></div>
-    <RadzenDataGrid Data="@conflicts" TItem="ConflictListItem" AllowSorting="true" AllowFiltering="true" FilterMode="FilterMode.Simple" AllowPaging="true" PageSize="25" ShowPagingSummary="true" PagingSummaryFormat="@L["Common_PagingSummary"]" EmptyText="@L["Conflicts_Empty"]" Density="Density.Compact">
+    <div class="panel-title conflict-list-heading">
+        <div><h2>@L["Conflicts_Recent"]</h2><span>@L["Common_Count", FilteredConflicts.Count]</span></div>
+        <label class="compact-filter">
+            <span>@L["Common_Status"]</span>
+            <select @bind="filter">
+                <option value="@ConflictFilter.AwaitingDecision">@L["Conflicts_StateAwaiting"]</option>
+                <option value="@ConflictFilter.WaitingForPrevious">@L["Conflicts_FilterWaitingForPrevious"]</option>
+                <option value="@ConflictFilter.Pending">@L["Conflicts_StatePending"]</option>
+                <option value="@ConflictFilter.Processing">@L["Conflicts_StateProcessing"]</option>
+                <option value="@ConflictFilter.Failed">@L["Conflicts_StateFailed"]</option>
+                <option value="@ConflictFilter.Resolved">@L["Conflicts_FilterResolved"]</option>
+                <option value="@ConflictFilter.Superseded">@L["Conflicts_FilterSuperseded"]</option>
+                <option value="@ConflictFilter.All">@L["Conflicts_FilterAll"]</option>
+            </select>
+        </label>
+    </div>
+    <RadzenDataGrid Data="@FilteredConflicts" TItem="ConflictListItem" AllowSorting="true" AllowFiltering="true" FilterMode="FilterMode.Simple" AllowPaging="true" PageSize="25" ShowPagingSummary="true" PagingSummaryFormat="@L["Common_PagingSummary"]" EmptyText="@L["Conflicts_Empty"]" Density="Density.Compact">
         <Columns>
+            <RadzenDataGridColumn TItem="ConflictListItem" Property="ResolutionState" Title="@L["Common_Status"]" Filterable="false">
+                <Template Context="conflict"><span class="status-pill @StateClass(conflict.ResolutionState)">@StateText(conflict.ResolutionState)</span></Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="ConflictListItem" Property="Operation" Title="@L["Common_Type"]" Width="120px" Filterable="false">
+                <Template Context="conflict">
+                    <span class="conflict-kind @(conflict.Operation == ChangeOperation.Delete ? "delete" : "update")">
+                        @(conflict.Operation == ChangeOperation.Delete ? L["ConflictDetail_DeleteConflict"] : L["ConflictDetail_UpdateConflict"])
+                    </span>
+                </Template>
+            </RadzenDataGridColumn>
             <RadzenDataGridColumn TItem="ConflictListItem" Property="DetectedAtUtc" Title="@L["Common_DetectedAt"]">
                 <Template Context="conflict">@UiFormat.LocalDateTime(conflict.DetectedAtUtc)</Template>
             </RadzenDataGridColumn>
             <RadzenDataGridColumn TItem="ConflictListItem" Property="RouteName" Title="@L["Common_Rule"]" />
-            <RadzenDataGridColumn TItem="ConflictListItem" Title="@L["Common_Direction"]" Sortable="false" Filterable="false">
+            <RadzenDataGridColumn TItem="ConflictListItem" Title="@L["Conflicts_SyncPath"]" Sortable="false" Filterable="false">
                 <Template Context="conflict"><code class="direction">@conflict.SourceSystemName → @conflict.DestinationSystemName</code></Template>
             </RadzenDataGridColumn>
-            <RadzenDataGridColumn TItem="ConflictListItem" Property="EntityId" Title="@L["Common_TargetId"]" />
-            <RadzenDataGridColumn TItem="ConflictListItem" Title="" Sortable="false" Filterable="false" Width="72px" TextAlign="TextAlign.Right">
-                <Template Context="conflict"><RadzenButton Icon="chevron_right" title="@L["Common_Details"]" aria-label="@L["Common_Details"]" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => OpenDetails(conflict.Id))" /></Template>
+            <RadzenDataGridColumn TItem="ConflictListItem" Property="EntityId" Title="@L["Common_RecordKey"]">
+                <Template Context="conflict"><a class="record-id-link" href="/conflicts/@conflict.Id" title="@L["Common_Details"]">@conflict.EntityId</a></Template>
             </RadzenDataGridColumn>
         </Columns>
     </RadzenDataGrid>
@@ -37,7 +71,21 @@
 
 @code {
     private IReadOnlyList<ConflictListItem> conflicts = [];
+    private ConflictStateCounts stateCounts = new(0, 0, 0, 0, 0, 0, 0);
+    private ConflictFilter filter = ConflictFilter.AwaitingDecision;
     private bool loading;
+
+    private IReadOnlyList<ConflictListItem> FilteredConflicts => conflicts.Where(conflict => filter switch
+    {
+        ConflictFilter.AwaitingDecision => conflict.ResolutionState == ConflictResolutionState.AwaitingDecision,
+        ConflictFilter.WaitingForPrevious => conflict.ResolutionState == ConflictResolutionState.WaitingForPrevious,
+        ConflictFilter.Pending => conflict.ResolutionState == ConflictResolutionState.Pending,
+        ConflictFilter.Processing => conflict.ResolutionState == ConflictResolutionState.Processing,
+        ConflictFilter.Failed => conflict.ResolutionState == ConflictResolutionState.Failed,
+        ConflictFilter.Resolved => conflict.ResolutionState == ConflictResolutionState.Resolved,
+        ConflictFilter.Superseded => conflict.ResolutionState == ConflictResolutionState.Superseded,
+        _ => true
+    }).ToArray();
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
@@ -46,7 +94,8 @@
         loading = true;
         try
         {
-            conflicts = await ReadService.GetRecentConflictsAsync(200, CancellationToken.None);
+            stateCounts = await ReadService.GetConflictStateCountsAsync(CancellationToken.None);
+            conflicts = await ReadService.GetRecentConflictsAsync(500, CancellationToken.None);
         }
         finally
         {
@@ -54,5 +103,25 @@
         }
     }
 
-    private void OpenDetails(Guid id) => Navigation.NavigateTo($"/conflicts/{id}");
+    private string StateText(ConflictResolutionState state) => state switch
+    {
+        ConflictResolutionState.AwaitingDecision => L["Conflicts_StateAwaiting"],
+        ConflictResolutionState.Pending => L["Conflicts_StatePending"],
+        ConflictResolutionState.Processing => L["Conflicts_StateProcessing"],
+        ConflictResolutionState.Failed => L["Conflicts_StateFailed"],
+        ConflictResolutionState.Superseded => L["Conflicts_StateSuperseded"],
+        ConflictResolutionState.WaitingForPrevious => L["Conflicts_StateWaitingForPrevious"],
+        _ => L["Conflicts_StateResolved"]
+    };
+    private static string StateClass(ConflictResolutionState state) => state switch
+    {
+        ConflictResolutionState.AwaitingDecision => "held",
+        ConflictResolutionState.Pending or ConflictResolutionState.Processing => "processing",
+        ConflictResolutionState.Failed => "failed",
+        ConflictResolutionState.Superseded => "disabled",
+        ConflictResolutionState.WaitingForPrevious => "disabled",
+        _ => "enabled"
+    };
+
+    private enum ConflictFilter { AwaitingDecision, WaitingForPrevious, Pending, Processing, Failed, Resolved, Superseded, All }
 }

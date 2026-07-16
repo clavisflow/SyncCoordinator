@@ -31,6 +31,8 @@ public static class DependencyInjection
         services.AddScoped<ICoordinatorStore, EfCoordinatorStore>();
         services.AddScoped<ICoordinatorReadService, EfCoordinatorReadService>();
         services.AddScoped<ICoordinatorAdminService, EfCoordinatorAdminService>();
+        services.AddScoped<IConflictResolutionService, ConflictResolutionService>();
+        services.AddScoped<IDemoConflictSeeder, DemoConflictSeeder>();
         services.AddScoped<IDatabaseMetadataService, DatabaseMetadataService>();
         services.AddScoped<IDatabaseDeploymentService, DatabaseDeploymentService>();
         services.AddScoped<IWebhookAdminService, WebhookAdminService>();

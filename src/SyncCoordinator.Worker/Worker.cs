@@ -20,6 +20,10 @@ public sealed class Worker(
                 pollingInterval = TimeSpan.FromSeconds(settings.PollingIntervalSeconds);
                 var coordinator = scope.ServiceProvider.GetRequiredService<SynchronizationCoordinator>();
                 var processed = await coordinator.RunOnceAsync(settings.BatchSize, stoppingToken);
+                var demoConflicts = scope.ServiceProvider.GetRequiredService<IDemoConflictSeeder>();
+                var seededConflicts = await demoConflicts.SeedIfReadyAsync(stoppingToken);
+                var conflictResolutions = scope.ServiceProvider.GetRequiredService<IConflictResolutionService>();
+                var resolved = await conflictResolutions.ProcessPendingAsync(settings.BatchSize, stoppingToken);
                 var webhooks = scope.ServiceProvider.GetRequiredService<IWebhookDeliveryService>();
                 var delivered = await webhooks.DeliverDueAsync(settings.BatchSize, stoppingToken);
                 var cleanup = await settingsService.RunAutomaticCleanupIfDueAsync(stoppingToken);
@@ -30,6 +34,14 @@ public sealed class Worker(
                 if (delivered > 0)
                 {
                     WorkerLog.WebhooksProcessed(logger, delivered);
+                }
+                if (resolved > 0)
+                {
+                    WorkerLog.ConflictResolutionsProcessed(logger, resolved);
+                }
+                if (seededConflicts > 0)
+                {
+                    WorkerLog.DemoConflictsSeeded(logger, seededConflicts);
                 }
                 if (cleanup is { Deleted.Total: > 0 })
                 {
@@ -64,6 +76,12 @@ internal static partial class WorkerLog
 
     [LoggerMessage(LogLevel.Information, "Processed {count} webhook deliveries")]
     public static partial void WebhooksProcessed(ILogger logger, int count);
+
+    [LoggerMessage(LogLevel.Information, "Processed {count} manual conflict resolutions")]
+    public static partial void ConflictResolutionsProcessed(ILogger logger, int count);
+
+    [LoggerMessage(LogLevel.Information, "Seeded {count} demo conflicts")]
+    public static partial void DemoConflictsSeeded(ILogger logger, int count);
 
     [LoggerMessage(LogLevel.Information, "Deleted {count} expired management database rows")]
     public static partial void ManagementRowsCleaned(ILogger logger, long count);

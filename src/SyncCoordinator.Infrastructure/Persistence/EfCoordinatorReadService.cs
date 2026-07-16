@@ -12,9 +12,20 @@ public sealed class EfCoordinatorReadService(CoordinatorDbContext dbContext) : I
         var processing = await dbContext.InboxMessages.CountAsync(
             x => x.State == InboxState.Processing,
             cancellationToken);
-        var held = await dbContext.InboxMessages.CountAsync(x => x.State == InboxState.Held, cancellationToken);
+        var attentionConflicts = await dbContext.SyncConflicts.CountAsync(
+            x => x.ResolutionState == ConflictResolutionState.AwaitingDecision ||
+                 x.ResolutionState == ConflictResolutionState.Failed,
+            cancellationToken);
+        var valueTransformationErrors = await dbContext.InboxMessages.CountAsync(
+            inbox => inbox.State == InboxState.Held &&
+                     !dbContext.SyncConflicts.Any(conflict =>
+                         conflict.SourceMessageId == inbox.SourceMessageId &&
+                         conflict.RouteId == inbox.RouteId &&
+                         conflict.DestinationSystem == inbox.DestinationSystem),
+            cancellationToken);
         var failed = await dbContext.InboxMessages.CountAsync(x => x.State == InboxState.Failed, cancellationToken);
-        return new DashboardSummary(systems, routes, processing, held, failed);
+        return new DashboardSummary(
+            systems, routes, processing, attentionConflicts, valueTransformationErrors, failed);
     }
 
     public async Task<IReadOnlyList<RouteListItem>> GetRoutesAsync(CancellationToken cancellationToken) =>
@@ -54,6 +65,26 @@ public sealed class EfCoordinatorReadService(CoordinatorDbContext dbContext) : I
                     .Select(system => system.DisplayName).FirstOrDefault() ?? x.DestinationSystem,
                 x.EntityType,
                 x.EntityId,
-                x.DetectedAtUtc))
+                x.Operation,
+                x.DetectedAtUtc,
+                x.ResolutionState,
+                x.ResolvedAtUtc))
             .ToListAsync(cancellationToken);
+
+    public async Task<ConflictStateCounts> GetConflictStateCountsAsync(CancellationToken cancellationToken)
+    {
+        var counts = await dbContext.SyncConflicts.AsNoTracking()
+            .GroupBy(x => x.ResolutionState)
+            .Select(group => new { State = group.Key, Count = group.LongCount() })
+            .ToDictionaryAsync(x => x.State, x => x.Count, cancellationToken);
+
+        return new ConflictStateCounts(
+            counts.GetValueOrDefault(ConflictResolutionState.AwaitingDecision),
+            counts.GetValueOrDefault(ConflictResolutionState.WaitingForPrevious),
+            counts.GetValueOrDefault(ConflictResolutionState.Pending),
+            counts.GetValueOrDefault(ConflictResolutionState.Processing),
+            counts.GetValueOrDefault(ConflictResolutionState.Failed),
+            counts.GetValueOrDefault(ConflictResolutionState.Resolved),
+            counts.GetValueOrDefault(ConflictResolutionState.Superseded));
+    }
 }

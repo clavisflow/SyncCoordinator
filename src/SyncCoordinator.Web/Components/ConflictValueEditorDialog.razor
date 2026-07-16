@@ -1,0 +1,23 @@
+@inject DialogService DialogService
+@inject IStringLocalizer<SharedResource> L
+
+<div class="conflict-value-editor-dialog">
+    <p>@L["ConflictDetail_CustomValueHelp"]</p>
+    <textarea @bind="draft" @bind:event="oninput" rows="12" autofocus placeholder="@L["ConflictDetail_CustomPlaceholder"]"></textarea>
+    <div class="dialog-form-actions">
+        <RadzenButton Text="@L["Common_Cancel"]" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Click="@Cancel" />
+        <RadzenButton Text="@L["Common_Save"]" Icon="check" Click="@Save" />
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string Value { get; set; } = string.Empty;
+
+    private string draft = string.Empty;
+
+    protected override void OnParametersSet() => draft = Value;
+
+    private void Cancel() => DialogService.Close();
+    private void Save() => DialogService.Close(draft);
+}

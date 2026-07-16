@@ -14,9 +14,15 @@
   <data name="Nav_Mappings" xml:space="preserve"><value>Table mappings</value></data>
   <data name="Nav_Conflicts" xml:space="preserve"><value>Conflicts</value></data>
   <data name="Nav_Operations" xml:space="preserve"><value>Operations</value></data>
+  <data name="Nav_Help" xml:space="preserve"><value>Help</value></data>
   <data name="Error_Unexpected" xml:space="preserve"><value>An unexpected error occurred.</value></data>
   <data name="Action_Reload" xml:space="preserve"><value>Reload</value></data>
   <data name="Action_Refreshing" xml:space="preserve"><value>Refreshing…</value></data>
+  <data name="Help_PageTitle" xml:space="preserve"><value>Help | SyncCoordinator</value></data>
+  <data name="Help_Title" xml:space="preserve"><value>Help</value></data>
+  <data name="Help_Description" xml:space="preserve"><value>Review setup, operations, and troubleshooting procedures.</value></data>
+  <data name="Help_Loading" xml:space="preserve"><value>Loading the operation manual…</value></data>
+  <data name="Help_LoadFailed" xml:space="preserve"><value>The operation manual could not be loaded.</value></data>
   <data name="Home_PageTitle" xml:space="preserve"><value>Dashboard | SyncCoordinator</value></data>
   <data name="Home_Title" xml:space="preserve"><value>Dashboard</value></data>
   <data name="Home_Description" xml:space="preserve"><value>Review configured sync rules, processing states, and recent conflicts.</value></data>
@@ -33,13 +39,13 @@
   <data name="Metric_EnabledRoutes" xml:space="preserve"><value>Target rules</value></data>
   <data name="Metric_Processing" xml:space="preserve"><value>Processing</value></data>
   <data name="Metric_Held" xml:space="preserve"><value>Needs attention</value></data>
-  <data name="Metric_HeldHelp" xml:space="preserve"><value>Sync operations that could not be completed automatically and require data or configuration review.</value></data>
+  <data name="Metric_HeldHelp" xml:space="preserve"><value>Conflicts that require a manual decision or whose resolution failed.</value></data>
   <data name="Metric_Failed" xml:space="preserve"><value>Retrying automatically</value></data>
   <data name="Home_SyncStatus" xml:space="preserve"><value>Sync paths</value></data>
   <data name="Home_Syncing" xml:space="preserve"><value>Syncing</value></data>
   <data name="Home_Rules" xml:space="preserve"><value>Sync rules</value></data>
   <data name="Home_OpenManagement" xml:space="preserve"><value>Open management</value></data>
-  <data name="Home_Rule" xml:space="preserve"><value>Rule</value></data>
+  <data name="Home_Rule" xml:space="preserve"><value>Sync rule</value></data>
   <data name="Home_Direction" xml:space="preserve"><value>Sync path</value></data>
   <data name="Home_SyncDirection" xml:space="preserve"><value>Sync direction</value></data>
   <data name="Home_Conflict" xml:space="preserve"><value>Conflict</value></data>
@@ -166,6 +172,7 @@
   <data name="Common_SystemCount" xml:space="preserve"><value>{0} systems</value></data>
   <data name="Common_Target" xml:space="preserve"><value>Target</value></data>
   <data name="Common_TargetId" xml:space="preserve"><value>Target ID</value></data>
+  <data name="Common_RecordKey" xml:space="preserve"><value>Record key</value></data>
   <data name="Common_Type" xml:space="preserve"><value>Type</value></data>
   <data name="Common_Unresolved" xml:space="preserve"><value>Unresolved</value></data>
   <data name="Common_UpdatedAt" xml:space="preserve"><value>Updated at</value></data>
@@ -247,7 +254,7 @@
   <data name="RouteTabs_Database" xml:space="preserve"><value>Database deployment</value></data>
   <data name="Conflicts_PageTitle" xml:space="preserve"><value>Conflict history | SyncCoordinator</value></data>
   <data name="Conflicts_Title" xml:space="preserve"><value>Conflict history</value></data>
-  <data name="Conflicts_Description" xml:space="preserve"><value>Review values, applied policies, and selected results for conflicts detected during synchronization. This view is currently read-only.</value></data>
+  <data name="Conflicts_Description" xml:space="preserve"><value>Review synchronization conflicts and safely resolve values that were placed on hold.</value></data>
   <data name="Conflicts_Recent" xml:space="preserve"><value>Recent conflicts</value></data>
   <data name="Conflicts_Empty" xml:space="preserve"><value>No conflicts have been recorded.</value></data>
   <data name="ConflictDetail_PageTitle" xml:space="preserve"><value>Conflict details | SyncCoordinator</value></data>
@@ -556,4 +563,77 @@
   <data name="Operations_ManagementSettings" xml:space="preserve"><value>Management settings</value></data>
   <data name="Operations_AutomaticCleanup" xml:space="preserve"><value>Automatic cleanup</value></data>
   <data name="Operations_ManualCleanup" xml:space="preserve"><value>Manual cleanup</value></data>
+  <data name="Conflicts_FilterNeedsAttention" xml:space="preserve"><value>Needs attention</value></data>
+  <data name="Conflicts_FilterInProgress" xml:space="preserve"><value>In progress</value></data>
+  <data name="Conflicts_FilterWaitingForPrevious" xml:space="preserve"><value>Waiting for previous</value></data>
+  <data name="Conflicts_FilterResolved" xml:space="preserve"><value>Resolved</value></data>
+  <data name="Conflicts_FilterSuperseded" xml:space="preserve"><value>No action needed (later conflict prioritized)</value></data>
+  <data name="Conflicts_FilterAll" xml:space="preserve"><value>All</value></data>
+  <data name="Conflicts_StateAwaiting" xml:space="preserve"><value>Needs attention</value></data>
+  <data name="Conflicts_StateWaitingForPrevious" xml:space="preserve"><value>Waiting for previous</value></data>
+  <data name="Conflicts_StatePending" xml:space="preserve"><value>Waiting for resolution processing</value></data>
+  <data name="Conflicts_StateProcessing" xml:space="preserve"><value>Resolving</value></data>
+  <data name="Conflicts_StateFailed" xml:space="preserve"><value>Resolution failed</value></data>
+  <data name="Conflicts_StateResolved" xml:space="preserve"><value>Resolved</value></data>
+  <data name="Conflicts_StateSuperseded" xml:space="preserve"><value>No action needed (later conflict prioritized)</value></data>
+  <data name="Conflicts_StateSummary" xml:space="preserve"><value>Conflict counts by status</value></data>
+  <data name="Conflicts_SyncPath" xml:space="preserve"><value>Sync path</value></data>
+  <data name="Metric_OpenCount" xml:space="preserve"><value>Open {0}: {1}</value></data>
+  <data name="Operations_OpenConflict" xml:space="preserve"><value>Open the conflict requiring attention</value></data>
+  <data name="Operations_Conflict" xml:space="preserve"><value>Conflict</value></data>
+  <data name="Operations_ValueTransformationError" xml:space="preserve"><value>Value transformation error</value></data>
+  <data name="Metric_ValueTransformationErrors" xml:space="preserve"><value>Value transformation errors</value></data>
+  <data name="Metric_ValueTransformationErrorsHelp" xml:space="preserve"><value>Synchronizations that require review because value transformation or validation failed.</value></data>
+  <data name="Metric_AttentionConflicts" xml:space="preserve"><value>Conflicts requiring attention</value></data>
+  <data name="Metric_AttentionConflictsHelp" xml:space="preserve"><value>Conflicts that require a manual decision or whose resolution failed.</value></data>
+  <data name="ConflictDetail_EditValueTitle" xml:space="preserve"><value>Edit {0}</value></data>
+  <data name="ConflictDetail_CustomValueEmpty" xml:space="preserve"><value>No value entered</value></data>
+  <data name="ConflictDetail_CustomValueHelp" xml:space="preserve"><value>Enter text directly, or enter a number, true, false, null, or JSON. Line breaks are preserved as part of a string.</value></data>
+  <data name="ConflictDetail_RecordKey" xml:space="preserve"><value>Record key: {0}</value></data>
+  <data name="ConflictDetail_Attention" xml:space="preserve"><value>Review required</value></data>
+  <data name="ConflictDetail_CurrentChanged" xml:space="preserve"><value>The destination value has changed</value></data>
+  <data name="ConflictDetail_CurrentChangedHelp" xml:space="preserve"><value>You can resolve against the latest value shown here. If it changes again after submission, the update is not applied and a new decision is required.</value></data>
+  <data name="ConflictDetail_PendingTitle" xml:space="preserve"><value>Waiting for resolution processing</value></data>
+  <data name="ConflictDetail_PendingHelp" xml:space="preserve"><value>The resolution was received and will be processed by the Worker in order.</value></data>
+  <data name="ConflictDetail_QueuedTitle" xml:space="preserve"><value>Resolution is being processed</value></data>
+  <data name="ConflictDetail_QueuedHelp" xml:space="preserve"><value>The Worker is verifying the current destination value and applying the resolution. Reload this page shortly.</value></data>
+  <data name="ConflictDetail_ResolvedTitle" xml:space="preserve"><value>Resolved</value></data>
+  <data name="ConflictDetail_ResolvedSummary" xml:space="preserve"><value>Resolved by {0} at {1}.</value></data>
+  <data name="ConflictDetail_SupersededTitle" xml:space="preserve"><value>A newer conflict is available</value></data>
+  <data name="ConflictDetail_SupersededHelp" xml:space="preserve"><value>This history entry can no longer be changed.</value></data>
+  <data name="ConflictDetail_OpenLatest" xml:space="preserve"><value>Open the latest conflict</value></data>
+  <data name="ConflictDetail_UpdateConflict" xml:space="preserve"><value>Update conflict</value></data>
+  <data name="ConflictDetail_DeleteConflict" xml:space="preserve"><value>Delete conflict</value></data>
+  <data name="ConflictDetail_DeleteFields" xml:space="preserve"><value>Fields changed at the destination</value></data>
+  <data name="ConflictDetail_DeleteExplanation" xml:space="preserve"><value>A deletion was received, but the destination record has changed. Choose whether to delete the record or keep its current value.</value></data>
+  <data name="ConflictDetail_OpenOldest" xml:space="preserve"><value>Open the first conflict</value></data>
+  <data name="ConflictDetail_WaitingForPreviousTitle" xml:space="preserve"><value>Waiting for an earlier conflict</value></data>
+  <data name="ConflictDetail_WaitingForPreviousHelp" xml:space="preserve"><value>This conflict cannot be changed until its turn. Resolve from the first conflict, or prioritize the latest conflict.</value></data>
+  <data name="ConflictDetail_NewerConflictsTitle" xml:space="preserve"><value>Later conflicts are available</value></data>
+  <data name="ConflictDetail_NewerConflictsHelp" xml:space="preserve"><value>There are {0} later conflicts. After resolving this conflict, the next one will be reevaluated against the updated value.</value></data>
+  <data name="ConflictDetail_OlderConflictsTitle" xml:space="preserve"><value>Earlier conflicts remain unresolved</value></data>
+  <data name="ConflictDetail_OlderConflictsHelp" xml:space="preserve"><value>There are {0} earlier conflicts. Resolving this latest conflict will make the earlier conflicts unavailable.</value></data>
+  <data name="ConflictDetail_AllIncoming" xml:space="preserve"><value>Use all incoming</value></data>
+  <data name="ConflictDetail_AllCurrent" xml:space="preserve"><value>Keep all current</value></data>
+  <data name="ConflictDetail_ChooseIncoming" xml:space="preserve"><value>Use incoming value</value></data>
+  <data name="ConflictDetail_ChooseCurrent" xml:space="preserve"><value>Keep destination value</value></data>
+  <data name="ConflictDetail_ChooseCustom" xml:space="preserve"><value>Enter a value</value></data>
+  <data name="ConflictDetail_CustomPlaceholder" xml:space="preserve"><value>String, number, true, false, null, or JSON</value></data>
+  <data name="ConflictDetail_Resolution" xml:space="preserve"><value>Resolution</value></data>
+  <data name="ConflictDetail_DeleteChoice" xml:space="preserve"><value>Resolve delete conflict</value></data>
+  <data name="ConflictDetail_ApplyDelete" xml:space="preserve"><value>Apply the incoming deletion to the destination</value></data>
+  <data name="ConflictDetail_KeepRecord" xml:space="preserve"><value>Keep the destination record</value></data>
+  <data name="ConflictDetail_Comment" xml:space="preserve"><value>Reason or note (optional)</value></data>
+  <data name="ConflictDetail_CommentPlaceholder" xml:space="preserve"><value>Record the reason for the decision or what was verified.</value></data>
+  <data name="ConflictDetail_Submit" xml:space="preserve"><value>Queue resolution</value></data>
+  <data name="ConflictDetail_Submitting" xml:space="preserve"><value>Submitting…</value></data>
+  <data name="ConflictDetail_ConfirmTitle" xml:space="preserve"><value>Resolve conflict</value></data>
+  <data name="ConflictDetail_ConfirmMessage" xml:space="preserve"><value>Queue a resolution that applies the selected values to the destination?</value></data>
+  <data name="ConflictDetail_ConfirmLatestMessage" xml:space="preserve"><value>Resolving this latest conflict will make {0} earlier conflicts unavailable. Continue?</value></data>
+  <data name="ConflictDetail_Queued" xml:space="preserve"><value>The resolution was queued. The Worker will verify the current value before applying it.</value></data>
+  <data name="ConflictDetail_ManuallyIncoming" xml:space="preserve"><value>Incoming value selected manually</value></data>
+  <data name="ConflictDetail_ManuallyCurrent" xml:space="preserve"><value>Destination value kept manually</value></data>
+  <data name="ConflictDetail_ManuallyCustom" xml:space="preserve"><value>Custom value selected manually</value></data>
+  <data name="ConflictDetail_ManuallyDelete" xml:space="preserve"><value>Deletion applied manually</value></data>
+  <data name="ConflictDetail_ManuallyKeptRecord" xml:space="preserve"><value>Destination record kept manually</value></data>
 </root>

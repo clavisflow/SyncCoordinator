@@ -92,6 +92,7 @@ public interface ICoordinatorReadService
     Task<DashboardSummary> GetSummaryAsync(CancellationToken cancellationToken);
     Task<IReadOnlyList<RouteListItem>> GetRoutesAsync(CancellationToken cancellationToken);
     Task<IReadOnlyList<ConflictListItem>> GetRecentConflictsAsync(int take, CancellationToken cancellationToken);
+    Task<ConflictStateCounts> GetConflictStateCountsAsync(CancellationToken cancellationToken);
 }
 
 public interface ICoordinatorAdminService
@@ -116,6 +117,22 @@ public interface ICoordinatorAdminService
     Task<IReadOnlyList<ConfigurationAuditListItem>> GetRecentConfigurationAuditsAsync(
         int take,
         CancellationToken cancellationToken);
+}
+
+public interface IConflictResolutionService
+{
+    Task<ConflictDetails?> GetAsync(Guid id, CancellationToken cancellationToken);
+    Task QueueAsync(
+        Guid id,
+        ConflictResolutionInput input,
+        string requestedBy,
+        CancellationToken cancellationToken);
+    Task<int> ProcessPendingAsync(int take, CancellationToken cancellationToken);
+}
+
+public interface IDemoConflictSeeder
+{
+    Task<int> SeedIfReadyAsync(CancellationToken cancellationToken);
 }
 
 public interface IDatabaseMetadataService

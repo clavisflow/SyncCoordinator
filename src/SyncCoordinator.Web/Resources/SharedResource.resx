@@ -14,9 +14,15 @@
   <data name="Nav_Mappings" xml:space="preserve"><value>テーブルマッピング</value></data>
   <data name="Nav_Conflicts" xml:space="preserve"><value>コンフリクト</value></data>
   <data name="Nav_Operations" xml:space="preserve"><value>処理状況</value></data>
+  <data name="Nav_Help" xml:space="preserve"><value>ヘルプ</value></data>
   <data name="Error_Unexpected" xml:space="preserve"><value>予期しないエラーが発生しました。</value></data>
   <data name="Action_Reload" xml:space="preserve"><value>再読み込み</value></data>
   <data name="Action_Refreshing" xml:space="preserve"><value>更新中…</value></data>
+  <data name="Help_PageTitle" xml:space="preserve"><value>ヘルプ | SyncCoordinator</value></data>
+  <data name="Help_Title" xml:space="preserve"><value>ヘルプ</value></data>
+  <data name="Help_Description" xml:space="preserve"><value>設定、運用、トラブル対応の手順を確認します。</value></data>
+  <data name="Help_Loading" xml:space="preserve"><value>操作マニュアルを読み込んでいます…</value></data>
+  <data name="Help_LoadFailed" xml:space="preserve"><value>操作マニュアルを読み込めませんでした。</value></data>
   <data name="Home_PageTitle" xml:space="preserve"><value>ダッシュボード | SyncCoordinator</value></data>
   <data name="Home_Title" xml:space="preserve"><value>ダッシュボード</value></data>
   <data name="Home_Description" xml:space="preserve"><value>同期対象と現在の処理状況、直近のコンフリクトを確認します。</value></data>
@@ -33,13 +39,13 @@
   <data name="Metric_EnabledRoutes" xml:space="preserve"><value>同期対象ルール</value></data>
   <data name="Metric_Processing" xml:space="preserve"><value>処理中</value></data>
   <data name="Metric_Held" xml:space="preserve"><value>要対応</value></data>
-  <data name="Metric_HeldHelp" xml:space="preserve"><value>自動処理できず、データまたは設定の確認が必要な同期です。</value></data>
+  <data name="Metric_HeldHelp" xml:space="preserve"><value>手動での判断が必要、または解決処理に失敗したコンフリクトです。</value></data>
   <data name="Metric_Failed" xml:space="preserve"><value>自動再試行中</value></data>
   <data name="Home_SyncStatus" xml:space="preserve"><value>同期経路</value></data>
   <data name="Home_Syncing" xml:space="preserve"><value>同期中</value></data>
   <data name="Home_Rules" xml:space="preserve"><value>同期ルール</value></data>
   <data name="Home_OpenManagement" xml:space="preserve"><value>管理画面を開く</value></data>
-  <data name="Home_Rule" xml:space="preserve"><value>ルール</value></data>
+  <data name="Home_Rule" xml:space="preserve"><value>同期ルール</value></data>
   <data name="Home_Direction" xml:space="preserve"><value>同期経路</value></data>
   <data name="Home_SyncDirection" xml:space="preserve"><value>同期方向</value></data>
   <data name="Home_Conflict" xml:space="preserve"><value>コンフリクト</value></data>
@@ -134,7 +140,7 @@
   <data name="Common_Select"><value>選択してください</value></data><data name="Common_Show"><value>表示</value></data>
   <data name="Common_Status"><value>状態</value></data><data name="Common_System"><value>システム</value></data>
   <data name="Common_SystemCount"><value>{0} システム</value></data><data name="Common_Target"><value>対象</value></data>
-  <data name="Common_TargetId"><value>対象ID</value></data><data name="Common_Type"><value>種類</value></data>
+  <data name="Common_TargetId"><value>対象ID</value></data><data name="Common_RecordKey"><value>レコードキー</value></data><data name="Common_Type"><value>種類</value></data>
   <data name="Common_Unresolved"><value>未解決</value></data><data name="Common_UpdatedAt"><value>更新日時</value></data>
   <data name="Common_UseSource"><value>送信元を採用</value></data>
   <data name="Systems_PageTitle"><value>システム管理 | SyncCoordinator</value></data><data name="Systems_Title"><value>システム管理</value></data>
@@ -187,12 +193,12 @@
   <data name="RouteTabs_Mappings"><value>テーブルマッピング</value></data>
   <data name="RouteTabs_Database"><value>データベース反映</value></data>
   <data name="Conflicts_PageTitle"><value>コンフリクト履歴 | SyncCoordinator</value></data><data name="Conflicts_Title"><value>コンフリクト履歴</value></data>
-  <data name="Conflicts_Description"><value>同期時に検出したコンフリクトの値、適用ポリシー、採用結果を確認します。現在は参照専用です。</value></data>
+  <data name="Conflicts_Description"><value>同期時に検出したコンフリクトを確認し、保留された値を安全に解決します。</value></data>
   <data name="Conflicts_Recent"><value>最近のコンフリクト</value></data><data name="Conflicts_Empty"><value>コンフリクト履歴はありません。</value></data>
   <data name="ConflictDetail_PageTitle"><value>コンフリクト詳細 | SyncCoordinator</value></data><data name="ConflictDetail_Loading"><value>コンフリクト情報を読み込んでいます…</value></data>
   <data name="ConflictDetail_NotFoundTitle"><value>コンフリクトが見つかりません</value></data>
   <data name="ConflictDetail_NotFoundDescription"><value>指定されたコンフリクトは存在しないか、保持期間を過ぎています。</value></data>
-  <data name="ConflictDetail_Target"><value>対象 {0}</value></data><data name="ConflictDetail_Fields"><value>コンフリクト項目と採用値</value></data>
+  <data name="ConflictDetail_Target"><value>対象 {0}</value></data><data name="ConflictDetail_RecordKey"><value>レコードキー: {0}</value></data><data name="ConflictDetail_Fields"><value>コンフリクト項目と採用値</value></data>
   <data name="ConflictDetail_Empty"><value>コンフリクト項目はありません。</value></data><data name="ConflictDetail_Previous"><value>前回値</value></data><data name="ConflictDetail_Adopted"><value>採用値</value></data>
   <data name="Operations_PageTitle"><value>処理状況 | SyncCoordinator</value></data><data name="Operations_Title"><value>処理状況</value></data>
   <data name="Operations_Description"><value>システムごとのキュー読取位置、直近のメッセージ処理結果、設定変更履歴を確認します。</value></data>
@@ -432,4 +438,76 @@
   <data name="Operations_ManagementSettings"><value>管理設定</value></data>
   <data name="Operations_AutomaticCleanup"><value>自動クリーンアップ</value></data>
   <data name="Operations_ManualCleanup"><value>手動クリーンアップ</value></data>
+  <data name="Conflicts_FilterNeedsAttention"><value>要対応</value></data>
+  <data name="Conflicts_FilterInProgress"><value>処理中</value></data>
+  <data name="Conflicts_FilterWaitingForPrevious"><value>前の競合待ち</value></data>
+  <data name="Conflicts_FilterResolved"><value>解決済み</value></data>
+  <data name="Conflicts_FilterSuperseded"><value>対応不要（後続優先）</value></data>
+  <data name="Conflicts_FilterAll"><value>すべて</value></data>
+  <data name="Conflicts_StateAwaiting"><value>要対応</value></data>
+  <data name="Conflicts_StateWaitingForPrevious"><value>前の競合待ち</value></data>
+  <data name="Conflicts_StatePending"><value>解決処理待ち</value></data>
+  <data name="Conflicts_StateProcessing"><value>解決処理中</value></data>
+  <data name="Conflicts_StateFailed"><value>解決失敗</value></data>
+  <data name="Conflicts_StateResolved"><value>解決済み</value></data>
+  <data name="Conflicts_StateSuperseded"><value>対応不要（後続優先）</value></data>
+  <data name="Conflicts_StateSummary"><value>コンフリクトの状態別件数</value></data>
+  <data name="Conflicts_SyncPath"><value>同期経路</value></data>
+  <data name="Metric_OpenCount"><value>{0}: {1}件を開く</value></data>
+  <data name="Operations_OpenConflict"><value>要対応コンフリクトを開く</value></data>
+  <data name="Operations_Conflict"><value>コンフリクト</value></data>
+  <data name="Operations_ValueTransformationError"><value>値変換エラー</value></data>
+  <data name="Metric_ValueTransformationErrors"><value>値変換エラー</value></data>
+  <data name="Metric_ValueTransformationErrorsHelp"><value>値変換または入力値の検証に失敗し、確認が必要な同期です。</value></data>
+  <data name="Metric_AttentionConflicts"><value>要対応コンフリクト</value></data>
+  <data name="Metric_AttentionConflictsHelp"><value>手動での判断が必要、または解決処理に失敗したコンフリクトです。</value></data>
+  <data name="ConflictDetail_EditValueTitle"><value>{0} の値を編集</value></data>
+  <data name="ConflictDetail_CustomValueEmpty"><value>未入力</value></data>
+  <data name="ConflictDetail_CustomValueHelp"><value>文字列はそのまま入力できます。数値、true、false、null、JSONも入力できます。改行は文字列の一部として保持されます。</value></data>
+  <data name="ConflictDetail_Attention"><value>確認が必要です</value></data>
+  <data name="ConflictDetail_CurrentChanged"><value>同期先の現在値が変わっています</value></data>
+  <data name="ConflictDetail_CurrentChangedHelp"><value>画面に表示した最新値を基準に解決できます。登録後に再度変更された場合は適用せず、選択をやり直します。</value></data>
+  <data name="ConflictDetail_PendingTitle"><value>解決処理待ちです</value></data>
+  <data name="ConflictDetail_PendingHelp"><value>解決内容を受け付けました。Workerが順番に処理します。</value></data>
+  <data name="ConflictDetail_QueuedTitle"><value>解決処理中です</value></data>
+  <data name="ConflictDetail_QueuedHelp"><value>Workerが同期先の現在値を再確認して適用しています。しばらくして再読み込みしてください。</value></data>
+  <data name="ConflictDetail_ResolvedTitle"><value>解決済み</value></data>
+  <data name="ConflictDetail_ResolvedSummary"><value>{0} が {1} に解決しました。</value></data>
+  <data name="ConflictDetail_SupersededTitle"><value>新しいコンフリクトがあります</value></data>
+  <data name="ConflictDetail_SupersededHelp"><value>この履歴は操作できません。</value></data>
+  <data name="ConflictDetail_OpenLatest"><value>最新のコンフリクトを開く</value></data>
+  <data name="ConflictDetail_UpdateConflict"><value>更新競合</value></data>
+  <data name="ConflictDetail_DeleteConflict"><value>削除競合</value></data>
+  <data name="ConflictDetail_DeleteFields"><value>同期先で変更されている項目</value></data>
+  <data name="ConflictDetail_DeleteExplanation"><value>削除要求を受信しましたが、同期先のレコードが変更されています。レコードを削除するか、現在のレコードを維持するか選択してください。</value></data>
+  <data name="ConflictDetail_OpenOldest"><value>最初のコンフリクトを開く</value></data>
+  <data name="ConflictDetail_WaitingForPreviousTitle"><value>前のコンフリクトの解決待ちです</value></data>
+  <data name="ConflictDetail_WaitingForPreviousHelp"><value>この競合は順番が来るまで操作できません。最初から順に解決するか、最新の競合を優先できます。</value></data>
+  <data name="ConflictDetail_NewerConflictsTitle"><value>後続のコンフリクトがあります</value></data>
+  <data name="ConflictDetail_NewerConflictsHelp"><value>後続に{0}件あります。この競合を解決すると、次の競合を更新後の値で再評価します。</value></data>
+  <data name="ConflictDetail_OlderConflictsTitle"><value>未解決の古いコンフリクトがあります</value></data>
+  <data name="ConflictDetail_OlderConflictsHelp"><value>前に{0}件あります。この最新の競合を解決すると、古いコンフリクトは操作できなくなります。</value></data>
+  <data name="ConflictDetail_AllIncoming"><value>すべて受信値</value></data>
+  <data name="ConflictDetail_AllCurrent"><value>すべて現在値</value></data>
+  <data name="ConflictDetail_ChooseIncoming"><value>受信値を採用</value></data>
+  <data name="ConflictDetail_ChooseCurrent"><value>同期先の現在値を維持</value></data>
+  <data name="ConflictDetail_ChooseCustom"><value>値を入力</value></data>
+  <data name="ConflictDetail_CustomPlaceholder"><value>文字列、数値、true、false、null、JSON</value></data>
+  <data name="ConflictDetail_Resolution"><value>解決内容</value></data>
+  <data name="ConflictDetail_DeleteChoice"><value>削除競合の解決</value></data>
+  <data name="ConflictDetail_ApplyDelete"><value>受信した削除を同期先へ適用する</value></data>
+  <data name="ConflictDetail_KeepRecord"><value>同期先のレコードを維持する</value></data>
+  <data name="ConflictDetail_Comment"><value>解決理由・メモ（任意）</value></data>
+  <data name="ConflictDetail_CommentPlaceholder"><value>判断理由や確認内容を記録できます。</value></data>
+  <data name="ConflictDetail_Submit"><value>解決を登録</value></data>
+  <data name="ConflictDetail_Submitting"><value>登録中…</value></data>
+  <data name="ConflictDetail_ConfirmTitle"><value>競合を解決</value></data>
+  <data name="ConflictDetail_ConfirmMessage"><value>選択した値を同期先へ適用する解決要求を登録します。よろしいですか？</value></data>
+  <data name="ConflictDetail_ConfirmLatestMessage"><value>この最新のコンフリクトを解決すると、古いコンフリクト{0}件は操作できなくなります。続けますか？</value></data>
+  <data name="ConflictDetail_Queued"><value>解決要求を登録しました。Workerが現在値を確認して適用します。</value></data>
+  <data name="ConflictDetail_ManuallyIncoming"><value>手動で受信値を採用</value></data>
+  <data name="ConflictDetail_ManuallyCurrent"><value>手動で同期先を維持</value></data>
+  <data name="ConflictDetail_ManuallyCustom"><value>手動入力値を採用</value></data>
+  <data name="ConflictDetail_ManuallyDelete"><value>手動で削除を適用</value></data>
+  <data name="ConflictDetail_ManuallyKeptRecord"><value>手動で同期先レコードを維持</value></data>
 </root>

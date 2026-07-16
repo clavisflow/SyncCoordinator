@@ -1,5 +1,6 @@
 @page "/"
 @attribute [Authorize]
+@using SyncCoordinator.Contracts
 @using SyncCoordinator.Core
 @inject ICoordinatorReadService ReadService
 @inject IManagementSettingsService SettingsService
@@ -69,18 +70,22 @@ else
         <div class="dashboard-metric-group">
             <h2>@L["Metric_Targets"]</h2>
             <div class="dashboard-metric-grid targets">
-                <RadzenCard class="metric-card target"><span>@L["Metric_EnabledSystems"]</span><strong>@summary.EnabledSystems</strong></RadzenCard>
-                <RadzenCard class="metric-card target"><span>@L["Metric_EnabledRoutes"]</span><strong>@summary.EnabledRoutes</strong></RadzenCard>
+                <RadzenCard class="metric-card target"><span>@L["Metric_EnabledSystems"]</span><strong><a class="metric-value-link" href="/systems" aria-label="@L["Metric_OpenCount", L["Metric_EnabledSystems"], summary.EnabledSystems]">@summary.EnabledSystems</a></strong></RadzenCard>
+                <RadzenCard class="metric-card target"><span>@L["Metric_EnabledRoutes"]</span><strong><a class="metric-value-link" href="/routes" aria-label="@L["Metric_OpenCount", L["Metric_EnabledRoutes"], summary.EnabledRoutes]">@summary.EnabledRoutes</a></strong></RadzenCard>
             </div>
         </div>
         <div class="dashboard-metric-group">
             <h2>@L["Metric_ProcessingStatus"]</h2>
             <div class="dashboard-metric-grid processing">
-                <RadzenCard class="metric-card processing"><span>@L["Metric_Processing"]</span><strong>@summary.ProcessingMessages</strong></RadzenCard>
-                <RadzenCard class="metric-card retrying"><span>@L["Metric_Failed"]</span><strong>@summary.FailedMessages</strong></RadzenCard>
+                <RadzenCard class="metric-card processing"><span>@L["Metric_Processing"]</span><strong><a class="metric-value-link" href="/operations" aria-label="@L["Metric_OpenCount", L["Metric_Processing"], summary.ProcessingMessages]">@summary.ProcessingMessages</a></strong></RadzenCard>
+                <RadzenCard class="metric-card retrying"><span>@L["Metric_Failed"]</span><strong><a class="metric-value-link" href="/operations" aria-label="@L["Metric_OpenCount", L["Metric_Failed"], summary.FailedMessages]">@summary.FailedMessages</a></strong></RadzenCard>
+                <RadzenCard class="metric-card validation-error">
+                    <div class="caption-title"><span>@L["Metric_ValueTransformationErrors"]</span><HelpTip Text="@L["Metric_ValueTransformationErrorsHelp"]" /></div>
+                    <strong><a class="metric-value-link" href="/operations" aria-label="@L["Metric_OpenCount", L["Metric_ValueTransformationErrors"], summary.ValueTransformationErrors]">@summary.ValueTransformationErrors</a></strong>
+                </RadzenCard>
                 <RadzenCard class="metric-card attention">
-                    <div class="caption-title"><span>@L["Metric_Held"]</span><HelpTip Text="@L["Metric_HeldHelp"]" /></div>
-                    <strong>@summary.HeldMessages</strong>
+                    <div class="caption-title"><span>@L["Metric_AttentionConflicts"]</span><HelpTip Text="@L["Metric_AttentionConflictsHelp"]" /></div>
+                    <strong><a class="metric-value-link" href="/conflicts" aria-label="@L["Metric_OpenCount", L["Metric_AttentionConflicts"], summary.AttentionConflicts]">@summary.AttentionConflicts</a></strong>
                 </RadzenCard>
             </div>
         </div>
@@ -94,6 +99,13 @@ else
             </div>
             <RadzenDataGrid Data="@conflicts" TItem="ConflictListItem" AllowSorting="true" AllowPaging="true" PageSize="10" EmptyText="@L["Home_NoConflicts"]" Density="Density.Compact">
                 <Columns>
+                    <RadzenDataGridColumn TItem="ConflictListItem" Property="Operation" Title="@L["Common_Type"]" Width="120px">
+                        <Template Context="conflict">
+                            <span class="conflict-kind @(conflict.Operation == ChangeOperation.Delete ? "delete" : "update")">
+                                @(conflict.Operation == ChangeOperation.Delete ? L["ConflictDetail_DeleteConflict"] : L["ConflictDetail_UpdateConflict"])
+                            </span>
+                        </Template>
+                    </RadzenDataGridColumn>
                     <RadzenDataGridColumn TItem="ConflictListItem" Property="DetectedAtUtc" Title="@L["Home_DetectedAt"]">
                         <Template Context="conflict">@UiFormat.LocalDateTime(conflict.DetectedAtUtc)</Template>
                     </RadzenDataGridColumn>
@@ -103,7 +115,7 @@ else
                     <RadzenDataGridColumn TItem="ConflictListItem" Title="@L["Home_Direction"]" Sortable="false">
                         <Template Context="conflict"><code class="direction">@conflict.SourceSystemName → @conflict.DestinationSystemName</code></Template>
                     </RadzenDataGridColumn>
-                    <RadzenDataGridColumn TItem="ConflictListItem" Title="@L["Home_Target"]" Sortable="false">
+                    <RadzenDataGridColumn TItem="ConflictListItem" Title="@L["Common_RecordKey"]" Sortable="false">
                         <Template Context="conflict"><a href="/conflicts/@conflict.Id">@conflict.EntityId</a></Template>
                     </RadzenDataGridColumn>
                 </Columns>

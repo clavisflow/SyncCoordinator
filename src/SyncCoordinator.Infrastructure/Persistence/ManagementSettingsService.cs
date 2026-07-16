@@ -157,7 +157,7 @@ public sealed class ManagementSettingsService(
         settings.CompletedInboxRetentionDays == 0
             ? Task.FromResult(0L)
             : dbContext.InboxMessages.LongCountAsync(
-                x => x.State == InboxState.Completed &&
+                x => (x.State == InboxState.Completed || x.State == InboxState.Superseded) &&
                      x.UpdatedAtUtc < now.AddDays(-settings.CompletedInboxRetentionDays), token);
 
     private Task<long> CountDeliveredWebhooksAsync(ManagementSettingsEntity settings, DateTimeOffset now, CancellationToken token) =>
@@ -191,7 +191,7 @@ public sealed class ManagementSettingsService(
         settings.CompletedInboxRetentionDays == 0
             ? Task.FromResult(0)
             : dbContext.InboxMessages.Where(
-                x => x.State == InboxState.Completed &&
+                x => (x.State == InboxState.Completed || x.State == InboxState.Superseded) &&
                      x.UpdatedAtUtc < now.AddDays(-settings.CompletedInboxRetentionDays)).ExecuteDeleteAsync(token);
 
     private Task<int> DeleteDeliveredWebhooksAsync(ManagementSettingsEntity settings, DateTimeOffset now, CancellationToken token) =>

@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SyncCoordinator.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using SyncCoordinator.Infrastructure.Persistence;
 namespace SyncCoordinator.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(CoordinatorDbContext))]
-    partial class CoordinatorDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260716031055_HybridConflictChainResolution")]
+    partial class HybridConflictChainResolution
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -130,8 +133,8 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("State")
                         .IsRequired()
-                        .HasMaxLength(24)
-                        .HasColumnType("nvarchar(24)");
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
 
                     b.Property<DateTimeOffset>("UpdatedAtUtc")
                         .HasColumnType("datetimeoffset");

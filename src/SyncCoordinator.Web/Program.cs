@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using SyncCoordinator.Core;
 using SyncCoordinator.Infrastructure;
 using SyncCoordinator.Infrastructure.Persistence;
+using SyncCoordinator.Web;
 using SyncCoordinator.Web.Authentication;
 using SyncCoordinator.Web.Components;
 
@@ -103,6 +104,7 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddRadzenComponents();
 builder.Services.AddScoped<UiErrorReporter>();
+builder.Services.AddSingleton<HelpContentService>();
 
 var app = builder.Build();
 app.UseRequestLocalization();
@@ -124,6 +126,13 @@ app.UseAntiforgery();
 
 app.MapStaticAssets();
 app.MapSyncCoordinatorAuthentication();
+app.MapGet("/help-assets/{**assetPath}", (string? assetPath, HelpContentService helpContent) =>
+{
+    var asset = helpContent.TryResolveAsset(assetPath);
+    return asset is null
+        ? Results.NotFound()
+        : Results.File(asset.Path, asset.ContentType);
+}).RequireAuthorization();
 app.MapGet("/api/routes/{routeId:guid}/database-setup/{systemCode}/script", async (
     Guid routeId,
     string systemCode,

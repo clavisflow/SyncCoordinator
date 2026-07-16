@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SyncCoordinator.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using SyncCoordinator.Infrastructure.Persistence;
 namespace SyncCoordinator.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(CoordinatorDbContext))]
-    partial class CoordinatorDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260716020948_SupersedeOverlappingConflicts")]
+    partial class SupersedeOverlappingConflicts
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -130,8 +133,8 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("State")
                         .IsRequired()
-                        .HasMaxLength(24)
-                        .HasColumnType("nvarchar(24)");
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
 
                     b.Property<DateTimeOffset>("UpdatedAtUtc")
                         .HasColumnType("datetimeoffset");
@@ -506,9 +509,6 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("nvarchar(16)");
 
-                    b.Property<Guid?>("PreviousConflictId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<DateTimeOffset?>("RequestedAtUtc")
                         .HasColumnType("datetimeoffset");
 
@@ -578,7 +578,9 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
                     b.HasIndex("ResolutionState", "DetectedAtUtc");
 
                     b.HasIndex("RouteId", "DestinationSystem", "EntityType", "EntityId")
-                        .HasDatabaseName("IX_SyncConflict_RecordChain");
+                        .IsUnique()
+                        .HasDatabaseName("IX_SyncConflict_ActiveRecord")
+                        .HasFilter("[ResolutionState] IN (N'AwaitingDecision', N'Pending', N'Processing', N'Failed')");
 
                     b.ToTable("SyncConflict", (string)null);
                 });
