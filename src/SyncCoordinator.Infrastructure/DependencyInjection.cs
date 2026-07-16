@@ -42,9 +42,7 @@ public static class DependencyInjection
         services.AddScoped<IManagementSettingsService, ManagementSettingsService>();
         services.AddScoped<WebhookOutboxWriter>();
         services.AddScoped<ProtectedWebhookSecretService>();
-        services.AddHttpClient(WebhookDeliveryService.HttpClientName, client =>
-            client.Timeout = TimeSpan.FromSeconds(10))
-            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+        services.AddSingleton<WebhookHttpTransport>();
         services.AddScoped<ProtectedConnectionStringService>();
         services.AddScoped<CoordinatorDatabaseInitializer>();
         services.AddScoped<ConflictResolver>();

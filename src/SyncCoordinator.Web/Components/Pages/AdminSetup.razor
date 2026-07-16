@@ -7,7 +7,7 @@
 
 <PageTitle>@L["Auth_SetupPageTitle"]</PageTitle>
 
-<section class="auth-card">
+<section class="auth-card" data-testid="admin-setup-page">
     <p class="kicker">LOCAL SETUP</p>
     <h1>@L["Auth_SetupTitle"]</h1>
     <p>@L["Auth_SetupDescription"]</p>
@@ -31,7 +31,7 @@
         {
             <div class="message-box error" role="alert">@ErrorText(Error)</div>
         }
-        <form method="post" action="/auth/setup" class="auth-form">
+        <form method="post" action="/auth/setup" class="auth-form" data-testid="admin-setup-form">
             <AntiforgeryToken />
             <div class="form-field">
                 <label for="setup-password">@L["Auth_NewPassword"]</label>
@@ -42,7 +42,7 @@
                 <label for="setup-confirmation">@L["Auth_ConfirmPassword"]</label>
                 <input id="setup-confirmation" class="auth-input" name="confirmation" type="password" minlength="12" maxlength="128" autocomplete="new-password" required />
             </div>
-            <button class="auth-primary" type="submit">@L["Auth_SetupAction"]</button>
+            <button class="auth-primary" type="submit" data-testid="admin-setup-submit">@L["Auth_SetupAction"]</button>
         </form>
     }
 </section>

@@ -62,7 +62,11 @@ public static class ValueTransformEngine
 
         if (!contract.IsKnown)
         {
-            return NormalizeDateTimeIfRequested(value, transform, fieldName, targetColumn);
+            return NormalizeDateTime(
+                value,
+                transform.NormalizeDateTimeToUtc,
+                fieldName,
+                targetColumn);
         }
 
         var dataType = contract.DataType.Trim().ToLowerInvariant();
@@ -138,7 +142,12 @@ public static class ValueTransformEngine
 
         if (IsDateTime(dataType))
         {
-            return NormalizeDateTimeIfRequested(value, transform, fieldName, targetColumn, requireDateTime: true);
+            return NormalizeDateTime(
+                value,
+                transform.NormalizeDateTimeToUtc || IsOffsetAwareDateTime(dataType),
+                fieldName,
+                targetColumn,
+                requireDateTime: true);
         }
 
         if (IsGuid(dataType))
@@ -175,14 +184,14 @@ public static class ValueTransformEngine
         return null;
     }
 
-    private static JsonNode NormalizeDateTimeIfRequested(
+    private static JsonNode NormalizeDateTime(
         JsonNode value,
-        ValueTransformInput transform,
+        bool normalizeToUtc,
         string fieldName,
         string targetColumn,
         bool requireDateTime = false)
     {
-        if (!transform.NormalizeDateTimeToUtc && !requireDateTime)
+        if (!normalizeToUtc && !requireDateTime)
         {
             return value;
         }
@@ -194,7 +203,7 @@ public static class ValueTransformEngine
         {
             throw Error(fieldName, targetColumn, "invalid-datetime", "日時へ変換できません。");
         }
-        return transform.NormalizeDateTimeToUtc
+        return normalizeToUtc
             ? JsonValue.Create(dateTime.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture))!
             : value;
     }
@@ -317,6 +326,10 @@ public static class ValueTransformEngine
     private static bool IsDateTime(string type) =>
         type.Contains("date", StringComparison.Ordinal) ||
         type.Contains("time", StringComparison.Ordinal);
+
+    private static bool IsOffsetAwareDateTime(string type) => type is
+        "datetimeoffset" or "timestamptz" or "timetz" or
+        "timestamp with time zone" or "time with time zone";
 
     private static bool IsGuid(string type) => type is "uuid" or "uniqueidentifier";
 }

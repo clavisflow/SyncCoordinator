@@ -203,14 +203,28 @@ public sealed class WebhookAdminService(
             entity.ProtectedSecret is not null, WebhookOutboxWriter.ParseEventTypes(entity.EventTypesJson), entity.UpdatedAtUtc);
 }
 
+public sealed class WebhookHttpTransport : IDisposable
+{
+    private readonly HttpClient client = new(new HttpClientHandler { AllowAutoRedirect = false })
+    {
+        Timeout = TimeSpan.FromSeconds(10)
+    };
+
+    public Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken) =>
+        client.SendAsync(request, cancellationToken);
+
+    public void Dispose() => client.Dispose();
+}
+
 public sealed class WebhookDeliveryService(
     CoordinatorDbContext dbContext,
-    IHttpClientFactory httpClientFactory,
+    WebhookHttpTransport httpTransport,
     ProtectedWebhookSecretService secretProtector,
     TimeProvider timeProvider,
     IOperationalEventRecorder operationalEvents) : IWebhookDeliveryService
 {
-    public const string HttpClientName = "SyncCoordinator.Webhooks";
     private static readonly TimeSpan[] RetryDelays =
     [TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(30), TimeSpan.FromHours(2), TimeSpan.FromHours(6), TimeSpan.FromHours(12)];
 
@@ -250,7 +264,7 @@ public sealed class WebhookDeliveryService(
                     secretProtector.Unprotect(delivery.Endpoint.ProtectedSecret), timestamp, delivery.Event.PayloadJson);
                 request.Headers.Add("Webhook-Signature", signature);
             }
-            using var response = await httpClientFactory.CreateClient(HttpClientName).SendAsync(request, cancellationToken);
+            using var response = await httpTransport.SendAsync(request, cancellationToken);
             delivery.HttpStatusCode = (int)response.StatusCode;
             if (response.IsSuccessStatusCode)
             {

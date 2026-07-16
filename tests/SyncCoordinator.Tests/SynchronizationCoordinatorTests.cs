@@ -45,6 +45,42 @@ public sealed class SynchronizationCoordinatorTests
     }
 
     [Fact]
+    public async Task SourceReadFailureKeepsItsCheckpointAndDoesNotBlockOtherSources()
+    {
+        var failedSource = new FakeConnector
+        {
+            SystemCode = "A",
+            ReadChangesException = new InvalidOperationException("source unavailable")
+        };
+        var healthySource = new FakeConnector
+        {
+            SystemCode = "B",
+            AppliedMessage = true
+        };
+        var store = new PerSystemCheckpointStore();
+        var operationalEvents = new RecordingOperationalEventRecorder();
+        var coordinator = new SynchronizationCoordinator(
+            new ConnectorCatalog([failedSource, healthySource]),
+            store,
+            new ConflictResolver(new NoOpConflictValueMerger()),
+            TimeProvider.System,
+            NullLogger<SynchronizationCoordinator>.Instance,
+            operationalEvents);
+
+        var processed = await coordinator.RunOnceAsync(10, CancellationToken.None);
+
+        Assert.Equal(1, processed);
+        Assert.Equal(0, store.Checkpoint("A"));
+        Assert.Equal(42, store.Checkpoint("B"));
+        Assert.Equal(1, failedSource.ReadChangesCalls);
+        Assert.Equal(1, healthySource.ReadChangesCalls);
+        var recorded = Assert.Single(operationalEvents.Events);
+        Assert.Equal(OperationalEventCodes.SynchronizationPollingFailed, recorded.Code);
+        Assert.Equal("A", recorded.Target);
+        Assert.Contains("source unavailable", recorded.Details);
+    }
+
+    [Fact]
     public async Task DeleteUsesDestinationLogicalDeletionBehavior()
     {
         var messageId = Guid.NewGuid();
@@ -529,6 +565,7 @@ public sealed class SynchronizationCoordinatorTests
         public EntityPayload? Current { get; init; }
         public ApplyRequest? AppliedRequest { get; private set; }
         public Exception? ApplyException { get; init; }
+        public Exception? ReadChangesException { get; init; }
         public List<string>? Events { get; init; }
         public int ApplyCalls { get; private set; }
         public int ReadMessageCalls { get; private set; }
@@ -537,6 +574,10 @@ public sealed class SynchronizationCoordinatorTests
         public Task<IReadOnlyList<ChangeQueueItem>> ReadChangesAsync(long afterQueueId, int take, CancellationToken cancellationToken)
         {
             ReadChangesCalls++;
+            if (ReadChangesException is not null)
+            {
+                return Task.FromException<IReadOnlyList<ChangeQueueItem>>(ReadChangesException);
+            }
             return Task.FromResult<IReadOnlyList<ChangeQueueItem>>(EmitChange
                 ? (Changes ?? [new(42, MessageId, "Sample", "1", Operation, DateTimeOffset.UtcNow)])
                     .Where(x => x.QueueId > afterQueueId)
@@ -670,6 +711,41 @@ public sealed class SynchronizationCoordinatorTests
         public Task<SyncSnapshot?> GetSnapshotAsync(Guid routeId, string destinationSystem, string entityType, string entityId, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task SaveSnapshotAsync(SyncSnapshot snapshot, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task SaveConflictAsync(ConflictHistory conflict, WebhookEventNotification webhookEvent, CancellationToken cancellationToken) => throw new NotSupportedException();
+    }
+
+    private sealed class PerSystemCheckpointStore : ICoordinatorStore
+    {
+        private readonly Dictionary<string, long> checkpoints = new(StringComparer.OrdinalIgnoreCase);
+
+        public long Checkpoint(string systemCode) => checkpoints.GetValueOrDefault(systemCode);
+        public Task<bool> IsGloballyPausedAsync(CancellationToken cancellationToken) => Task.FromResult(false);
+        public Task<bool> IsSystemPausedAsync(string systemCode, CancellationToken cancellationToken) => Task.FromResult(false);
+        public Task<long> GetCheckpointAsync(string systemCode, CancellationToken cancellationToken) =>
+            Task.FromResult(Checkpoint(systemCode));
+        public Task AdvanceCheckpointAsync(string systemCode, long queueId, CancellationToken cancellationToken)
+        {
+            checkpoints[systemCode] = queueId;
+            return Task.CompletedTask;
+        }
+        public Task<IReadOnlyList<SyncRouteDefinition>> GetRoutesAsync(string sourceSystem, string originSystem, string entityType, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<InboxAcquireResult> TryBeginInboxAsync(Guid sourceMessageId, Guid routeId, string destinationSystem, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task CompleteInboxAsync(Guid sourceMessageId, Guid routeId, string destinationSystem, InboxState state, WebhookEventNotification? webhookEvent, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task FailInboxAsync(Guid sourceMessageId, Guid routeId, string destinationSystem, string errorDetails, WebhookEventNotification webhookEvent, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task HoldInboxAsync(Guid sourceMessageId, Guid routeId, string destinationSystem, string errorDetails, WebhookEventNotification webhookEvent, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<SyncSnapshot?> GetSnapshotAsync(Guid routeId, string destinationSystem, string entityType, string entityId, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task SaveSnapshotAsync(SyncSnapshot snapshot, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task SaveConflictAsync(ConflictHistory conflict, WebhookEventNotification webhookEvent, CancellationToken cancellationToken) => throw new NotSupportedException();
+    }
+
+    private sealed class RecordingOperationalEventRecorder : IOperationalEventRecorder
+    {
+        public List<OperationalEventInput> Events { get; } = [];
+
+        public Task RecordAsync(OperationalEventInput input, CancellationToken cancellationToken)
+        {
+            Events.Add(input);
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class DeleteFlowStore(SyncRouteDefinition route, EntityPayload snapshot) : ICoordinatorStore

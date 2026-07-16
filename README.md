@@ -11,8 +11,10 @@ Customer Portal（MySQL）、CRM（SQL Server）、Field Service（PostgreSQL）
 ## ドキュメント
 
 - [操作マニュアル兼ヘルプ](docs/user-guide.md): 初期設定、同期ルールの作成、監視、停止、コンフリクト・通知・管理設定の操作
+- [Webhook連携ガイド](docs/webhooks.md): イベント、payload、署名検証、再試行、受信側の実装契約
 - [技術仕様書](docs/technical-specification.md): 実行構成、同期処理、状態遷移、永続化、セキュリティ、配備と運用上の制約
 - [デモ環境](demos/README.md): Aspireで起動する3システム構成と確認手順
+- [E2Eテスト](docs/e2e-testing.md): デモと共通のAppHost構成を使う一時テスト環境と実行方法
 - [設計判断（ADR）](docs/decisions): 主要な設計判断の背景と採用理由
 
 ## 確認済みの開発環境
@@ -21,6 +23,7 @@ Customer Portal（MySQL）、CRM（SQL Server）、Field Service（PostgreSQL）
 - .NET SDK: 9.0.315、10.0.300、10.0.301（`global.json` は 10.0.301）
 - Aspire CLI: 13.4.4
 - Aspire project packages/templates: 13.4.6
+- Microsoft Playwright / Chromium: 1.61.0（E2Eのみ）
 - .NET workload: 追加 workload なし（このソリューションには不要）
 
 ## プロジェクトと依存関係
@@ -37,6 +40,7 @@ Worker          Web  ← SyncCoordinator.ServiceDefaults
    SyncCoordinator.AppHost
 
 SyncCoordinator.Tests → Core / Infrastructure / Contracts
+SyncCoordinator.E2ETests → AppHost / Infrastructure
 ```
 
 | プロジェクト | 責務 |
@@ -49,6 +53,7 @@ SyncCoordinator.Tests → Core / Infrastructure / Contracts
 | `SyncCoordinator.AppHost` | 3つの業務DB・業務アプリ、Worker、WebをまとめるAspire構成。設定でCoordinator単体構成にも切替可能 |
 | `SyncCoordinator.ServiceDefaults` | OpenTelemetry、service discovery、resilience、Health Check |
 | `SyncCoordinator.Tests` | Core／Infrastructureの同期処理、管理機能、永続化に関するテスト |
+| `SyncCoordinator.E2ETests` | デモと共通のAppHost構成を一時起動し、実DB・実Worker間の同期とChromiumでの管理画面操作を確認するE2Eテスト |
 
 ## 同期フロー
 
@@ -75,9 +80,11 @@ dotnet test SyncCoordinator.sln --no-build
 aspire run --apphost src/SyncCoordinator.AppHost/SyncCoordinator.AppHost.csproj
 ```
 
+通常のテストではDocker・ChromiumベースE2Eをスキップします。Chromiumの初回準備とE2Eを明示実行する方法は[`docs/e2e-testing.md`](docs/e2e-testing.md)を参照してください。
+
 AppHostはデモ用接続文字列をWebへ渡し、Webが同期対象3システムと暗号化した接続情報を空の管理DBへ初期投入します。Workerは管理DBの設定を使用します。構成とデモ手順は[`demos/README.md`](demos/README.md)を参照してください。
 
-Coordinator WebとWorkerだけを起動する場合は、`Demo:Enabled`を`false`にします。この場合は従来どおり`ConnectionStrings:coordinator-db`を使用します。
+Coordinator WebとWorkerだけを起動する場合は、`RunMode`を`Core`にします。この場合は従来どおり`ConnectionStrings:coordinator-db`を使用します。既存構成との互換性のため、`RunMode`未指定時の`Demo:Enabled=false`も引き続き使用できます。
 
 SQL Server認証を使用する場合は、パスワードを設定ファイルへ書かず、AppHostのUser Secretsへ登録します。
 

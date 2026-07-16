@@ -50,6 +50,8 @@ CodexはDocker Desktop、コンテナ、AppHost、Web、Workerを起動・停止
 
 Visual StudioではAppHostの起動プロファイルに`Demo`を選びます。デモを動かさずCoordinator WebとWorkerだけを起動する場合は`Core`を選びます。
 
+E2Eは別の構成定義を持たず、このデモと同じAppHost topologyを`RunMode=E2E`で使用します。DBポートとデータだけをテストごとに一時化するため、デモの永続データには触れません。実行方法は[`../docs/e2e-testing.md`](../docs/e2e-testing.md)を参照してください。
+
 初回はCustomer PortalとField ServiceのDockerイメージをビルドするため、2回目以降より起動に時間がかかります。
 
 AppHostは既定でこのデモ一式を起動します。AppHostを終了すると3つのDBコンテナも終了し、次回までデータだけがDocker volumeへ保存されます。

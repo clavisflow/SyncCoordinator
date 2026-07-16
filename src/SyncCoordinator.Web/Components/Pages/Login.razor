@@ -8,7 +8,7 @@
 
 <PageTitle>@L["Auth_LoginPageTitle"]</PageTitle>
 
-<section class="auth-card">
+<section class="auth-card" data-testid="login-page">
     <p class="kicker">ADMINISTRATION</p>
     <h1>@L["Auth_LoginTitle"]</h1>
     <p>@L["Auth_LoginDescription"]</p>
@@ -27,7 +27,7 @@
         {
             <div class="message-box error" role="alert">@L["Auth_InvalidCredentials"]</div>
         }
-        <form method="post" action="/auth/login" class="auth-form">
+        <form method="post" action="/auth/login" class="auth-form" data-testid="login-form">
             <AntiforgeryToken />
             <input type="hidden" name="returnUrl" value="@ReturnUrl" />
             <div class="form-field">
@@ -39,7 +39,7 @@
                 <input id="login-password" class="auth-input" name="password" type="password" autocomplete="current-password" required autofocus />
             </div>
             <label class="auth-check"><input type="checkbox" name="rememberMe" value="true" /> @L["Auth_RememberMe"]</label>
-            <button class="auth-primary" type="submit">@L["Auth_LoginAction"]</button>
+            <button class="auth-primary" type="submit" data-testid="login-submit">@L["Auth_LoginAction"]</button>
         </form>
         @if (isLocal)
         {

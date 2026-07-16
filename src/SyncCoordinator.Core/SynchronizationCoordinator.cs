@@ -22,7 +22,26 @@ public sealed class SynchronizationCoordinator(
         var processed = 0;
         foreach (var source in await connectors.GetAllAsync(cancellationToken))
         {
-            processed += await ProcessSourceAsync(source, batchSize, cancellationToken);
+            try
+            {
+                processed += await ProcessSourceAsync(source, batchSize, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                CoordinatorLog.SourceProcessingFailed(logger, exception, source.SystemCode);
+                if (operationalEvents is not null)
+                {
+                    await operationalEvents.RecordAsync(new OperationalEventInput(
+                        OperationalEventSeverity.Error,
+                        OperationalEventCategories.Synchronization,
+                        OperationalEventCodes.SynchronizationPollingFailed,
+                        "worker",
+                        source.SystemCode,
+                        $"{exception.GetType().Name}: {exception.Message}"), CancellationToken.None);
+                }
+                // Checkpointは送信元ごとに独立している。障害元は進めず、
+                // 他の送信元まで同じWorker周期で止めない。
+            }
         }
         return processed;
     }
@@ -369,6 +388,9 @@ internal static partial class CoordinatorLog
 
     [LoggerMessage(LogLevel.Error, "Change queue item {queueId} from {systemCode} failed; checkpoint was not advanced")]
     public static partial void QueueItemFailed(ILogger logger, Exception exception, long queueId, string systemCode);
+
+    [LoggerMessage(LogLevel.Error, "Source {systemCode} processing failed; its checkpoint was not advanced and other sources will continue")]
+    public static partial void SourceProcessingFailed(ILogger logger, Exception exception, string systemCode);
 
     [LoggerMessage(LogLevel.Debug, "Route {routeName} resolved to its source system and was skipped")]
     public static partial void SelfRouteSkipped(ILogger logger, string routeName);

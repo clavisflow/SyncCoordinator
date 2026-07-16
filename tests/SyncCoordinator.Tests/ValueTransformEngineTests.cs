@@ -67,4 +67,39 @@ public sealed class ValueTransformEngineTests
 
         Assert.Equal(0.12m, result!.GetValue<decimal>());
     }
+
+    [Fact]
+    public void OffsetAwareDateTimesUseOneCanonicalUtcRepresentation()
+    {
+        var sqlServer = ValueTransformEngine.Transform(
+            JsonValue.Create("2026-07-16T06:35:44.440172+00:00"),
+            new ValueTransformInput(),
+            new ColumnValueContract("datetimeoffset", false),
+            "UpdatedAtUtc",
+            "UpdatedAtUtc");
+        var postgreSql = ValueTransformEngine.Transform(
+            JsonValue.Create("2026-07-16T06:35:44.440172Z"),
+            new ValueTransformInput(),
+            new ColumnValueContract("timestamptz", false),
+            "UpdatedAtUtc",
+            "modified_at");
+
+        Assert.True(JsonNode.DeepEquals(sqlServer, postgreSql));
+        Assert.Equal(
+            "2026-07-16T06:35:44.4401720+00:00",
+            sqlServer!.GetValue<string>());
+    }
+
+    [Fact]
+    public void DateTimeWithoutOffsetIsNotImplicitlyReinterpreted()
+    {
+        var result = ValueTransformEngine.Transform(
+            JsonValue.Create("2026-07-16T06:35:44.440172"),
+            new ValueTransformInput(),
+            new ColumnValueContract("datetime", false),
+            "UpdatedAtUtc",
+            "UpdatedAtUtc");
+
+        Assert.Equal("2026-07-16T06:35:44.440172", result!.GetValue<string>());
+    }
 }
