@@ -17,4 +17,8 @@ npm run typecheck
 npm run build
 ```
 
-通常のデモ実行では`SyncCoordinator.Demo.AppHost`がDockerfileをビルドし、`DATABASE_URL`を注入します。
+通常のデモ実行では`SyncCoordinator.AppHost`がDockerfileをビルドし、`DATABASE_URL`を注入します。
+
+## Distribution license
+
+Field Serviceのソースはリポジトリ直下のApache License 2.0で提供します。`npm run build`後の処理は、未使用のsharp/libvipsバイナリをstandalone成果物から除外し、実際に残るruntimeパッケージのライセンス原文と`THIRD-PARTY-NOTICES.txt`を成果物へ収集します。Dockerイメージにはこれらの通知が`/app`以下に含まれます。

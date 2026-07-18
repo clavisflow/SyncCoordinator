@@ -22,4 +22,39 @@
     <ProjectReference Include="..\SyncCoordinator.Contracts\SyncCoordinator.Contracts.csproj" />
     <ProjectReference Include="..\SyncCoordinator.ServiceDefaults\SyncCoordinator.ServiceDefaults.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\LICENSE"
+             Link="LICENSE"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\NOTICE"
+             Link="NOTICE"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\BINARY-DISTRIBUTION-NOTICE.md"
+             Link="BINARY-DISTRIBUTION-NOTICE.md"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\THIRD-PARTY-NOTICES.md"
+             Link="THIRD-PARTY-NOTICES.md"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\licenses\*.txt"
+             Link="licenses\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="$(NuGetPackageRoot)microsoft.bcl.cryptography\9.0.13\THIRD-PARTY-NOTICES.TXT"
+             Link="licenses\Microsoft.Bcl.Cryptography-THIRD-PARTY-NOTICES.txt"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="$(NuGetPackageRoot)microsoft.extensions.hosting.windowsservices\10.0.9\THIRD-PARTY-NOTICES.TXT"
+             Link="licenses\Microsoft.Extensions.Hosting.WindowsServices-THIRD-PARTY-NOTICES.txt"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="$(NuGetPackageRoot)opentelemetry\1.15.3\THIRD-PARTY-NOTICES.TXT"
+             Link="licenses\OpenTelemetry-THIRD-PARTY-NOTICES.txt"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

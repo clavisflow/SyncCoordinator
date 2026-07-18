@@ -1,4 +1,4 @@
-FROM node:24-alpine AS dependencies
+FROM node:24.14.1-alpine3.23 AS dependencies
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -8,7 +8,7 @@ WORKDIR /app
 COPY . .
 RUN npm run build
 
-FROM node:24-alpine AS runtime
+FROM node:24.14.1-alpine3.23 AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0

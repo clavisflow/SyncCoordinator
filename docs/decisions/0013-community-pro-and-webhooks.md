@@ -2,6 +2,7 @@
 
 - 状態: Accepted
 - 日付: 2026-07-14
+- 現在仕様: Webhookの配送契約はADR 0014で更新し、業務payloadは含めない。基本SMTP通知、Pro実装、正式なCommunity配布は未実装
 
 ## 決定
 

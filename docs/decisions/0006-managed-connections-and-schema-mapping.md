@@ -2,6 +2,7 @@
 
 - 状態: Accepted
 - 日付: 2026-07-13
+- 現在仕様: ADR 0008・0009で同期補助テーブルを追加し、保存したマッピングは`ManagedConnectorCatalog`と`MappedRelationalConnector`が動的に使用する
 
 ## 決定
 

@@ -73,8 +73,8 @@ public sealed class HelpContentService
 
         var body = DocumentTitlePattern.Replace(markdown, string.Empty, 1)
             .Replace(
-                "](images/user-guide/",
-                "](/help-assets/images/user-guide/",
+                "](images/",
+                "](/help-assets/images/",
                 StringComparison.Ordinal);
         var html = Markdown.ToHtml(body, Pipeline);
         html = RewriteDocumentAnchors(html);
@@ -138,7 +138,7 @@ public sealed class HelpContentService
         var attribute = match.Groups["attribute"].Value;
         var url = match.Groups["url"].Value;
         var allowed = string.Equals(attribute, "src", StringComparison.OrdinalIgnoreCase)
-            ? url.StartsWith("/help-assets/images/user-guide/", StringComparison.Ordinal)
+            ? url.StartsWith("/help-assets/images/", StringComparison.Ordinal)
             : url.StartsWith("/help#", StringComparison.Ordinal) ||
               url.StartsWith("/help-assets/", StringComparison.Ordinal) ||
               Uri.TryCreate(url, UriKind.Absolute, out var uri) &&

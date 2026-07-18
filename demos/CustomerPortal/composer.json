@@ -3,7 +3,7 @@
     "name": "sync-coordinator/customer-portal-demo",
     "type": "project",
     "description": "Laravel 12 and MySQL customer support portal demo for SyncCoordinator.",
-    "license": "MIT",
+    "license": "Apache-2.0",
     "require": {
         "php": "^8.2",
         "laravel/framework": "^12.0"
