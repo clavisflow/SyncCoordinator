@@ -25,15 +25,21 @@ export default async function WorkOrderDetailsPage({ params, searchParams }: {
     <>
       <Link href="/" className="screen-back">‹ 作業一覧へ</Link>
       <header className="record-header">
-        <div><span>作業指示番号</span><h1>{order.payload.WorkOrderNumber ?? order.entityId}</h1><p>案件番号　{order.payload.CaseNumber ?? "未設定"}</p></div>
+        <div><span>作業指示番号</span><h1>{order.payload.WorkOrderNumber ?? order.entityId}</h1><p>案件番号　{order.payload.CaseNumber ?? "未設定"}<small className="lineage-pill">Service CRMから受信</small></p></div>
         <span className={statusClass(order.payload.Status)}>{statusLabel(order.payload.Status)}</span>
       </header>
-      {updated === "1" && <div className="tablet-alert alert-success" role="status"><strong>作業内容を更新しました</strong></div>}
+      {updated === "1" && <div className="tablet-alert alert-success" role="status"><strong>作業内容を更新しました</strong><span>変更内容はService CRMへ同期されます。</span></div>}
 
       <section className="visit-banner">
         <div><span>次の訪問予定</span><strong>{displayDateTime(order.payload.ScheduledAt)}</strong><p>担当者　{order.payload.TechnicianName ?? "未定"}</p></div>
         <Link href={`/work-orders/${encodeURIComponent(order.entityId)}/edit`} className="tablet-button primary-button">作業内容を更新</Link>
       </section>
+
+      <section className={`detail-card result-card ${order.payload.WorkResult ? "has-result" : ""}`}><h2><span>作業結果</span><small>Service CRMへ連携</small></h2><dl>
+        <div><dt>状態</dt><dd>{statusLabel(order.payload.Status)}</dd></div>
+        <div><dt>完了日時</dt><dd>{displayDateTime(order.payload.CompletedAt)}</dd></div>
+        <div><dt>作業結果</dt><dd className="preserve-lines">{order.payload.WorkResult ?? "未入力"}</dd></div>
+      </dl></section>
 
       <div className="detail-grid">
         <section className="detail-card"><h2>お客様・訪問先</h2><dl>
@@ -46,11 +52,6 @@ export default async function WorkOrderDetailsPage({ params, searchParams }: {
           <div><dt>症状・依頼内容</dt><dd>{order.payload.ProblemSummary ?? "未設定"}</dd></div>
         </dl></section>
       </div>
-      <section className="detail-card result-card"><h2>作業結果</h2><dl>
-        <div><dt>状態</dt><dd>{statusLabel(order.payload.Status)}</dd></div>
-        <div><dt>完了日時</dt><dd>{displayDateTime(order.payload.CompletedAt)}</dd></div>
-        <div><dt>作業結果</dt><dd className="preserve-lines">{order.payload.WorkResult ?? "未入力"}</dd></div>
-      </dl></section>
       <p className="sync-note">最終更新 {displayDateTime(order.updatedAtUtc)}　連携元 {order.originSystem}</p>
     </>
   );

@@ -21,6 +21,10 @@ public sealed class DemoConflictSeeder(
     internal const string DeleteEntityId = "CASE-DELETE-1001";
     internal const string UpdateThenDeleteEntityId = "CASE-UPDATE-THEN-DELETE-1001";
     internal const string DeleteThenUpdateEntityId = "CASE-DELETE-THEN-UPDATE-1001";
+    internal const string ResolvedEntityId = "CASE-RESOLVED-1001";
+    internal const string DateConflictEntityId = "CASE-DATE-CONFLICT-1001";
+    internal const string DateTimeConflictEntityId = "WO-DATETIME-CONFLICT-1001";
+    internal const string WorkOrderEntityType = "WorkOrder";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public async Task<int> SeedIfReadyAsync(CancellationToken cancellationToken)
@@ -30,6 +34,7 @@ public sealed class DemoConflictSeeder(
             return 0;
         }
 
+        var seeded = await SeedWorkOrderDateTimeConflictIfReadyAsync(cancellationToken);
         var routeInfo = await dbContext.Routes.AsNoTracking()
             .Where(x => x.EntityType == EntityType &&
                         x.SourceSystem.Code == "PORTAL" &&
@@ -41,7 +46,7 @@ public sealed class DemoConflictSeeder(
             .SingleOrDefaultAsync(cancellationToken);
         if (routeInfo is null)
         {
-            return 0;
+            return seeded;
         }
 
         var conflictId = UpdateConflictId(routeInfo.Id, EntityId);
@@ -50,6 +55,8 @@ public sealed class DemoConflictSeeder(
         var updateThenDeleteDeleteId = DeleteConflictId(routeInfo.Id, UpdateThenDeleteEntityId);
         var deleteThenUpdateDeleteId = DeleteConflictId(routeInfo.Id, DeleteThenUpdateEntityId);
         var deleteThenUpdateUpdateId = UpdateConflictId(routeInfo.Id, DeleteThenUpdateEntityId);
+        var resolvedConflictId = ResolvedConflictId(routeInfo.Id, ResolvedEntityId);
+        var dateConflictId = UpdateConflictId(routeInfo.Id, DateConflictEntityId);
         Guid[] expectedConflictIds =
         [
             conflictId,
@@ -57,7 +64,9 @@ public sealed class DemoConflictSeeder(
             updateThenDeleteUpdateId,
             updateThenDeleteDeleteId,
             deleteThenUpdateDeleteId,
-            deleteThenUpdateUpdateId
+            deleteThenUpdateUpdateId,
+            resolvedConflictId,
+            dateConflictId
         ];
         var existingConflictIds = await dbContext.SyncConflicts.AsNoTracking()
             .Where(x => expectedConflictIds.Contains(x.Id))
@@ -69,13 +78,19 @@ public sealed class DemoConflictSeeder(
                                    !existingConflictIds.Contains(updateThenDeleteDeleteId);
         var seedDeleteThenUpdate = !existingConflictIds.Contains(deleteThenUpdateDeleteId) ||
                                    !existingConflictIds.Contains(deleteThenUpdateUpdateId);
+        var seedResolvedConflict = !existingConflictIds.Contains(resolvedConflictId);
+        var seedDateConflict = !existingConflictIds.Contains(dateConflictId);
 
         var legacyUpdateConflictId = WebhookEventId.Create(
             "demo.conflict.history", routeInfo.Id, TemplateEntityId);
         var legacyDeleteConflictId = WebhookEventId.Create(
             "demo.delete-conflict.history", routeInfo.Id, DeleteEntityId);
         var conflictIdsToReplace = new HashSet<Guid> { legacyUpdateConflictId, legacyDeleteConflictId };
-        foreach (var entityId in new[] { EntityId, DeleteEntityId, UpdateThenDeleteEntityId, DeleteThenUpdateEntityId })
+        foreach (var entityId in new[]
+                 {
+                     EntityId, DeleteEntityId, UpdateThenDeleteEntityId, DeleteThenUpdateEntityId, ResolvedEntityId,
+                     DateConflictEntityId
+                 })
         {
             conflictIdsToReplace.Add(WebhookEventId.Create("demo.conflict.v2.update.history", routeInfo.Id, entityId));
             conflictIdsToReplace.Add(WebhookEventId.Create("demo.conflict.v2.delete.history", routeInfo.Id, entityId));
@@ -92,6 +107,8 @@ public sealed class DemoConflictSeeder(
             conflictIdsToReplace.Add(deleteThenUpdateDeleteId);
             conflictIdsToReplace.Add(deleteThenUpdateUpdateId);
         }
+        if (seedResolvedConflict) conflictIdsToReplace.Add(resolvedConflictId);
+        if (seedDateConflict) conflictIdsToReplace.Add(dateConflictId);
 
         var conflictsToReplace = await dbContext.SyncConflicts
             .Where(x => conflictIdsToReplace.Contains(x.Id))
@@ -111,14 +128,18 @@ public sealed class DemoConflictSeeder(
             EntityId,
             DeleteEntityId,
             UpdateThenDeleteEntityId,
-            DeleteThenUpdateEntityId
+            DeleteThenUpdateEntityId,
+            ResolvedEntityId,
+            DateConflictEntityId
         ];
         var snapshotsToReplace = await dbContext.SyncSnapshots
             .Where(x => x.RouteId == routeInfo.Id && scenarioEntityIds.Contains(x.EntityId) &&
                         ((x.EntityId == EntityId && seedUpdateConflict) ||
                          (x.EntityId == DeleteEntityId && seedDeleteConflict) ||
                          (x.EntityId == UpdateThenDeleteEntityId && seedUpdateThenDelete) ||
-                         (x.EntityId == DeleteThenUpdateEntityId && seedDeleteThenUpdate)))
+                         (x.EntityId == DeleteThenUpdateEntityId && seedDeleteThenUpdate) ||
+                         (x.EntityId == ResolvedEntityId && seedResolvedConflict) ||
+                         (x.EntityId == DateConflictEntityId && seedDateConflict)))
             .ToListAsync(cancellationToken);
         dbContext.SyncSnapshots.RemoveRange(snapshotsToReplace);
         if (conflictsToReplace.Count > 0 || snapshotsToReplace.Count > 0)
@@ -126,16 +147,17 @@ public sealed class DemoConflictSeeder(
             await dbContext.SaveChangesAsync(cancellationToken);
         }
 
-        if (!seedUpdateConflict && !seedDeleteConflict && !seedUpdateThenDelete && !seedDeleteThenUpdate)
+        if (!seedUpdateConflict && !seedDeleteConflict && !seedUpdateThenDelete && !seedDeleteThenUpdate &&
+            !seedResolvedConflict && !seedDateConflict)
         {
-            return 0;
+            return seeded;
         }
 
         var route = (await store.GetRoutesAsync("PORTAL", "PORTAL", EntityType, cancellationToken))
             .SingleOrDefault(x => x.Id == routeInfo.Id);
         if (route is null || route.OperationallyPaused)
         {
-            return 0;
+            return seeded;
         }
 
         var source = await connectors.GetRequiredAsync(route.SourceSystem, cancellationToken);
@@ -144,15 +166,29 @@ public sealed class DemoConflictSeeder(
         if (sourceCurrent is null)
         {
             // Customer Portalの初期データがまだ準備されていない場合だけ次周期へ送る。
-            return 0;
+            return seeded;
         }
 
         var now = timeProvider.GetUtcNow();
-        var seeded = 0;
+        if (seedResolvedConflict)
+        {
+            await SeedResolvedConflictAsync(
+                route, source, destination, sourceCurrent, ResolvedEntityId, resolvedConflictId,
+                now.AddMinutes(-15), now.AddMinutes(-12), cancellationToken);
+            seeded++;
+        }
+        if (seedDateConflict)
+        {
+            await SeedUpdateConflictAsync(
+                route, source, destination, EntityType,
+                CreateDateConflictScenario(sourceCurrent, DateConflictEntityId),
+                DateConflictEntityId, dateConflictId, now.AddMinutes(-10), null, cancellationToken);
+            seeded++;
+        }
         if (seedUpdateConflict)
         {
             await SeedUpdateConflictAsync(
-                route, source, destination, sourceCurrent, EntityId, conflictId,
+                route, source, destination, EntityType, CreateScenario(sourceCurrent, EntityId), EntityId, conflictId,
                 now.AddMinutes(-5), null, cancellationToken);
             seeded++;
         }
@@ -166,7 +202,8 @@ public sealed class DemoConflictSeeder(
         if (seedUpdateThenDelete)
         {
             await SeedUpdateConflictAsync(
-                route, source, destination, sourceCurrent, UpdateThenDeleteEntityId, updateThenDeleteUpdateId,
+                route, source, destination, EntityType, CreateScenario(sourceCurrent, UpdateThenDeleteEntityId),
+                UpdateThenDeleteEntityId, updateThenDeleteUpdateId,
                 now.AddMinutes(-3), null, cancellationToken);
             await SeedDeleteConflictAsync(
                 route, source, destination, sourceCurrent, UpdateThenDeleteEntityId, updateThenDeleteDeleteId,
@@ -179,7 +216,8 @@ public sealed class DemoConflictSeeder(
                 route, source, destination, sourceCurrent, DeleteThenUpdateEntityId, deleteThenUpdateDeleteId,
                 now.AddMinutes(-1), null, cancellationToken);
             await SeedUpdateConflictAsync(
-                route, source, destination, sourceCurrent, DeleteThenUpdateEntityId, deleteThenUpdateUpdateId,
+                route, source, destination, EntityType, CreateScenario(sourceCurrent, DeleteThenUpdateEntityId),
+                DeleteThenUpdateEntityId, deleteThenUpdateUpdateId,
                 now, deleteThenUpdateDeleteId, cancellationToken);
             seeded += 2;
         }
@@ -187,26 +225,80 @@ public sealed class DemoConflictSeeder(
         return seeded;
     }
 
+    private async Task<int> SeedWorkOrderDateTimeConflictIfReadyAsync(CancellationToken cancellationToken)
+    {
+        var routeInfo = await dbContext.Routes.AsNoTracking()
+            .Where(x => x.EntityType == WorkOrderEntityType &&
+                        x.SourceSystem.Code == "CRM" && x.DestinationSystem.Code == "FIELD" &&
+                        x.Enabled && x.DeploymentState == DatabaseDeploymentState.Prepared &&
+                        x.MappingMaintenanceStartedAtUtc == null &&
+                        x.SourceSystem.PausedAtUtc == null && x.DestinationSystem.PausedAtUtc == null)
+            .Select(x => new { x.Id })
+            .SingleOrDefaultAsync(cancellationToken);
+        if (routeInfo is null)
+        {
+            return 0;
+        }
+
+        var conflictId = UpdateConflictId(routeInfo.Id, DateTimeConflictEntityId);
+        if (await dbContext.SyncConflicts.AsNoTracking().AnyAsync(x => x.Id == conflictId, cancellationToken))
+        {
+            return 0;
+        }
+
+        var snapshotsToReplace = await dbContext.SyncSnapshots
+            .Where(x => x.RouteId == routeInfo.Id && x.EntityType == WorkOrderEntityType &&
+                        x.EntityId == DateTimeConflictEntityId)
+            .ToListAsync(cancellationToken);
+        dbContext.SyncSnapshots.RemoveRange(snapshotsToReplace);
+
+        var route = (await store.GetRoutesAsync("CRM", "CRM", WorkOrderEntityType, cancellationToken))
+            .SingleOrDefault(x => x.Id == routeInfo.Id);
+        if (route is null || route.OperationallyPaused)
+        {
+            return 0;
+        }
+
+        var source = await connectors.GetRequiredAsync(route.SourceSystem, cancellationToken);
+        var destination = await connectors.GetRequiredAsync(route.DestinationSystem, cancellationToken);
+        var detectedAt = timeProvider.GetUtcNow().AddMinutes(-8);
+        await SeedUpdateConflictAsync(
+            route, source, destination, WorkOrderEntityType,
+            CreateDateTimeConflictScenario(DateTimeConflictEntityId), DateTimeConflictEntityId, conflictId,
+            detectedAt, null, cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return 1;
+    }
+
     private async Task SeedUpdateConflictAsync(
         SyncRouteDefinition route,
         ISyncConnector source,
         ISyncConnector destination,
-        EntityPayload sourceCurrent,
+        string entityType,
+        DemoConflictScenario scenario,
         string entityId,
         Guid conflictId,
         DateTimeOffset detectedAt,
         Guid? previousConflictId,
         CancellationToken cancellationToken)
     {
-        var scenario = CreateScenario(sourceCurrent, entityId);
         var sourceSeedMessageId = WebhookEventId.Create("demo.conflict.v3.update.source-change", route.Id, entityId);
         var destinationSeedMessageId = WebhookEventId.Create("demo.conflict.v3.update.destination-change", route.Id, entityId);
+        var seedChanges = new List<(Guid SourceMessageId, string DestinationSystem)>
+        {
+            (sourceSeedMessageId, route.DestinationSystem)
+        };
+        if (route.Direction == SyncDirection.Bidirectional)
+        {
+            seedChanges.Add((destinationSeedMessageId, route.SourceSystem));
+        }
+        await SuppressSeedChangesAsync(route.Id, detectedAt, seedChanges, cancellationToken);
         await source.ApplyAsync(new ApplyRequest(
             sourceSeedMessageId,
             sourceSeedMessageId,
             route.SourceSystem,
             route.SourceSystem,
-            EntityType,
+            entityType,
             entityId,
             ChangeOperation.Upsert,
             null,
@@ -216,7 +308,7 @@ public sealed class DemoConflictSeeder(
             destinationSeedMessageId,
             route.DestinationSystem,
             route.SourceSystem,
-            EntityType,
+            entityType,
             entityId,
             ChangeOperation.Upsert,
             null,
@@ -225,11 +317,11 @@ public sealed class DemoConflictSeeder(
         var baseline = new SyncSnapshot(
             route.Id,
             route.DestinationSystem,
-            EntityType,
+            entityType,
             entityId,
             scenario.Baseline,
             scenario.Baseline);
-        var resolution = conflictResolver.Resolve(EntityType, baseline, scenario.Incoming, scenario.Current, route);
+        var resolution = conflictResolver.Resolve(entityType, baseline, scenario.Incoming, scenario.Current, route);
         if (!resolution.IsHeld || resolution.Conflicts.Count == 0)
         {
             throw new InvalidOperationException("デモ競合シナリオから保留コンフリクトを生成できませんでした。");
@@ -250,7 +342,7 @@ public sealed class DemoConflictSeeder(
             DeliveryMessageId = deliveryMessageId,
             SourceSystem = route.SourceSystem,
             DestinationSystem = route.DestinationSystem,
-            EntityType = EntityType,
+            EntityType = entityType,
             EntityId = entityId,
             Operation = ChangeOperation.Upsert,
             Scope = route.ConflictScope,
@@ -275,12 +367,12 @@ public sealed class DemoConflictSeeder(
             UpdatedAtUtc = detectedAt
         });
         await UpsertSnapshotAsync(
-            route.Id, route.DestinationSystem, entityId,
+            route.Id, route.DestinationSystem, entityType, entityId,
             scenario.Incoming, resolution.AdoptedPayload, detectedAt, cancellationToken);
         if (route.Direction == SyncDirection.Bidirectional)
         {
             await UpsertSnapshotAsync(
-                route.Id, route.SourceSystem, entityId,
+                route.Id, route.SourceSystem, entityType, entityId,
                 resolution.AdoptedPayload, scenario.Incoming, detectedAt, cancellationToken);
         }
     }
@@ -300,6 +392,16 @@ public sealed class DemoConflictSeeder(
         var sourceSeedMessageId = WebhookEventId.Create("demo.conflict.v3.delete.source-create", route.Id, entityId);
         var destinationSeedMessageId = WebhookEventId.Create("demo.conflict.v3.delete.destination-change", route.Id, entityId);
         var sourceDeleteMessageId = WebhookEventId.Create("demo.conflict.v3.delete.source-delete", route.Id, entityId);
+        var seedChanges = new List<(Guid SourceMessageId, string DestinationSystem)>
+        {
+            (sourceSeedMessageId, route.DestinationSystem),
+            (sourceDeleteMessageId, route.DestinationSystem)
+        };
+        if (route.Direction == SyncDirection.Bidirectional)
+        {
+            seedChanges.Add((destinationSeedMessageId, route.SourceSystem));
+        }
+        await SuppressSeedChangesAsync(route.Id, detectedAt, seedChanges, cancellationToken);
         await source.ApplyAsync(new ApplyRequest(
             sourceSeedMessageId,
             sourceSeedMessageId,
@@ -385,14 +487,165 @@ public sealed class DemoConflictSeeder(
             UpdatedAtUtc = detectedAt
         });
         await UpsertSnapshotAsync(
-            route.Id, route.DestinationSystem, entityId,
+            route.Id, route.DestinationSystem, EntityType, entityId,
             null, resolution.AdoptedPayload, detectedAt, cancellationToken);
         if (route.Direction == SyncDirection.Bidirectional)
         {
             await UpsertSnapshotAsync(
-                route.Id, route.SourceSystem, entityId,
+                route.Id, route.SourceSystem, EntityType, entityId,
                 resolution.AdoptedPayload, null, detectedAt, cancellationToken);
         }
+    }
+
+    private async Task SeedResolvedConflictAsync(
+        SyncRouteDefinition route,
+        ISyncConnector source,
+        ISyncConnector destination,
+        EntityPayload sourceCurrent,
+        string entityId,
+        Guid conflictId,
+        DateTimeOffset detectedAt,
+        DateTimeOffset resolvedAt,
+        CancellationToken cancellationToken)
+    {
+        var scenario = CreateScenario(sourceCurrent, entityId);
+        var sourceSeedMessageId = WebhookEventId.Create("demo.conflict.v4.resolved.source-change", route.Id, entityId);
+        var destinationSeedMessageId = WebhookEventId.Create("demo.conflict.v4.resolved.destination-change", route.Id, entityId);
+        var seedChanges = new List<(Guid SourceMessageId, string DestinationSystem)>
+        {
+            (sourceSeedMessageId, route.DestinationSystem)
+        };
+        if (route.Direction == SyncDirection.Bidirectional)
+        {
+            seedChanges.Add((destinationSeedMessageId, route.SourceSystem));
+        }
+        await SuppressSeedChangesAsync(route.Id, detectedAt, seedChanges, cancellationToken);
+
+        await source.ApplyAsync(new ApplyRequest(
+            sourceSeedMessageId,
+            sourceSeedMessageId,
+            route.SourceSystem,
+            route.SourceSystem,
+            EntityType,
+            entityId,
+            ChangeOperation.Upsert,
+            null,
+            scenario.Incoming), cancellationToken);
+        await destination.ApplyAsync(new ApplyRequest(
+            destinationSeedMessageId,
+            destinationSeedMessageId,
+            route.DestinationSystem,
+            route.SourceSystem,
+            EntityType,
+            entityId,
+            ChangeOperation.Upsert,
+            null,
+            SyncPayloadTransformer.TransformFromCanonical(scenario.Incoming, route, route.DestinationSystem)), cancellationToken);
+
+        var baseline = new SyncSnapshot(
+            route.Id,
+            route.DestinationSystem,
+            EntityType,
+            entityId,
+            scenario.Baseline,
+            scenario.Baseline);
+        var resolution = conflictResolver.Resolve(EntityType, baseline, scenario.Incoming, scenario.Current, route);
+        if (!resolution.IsHeld || resolution.Conflicts.Count == 0)
+        {
+            throw new InvalidOperationException("解決済みデモ競合の元になる保留コンフリクトを生成できませんでした。");
+        }
+
+        var fields = resolution.Conflicts.Select(field => field with
+        {
+            AdoptedValue = field.IncomingValue?.DeepClone(),
+            Resolution = "ManuallyAppliedIncoming",
+            IncomingFieldName = field.FieldName,
+            CurrentFieldName = route.ValueMappings.GetValueOrDefault(field.FieldName)?.DestinationColumn ?? field.FieldName
+        }).ToArray();
+        var sourceMessageId = WebhookEventId.Create("demo.conflict.v4.resolved.source-message", route.Id, entityId);
+        var deliveryMessageId = DeliveryMessageId.Create(sourceMessageId, route.Id, route.DestinationSystem);
+        dbContext.SyncConflicts.Add(new SyncConflictEntity
+        {
+            Id = conflictId,
+            RouteId = route.Id,
+            SourceMessageId = sourceMessageId,
+            DeliveryMessageId = deliveryMessageId,
+            SourceSystem = route.SourceSystem,
+            DestinationSystem = route.DestinationSystem,
+            EntityType = EntityType,
+            EntityId = entityId,
+            Operation = ChangeOperation.Upsert,
+            Scope = route.ConflictScope,
+            FieldsJson = JsonSerializer.Serialize(fields, JsonOptions),
+            HadBaseline = true,
+            BaselineSourcePayloadJson = SerializePayload(scenario.Baseline),
+            BaselineDestinationPayloadJson = SerializePayload(scenario.Baseline),
+            IncomingPayloadJson = SerializePayload(scenario.Incoming)!,
+            CurrentPayloadJson = SerializePayload(scenario.Current),
+            DetectedAtUtc = detectedAt,
+            ResolutionState = ConflictResolutionState.Resolved,
+            ResolutionComment = "お客様の最新申告を確認し、受信値を採用しました。",
+            RequestedBy = "demo-admin",
+            RequestedAtUtc = resolvedAt.AddSeconds(-20),
+            ResolutionAttemptCount = 1,
+            ResolvedBy = "demo-admin",
+            ResolvedAtUtc = resolvedAt
+        });
+        dbContext.InboxMessages.Add(new InboxMessageEntity
+        {
+            SourceMessageId = sourceMessageId,
+            RouteId = route.Id,
+            DestinationSystem = route.DestinationSystem,
+            State = InboxState.Completed,
+            AttemptCount = 1,
+            FirstSeenAtUtc = detectedAt,
+            UpdatedAtUtc = resolvedAt
+        });
+        await UpsertSnapshotAsync(
+            route.Id, route.DestinationSystem, EntityType, entityId,
+            scenario.Incoming, scenario.Incoming, resolvedAt, cancellationToken);
+        if (route.Direction == SyncDirection.Bidirectional)
+        {
+            await UpsertSnapshotAsync(
+                route.Id, route.SourceSystem, EntityType, entityId,
+                scenario.Incoming, scenario.Incoming, resolvedAt, cancellationToken);
+        }
+    }
+
+    private async Task SuppressSeedChangesAsync(
+        Guid routeId,
+        DateTimeOffset timestamp,
+        IReadOnlyCollection<(Guid SourceMessageId, string DestinationSystem)> seedChanges,
+        CancellationToken cancellationToken)
+    {
+        foreach (var seedChange in seedChanges)
+        {
+            var inbox = dbContext.InboxMessages.Local.SingleOrDefault(x =>
+                            x.SourceMessageId == seedChange.SourceMessageId && x.RouteId == routeId &&
+                            x.DestinationSystem == seedChange.DestinationSystem) ??
+                        await dbContext.InboxMessages.SingleOrDefaultAsync(x =>
+                            x.SourceMessageId == seedChange.SourceMessageId && x.RouteId == routeId &&
+                            x.DestinationSystem == seedChange.DestinationSystem, cancellationToken);
+            if (inbox is null)
+            {
+                inbox = new InboxMessageEntity
+                {
+                    SourceMessageId = seedChange.SourceMessageId,
+                    RouteId = routeId,
+                    DestinationSystem = seedChange.DestinationSystem,
+                    FirstSeenAtUtc = timestamp
+                };
+                dbContext.InboxMessages.Add(inbox);
+            }
+            inbox.State = InboxState.Completed;
+            inbox.AttemptCount = Math.Max(1, inbox.AttemptCount);
+            inbox.UpdatedAtUtc = timestamp;
+            inbox.LockedUntilUtc = null;
+            inbox.LastError = null;
+        }
+
+        // 先に確定し、外部DBのTriggerをWorkerが拾ってもデモ生成操作として無視できるようにする。
+        await dbContext.SaveChangesAsync(cancellationToken);
     }
 
     internal static DemoConflictScenario CreateScenario(EntityPayload template) =>
@@ -418,6 +671,57 @@ public sealed class DemoConflictSeeder(
         return new DemoConflictScenario(baseline, incoming, current);
     }
 
+    internal static DemoConflictScenario CreateDateConflictScenario(EntityPayload template, string entityId)
+    {
+        var baselineFields = CloneFields(template.Fields);
+        baselineFields["CaseNumber"] = JsonValue.Create(entityId);
+        baselineFields["Subject"] = JsonValue.Create("訪問希望日の変更");
+        baselineFields["Description"] = JsonValue.Create("冷房点検の訪問日を調整しています。");
+        baselineFields["PreferredVisitDate"] = JsonValue.Create("2026-07-22");
+        var baseline = new EntityPayload(baselineFields);
+
+        var incomingFields = CloneFields(baseline.Fields);
+        incomingFields["PreferredVisitDate"] = JsonValue.Create("2026-07-24");
+        var incoming = new EntityPayload(incomingFields);
+
+        var currentFields = CloneFields(baseline.Fields);
+        currentFields["PreferredVisitDate"] = JsonValue.Create("2026-07-23");
+        var current = new EntityPayload(currentFields);
+        return new DemoConflictScenario(baseline, incoming, current);
+    }
+
+    internal static DemoConflictScenario CreateDateTimeConflictScenario(string entityId)
+    {
+        var baselineFields = new Dictionary<string, JsonNode?>(StringComparer.Ordinal)
+        {
+            ["WorkOrderNumber"] = JsonValue.Create(entityId),
+            ["CaseId"] = JsonValue.Create("CASE-UPDATE-1001"),
+            ["CaseNumber"] = JsonValue.Create("CASE-UPDATE-1001"),
+            ["CustomerName"] = JsonValue.Create("山田 太郎"),
+            ["Address"] = JsonValue.Create("東京都品川区東品川1-2-3"),
+            ["Phone"] = JsonValue.Create("090-1234-5678"),
+            ["ProductName"] = JsonValue.Create("AirCool X200"),
+            ["ProblemSummary"] = JsonValue.Create("冷房不良のため訪問点検を実施します。"),
+            ["ScheduledAt"] = JsonValue.Create("2026-07-22T10:00:00+09:00"),
+            ["TechnicianName"] = JsonValue.Create("佐藤 健"),
+            ["Status"] = JsonValue.Create("Scheduled"),
+            ["WorkResult"] = null,
+            ["CompletedAt"] = null,
+            ["OriginSystem"] = JsonValue.Create("CRM"),
+            ["UpdatedAtUtc"] = JsonValue.Create("2026-07-18T03:00:00Z")
+        };
+        var baseline = new EntityPayload(baselineFields);
+
+        var incomingFields = CloneFields(baseline.Fields);
+        incomingFields["ScheduledAt"] = JsonValue.Create("2026-07-22T14:00:00+09:00");
+        var incoming = new EntityPayload(incomingFields);
+
+        var currentFields = CloneFields(baseline.Fields);
+        currentFields["ScheduledAt"] = JsonValue.Create("2026-07-22T11:30:00+09:00");
+        var current = new EntityPayload(currentFields);
+        return new DemoConflictScenario(baseline, incoming, current);
+    }
+
     internal static DemoDeleteConflictScenario CreateDeleteScenario(EntityPayload template) =>
         CreateDeleteScenario(template, DeleteEntityId);
 
@@ -439,6 +743,7 @@ public sealed class DemoConflictSeeder(
     private async Task UpsertSnapshotAsync(
         Guid routeId,
         string destinationSystem,
+        string entityType,
         string entityId,
         EntityPayload? source,
         EntityPayload? destination,
@@ -447,17 +752,17 @@ public sealed class DemoConflictSeeder(
     {
         var entity = dbContext.SyncSnapshots.Local.SingleOrDefault(x =>
                          x.RouteId == routeId && x.DestinationSystem == destinationSystem &&
-                         x.EntityType == EntityType && x.EntityId == entityId) ??
+                         x.EntityType == entityType && x.EntityId == entityId) ??
                      await dbContext.SyncSnapshots.SingleOrDefaultAsync(x =>
                          x.RouteId == routeId && x.DestinationSystem == destinationSystem &&
-                         x.EntityType == EntityType && x.EntityId == entityId, cancellationToken);
+                         x.EntityType == entityType && x.EntityId == entityId, cancellationToken);
         if (entity is null)
         {
             entity = new SyncSnapshotEntity
             {
                 RouteId = routeId,
                 DestinationSystem = destinationSystem,
-                EntityType = EntityType,
+                EntityType = entityType,
                 EntityId = entityId
             };
             dbContext.SyncSnapshots.Add(entity);
@@ -478,6 +783,9 @@ public sealed class DemoConflictSeeder(
 
     private static Guid DeleteConflictId(Guid routeId, string entityId) =>
         WebhookEventId.Create("demo.conflict.v3.delete.history", routeId, entityId);
+
+    private static Guid ResolvedConflictId(Guid routeId, string entityId) =>
+        WebhookEventId.Create("demo.conflict.v4.resolved.history", routeId, entityId);
 
     internal sealed record DemoConflictScenario(
         EntityPayload Baseline,

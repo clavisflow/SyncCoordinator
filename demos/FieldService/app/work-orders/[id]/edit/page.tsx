@@ -25,7 +25,7 @@ export default async function WorkOrderEditPage({ params, searchParams }: {
   return (
     <>
       <Link href={`/work-orders/${encodeURIComponent(id)}`} className="screen-back">‹ 作業詳細へ戻る</Link>
-      <header className="edit-header"><span>作業指示　{order.payload.WorkOrderNumber ?? order.entityId}</span><h1>作業内容を更新</h1></header>
+      <header className="edit-header"><span>作業指示　{order.payload.WorkOrderNumber ?? order.entityId}</span><h1>作業内容を更新</h1><p>保存した進捗と作業結果はService CRMへ同期されます。</p></header>
       {error && <div className="tablet-alert alert-error" role="alert"><strong>更新できません</strong><span>{error}</span></div>}
 
       <form action={saveWorkOrder} className="tablet-form">

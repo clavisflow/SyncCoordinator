@@ -1,4 +1,5 @@
 using System.Data;
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using Dapper;
 using SyncCoordinator.Core;
@@ -13,21 +14,27 @@ namespace SyncCoordinator.Tests;
 public sealed class DemoPayloadContractTests
 {
     [Fact]
-    public void DemoConflictScenariosUseFourDistinctRecordKeys()
+    public void DemoConflictScenariosUseSevenDistinctRecordKeys()
     {
         string[] recordKeys =
         [
             DemoConflictSeeder.EntityId,
             DemoConflictSeeder.DeleteEntityId,
             DemoConflictSeeder.UpdateThenDeleteEntityId,
-            DemoConflictSeeder.DeleteThenUpdateEntityId
+            DemoConflictSeeder.DeleteThenUpdateEntityId,
+            DemoConflictSeeder.ResolvedEntityId,
+            DemoConflictSeeder.DateConflictEntityId,
+            DemoConflictSeeder.DateTimeConflictEntityId
         ];
 
-        Assert.Equal(4, recordKeys.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(7, recordKeys.Distinct(StringComparer.Ordinal).Count());
         Assert.Equal("CASE-UPDATE-1001", DemoConflictSeeder.EntityId);
         Assert.Equal("CASE-DELETE-1001", DemoConflictSeeder.DeleteEntityId);
         Assert.Equal("CASE-UPDATE-THEN-DELETE-1001", DemoConflictSeeder.UpdateThenDeleteEntityId);
         Assert.Equal("CASE-DELETE-THEN-UPDATE-1001", DemoConflictSeeder.DeleteThenUpdateEntityId);
+        Assert.Equal("CASE-RESOLVED-1001", DemoConflictSeeder.ResolvedEntityId);
+        Assert.Equal("CASE-DATE-CONFLICT-1001", DemoConflictSeeder.DateConflictEntityId);
+        Assert.Equal("WO-DATETIME-CONFLICT-1001", DemoConflictSeeder.DateTimeConflictEntityId);
     }
 
     [Fact]
@@ -84,6 +91,55 @@ public sealed class DemoPayloadContractTests
         Assert.Equal(["Description", "Subject"], resolution.Conflicts.Select(x => x.FieldName));
         Assert.All(resolution.Conflicts, conflict => Assert.Equal("Held", conflict.Resolution));
         Assert.Equal(DemoConflictSeeder.EntityId, scenario.Baseline.Fields["CaseNumber"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void DemoDateConflictScenarioCreatesOneHeldDateConflict()
+    {
+        var route = DemoSupportCaseRoute();
+        var template = new EntityPayload(new Dictionary<string, System.Text.Json.Nodes.JsonNode?>
+        {
+            ["CaseNumber"] = System.Text.Json.Nodes.JsonValue.Create(DemoConflictSeeder.DateConflictEntityId),
+            ["Subject"] = System.Text.Json.Nodes.JsonValue.Create("original"),
+            ["Description"] = System.Text.Json.Nodes.JsonValue.Create("original"),
+            ["PreferredVisitDate"] = System.Text.Json.Nodes.JsonValue.Create("2026-07-22")
+        });
+        var scenario = DemoConflictSeeder.CreateDateConflictScenario(
+            template, DemoConflictSeeder.DateConflictEntityId);
+        var baseline = new SyncSnapshot(
+            route.Id, route.DestinationSystem, route.EntityType, DemoConflictSeeder.DateConflictEntityId,
+            scenario.Baseline, scenario.Baseline);
+
+        var resolution = new ConflictResolver(new NoOpConflictValueMerger()).Resolve(
+            route.EntityType, baseline, scenario.Incoming, scenario.Current, route);
+
+        var conflict = Assert.Single(resolution.Conflicts);
+        Assert.True(resolution.IsHeld);
+        Assert.Equal("PreferredVisitDate", conflict.FieldName);
+        Assert.Equal("2026-07-22", conflict.BaseValue!.GetValue<string>());
+        Assert.Equal("2026-07-24", conflict.IncomingValue!.GetValue<string>());
+        Assert.Equal("2026-07-23", conflict.CurrentValue!.GetValue<string>());
+    }
+
+    [Fact]
+    public void DemoDateTimeConflictScenarioCreatesOneHeldScheduledAtConflict()
+    {
+        var route = DemoRoute(DemoConflictSeeder.WorkOrderEntityType);
+        var scenario = DemoConflictSeeder.CreateDateTimeConflictScenario(
+            DemoConflictSeeder.DateTimeConflictEntityId);
+        var baseline = new SyncSnapshot(
+            route.Id, route.DestinationSystem, route.EntityType, DemoConflictSeeder.DateTimeConflictEntityId,
+            scenario.Baseline, scenario.Baseline);
+
+        var resolution = new ConflictResolver(new NoOpConflictValueMerger()).Resolve(
+            route.EntityType, baseline, scenario.Incoming, scenario.Current, route);
+
+        var conflict = Assert.Single(resolution.Conflicts);
+        Assert.True(resolution.IsHeld);
+        Assert.Equal("ScheduledAt", conflict.FieldName);
+        Assert.Equal("2026-07-22T10:00:00+09:00", conflict.BaseValue!.GetValue<string>());
+        Assert.Equal("2026-07-22T14:00:00+09:00", conflict.IncomingValue!.GetValue<string>());
+        Assert.Equal("2026-07-22T11:30:00+09:00", conflict.CurrentValue!.GetValue<string>());
     }
 
     [Fact]
@@ -190,9 +246,12 @@ public sealed class DemoPayloadContractTests
         typeof(T).GetProperties().Select(property => property.Name).Order();
 
     private static SyncRouteDefinition DemoSupportCaseRoute()
+        => DemoRoute(DemoConflictSeeder.EntityType);
+
+    private static SyncRouteDefinition DemoRoute(string entityType)
     {
         var seed = CoordinatorDatabaseInitializer.CreateDemoSeed();
-        var routeEntity = seed.Routes.Single(x => x.EntityType == DemoConflictSeeder.EntityType);
+        var routeEntity = seed.Routes.Single(x => x.EntityType == entityType);
         return new SyncRouteDefinition(
             routeEntity.Id,
             routeEntity.Name,
@@ -238,15 +297,27 @@ public sealed class DemoPayloadContractTests
             .ToArray();
     }
 
-    private static string RepositoryRoot()
+    private static string RepositoryRoot([CallerFilePath] string sourceFilePath = "")
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "SyncCoordinator.sln")))
+        foreach (var startPath in new[]
+                 {
+                     Path.GetDirectoryName(sourceFilePath) ?? string.Empty,
+                     AppContext.BaseDirectory,
+                     Directory.GetCurrentDirectory()
+                 })
         {
-            directory = directory.Parent;
+            if (string.IsNullOrWhiteSpace(startPath)) continue;
+            var directory = new DirectoryInfo(startPath);
+            while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "SyncCoordinator.sln")))
+            {
+                directory = directory.Parent;
+            }
+            if (directory is not null)
+            {
+                return directory.FullName;
+            }
         }
 
-        return directory?.FullName
-            ?? throw new DirectoryNotFoundException("SyncCoordinator repository root was not found.");
+        throw new DirectoryNotFoundException("SyncCoordinator repository root was not found.");
     }
 }

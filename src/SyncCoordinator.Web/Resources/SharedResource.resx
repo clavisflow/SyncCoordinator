@@ -442,7 +442,7 @@
   <data name="Conflicts_FilterInProgress"><value>処理中</value></data>
   <data name="Conflicts_FilterWaitingForPrevious"><value>前の競合待ち</value></data>
   <data name="Conflicts_FilterResolved"><value>解決済み</value></data>
-  <data name="Conflicts_FilterSuperseded"><value>対応不要（後続優先）</value></data>
+  <data name="Conflicts_FilterSuperseded"><value>対応不要</value></data>
   <data name="Conflicts_FilterAll"><value>すべて</value></data>
   <data name="Conflicts_StateAwaiting"><value>要対応</value></data>
   <data name="Conflicts_StateWaitingForPrevious"><value>前の競合待ち</value></data>
@@ -450,7 +450,7 @@
   <data name="Conflicts_StateProcessing"><value>解決処理中</value></data>
   <data name="Conflicts_StateFailed"><value>解決失敗</value></data>
   <data name="Conflicts_StateResolved"><value>解決済み</value></data>
-  <data name="Conflicts_StateSuperseded"><value>対応不要（後続優先）</value></data>
+  <data name="Conflicts_StateSuperseded"><value>対応不要</value></data>
   <data name="Conflicts_StateSummary"><value>コンフリクトの状態別件数</value></data>
   <data name="Conflicts_SyncPath"><value>同期経路</value></data>
   <data name="Metric_OpenCount"><value>{0}: {1}件を開く</value></data>
@@ -489,6 +489,8 @@
   <data name="ConflictDetail_OlderConflictsHelp"><value>前に{0}件あります。この最新の競合を解決すると、古いコンフリクトは操作できなくなります。</value></data>
   <data name="ConflictDetail_AllIncoming"><value>すべて受信値</value></data>
   <data name="ConflictDetail_AllCurrent"><value>すべて現在値</value></data>
+  <data name="ConflictDetail_PreviousContext"><value>前回同期時</value></data>
+  <data name="ConflictDetail_AdoptedContext"><value>解決後</value></data>
   <data name="ConflictDetail_ChooseIncoming"><value>受信値を採用</value></data>
   <data name="ConflictDetail_ChooseCurrent"><value>同期先の現在値を維持</value></data>
   <data name="ConflictDetail_ChooseCustom"><value>値を入力</value></data>

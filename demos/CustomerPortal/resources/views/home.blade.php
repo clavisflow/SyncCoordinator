@@ -13,6 +13,37 @@
         </div>
     </section>
 
+    <section class="history-section" id="history" aria-labelledby="history-title">
+        <div class="history-heading">
+            <h2 id="history-title">ご相談履歴</h2>
+            @if (count($cases) > 0)<span>{{ count($cases) }}件</span>@endif
+        </div>
+
+        @if ($errorMessage)
+            <div class="message message-error" role="alert">{{ $errorMessage }}</div>
+        @elseif (count($cases) === 0)
+            <div class="empty-state">
+                <h3>まだご相談はありません</h3>
+                <p>困ったことがあれば、下の項目から選んでください。</p>
+            </div>
+        @else
+            <div class="case-cards">
+                @foreach ($cases as $case)
+                    <article class="case-card">
+                        <img class="appliance-photo" src="/images/air-conditioner-v1.png" alt="" width="1024" height="1024" loading="lazy">
+                        <div class="case-card-copy">
+                            <small>{{ $case->value('CaseNumber') ?? '受付番号を確認中' }}</small>
+                            <strong>{{ $case->value('ProductName') ?? '製品名未登録' }}</strong>
+                            <span>{{ $case->value('Subject') ?? 'ご相談内容' }}</span>
+                        </div>
+                        <span class="status {{ $case->statusClass() }}">{{ $case->statusLabel() }}</span>
+                        <a class="button button-outline" href="{{ route('support-cases.show', $case->entityId, absolute: false) }}">内容を見る</a>
+                    </article>
+                @endforeach
+            </div>
+        @endif
+    </section>
+
     <section class="help-start" id="help-topics" aria-labelledby="help-title">
         <div class="help-heading">
             <h2 id="help-title">どのようなことでお困りですか？</h2>
@@ -57,35 +88,5 @@
         </ol>
     </section>
 
-    <section class="history-section" id="history" aria-labelledby="history-title">
-        <div class="history-heading">
-            <h2 id="history-title">{{ count($cases) === 1 ? '前回のご相談' : 'これまでのご相談' }}</h2>
-            @if (count($cases) > 0)<span>{{ count($cases) }}件</span>@endif
-        </div>
-
-        @if ($errorMessage)
-            <div class="message message-error" role="alert">{{ $errorMessage }}</div>
-        @elseif (count($cases) === 0)
-            <div class="empty-state">
-                <h3>まだご相談はありません</h3>
-                <p>困ったことがあれば、上の項目から選んでください。</p>
-            </div>
-        @else
-            <div class="case-cards">
-                @foreach ($cases as $case)
-                    <article class="case-card">
-                        <img class="appliance-photo" src="/images/air-conditioner-v1.png" alt="" width="1024" height="1024" loading="lazy">
-                        <div class="case-card-copy">
-                            <small>{{ $case->value('CaseNumber') ?? '受付番号を確認中' }}</small>
-                            <strong>{{ $case->value('ProductName') ?? '製品名未登録' }}</strong>
-                            <span>{{ $case->value('Subject') ?? 'ご相談内容' }}</span>
-                        </div>
-                        <span class="status {{ $case->statusClass() }}">{{ $case->statusLabel() }}</span>
-                        <a class="button button-outline" href="{{ route('support-cases.show', $case->entityId, absolute: false) }}">内容を見る</a>
-                    </article>
-                @endforeach
-            </div>
-        @endif
-    </section>
 </div>
 @endsection

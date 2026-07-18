@@ -19,7 +19,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
               <strong>訪問作業管理</strong>
             </Link>
             <strong className="topbar-title">本日の作業</strong>
-            <span className="sync-state"><i aria-hidden="true" />同期済み</span>
+            <span className="sync-state"><i aria-hidden="true" />CRMと同期済み</span>
           </header>
           <nav className="tablet-nav" aria-label="メインメニュー">
             <Link href="/" className="nav-current"><span className="clipboard-icon" aria-hidden="true" /><strong>作業指示</strong></Link>

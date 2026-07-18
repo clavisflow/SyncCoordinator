@@ -10,3 +10,4 @@ artifacts/
 .codex-build/
 *.db
 *.bak
+/outputs

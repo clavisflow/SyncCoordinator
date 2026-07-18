@@ -1,4 +1,5 @@
 using System.Data;
+using System.Globalization;
 using System.Text.Json;
 using Dapper;
 using Microsoft.Data.SqlClient;
@@ -118,11 +119,11 @@ public sealed class CrmRepository(CrmConnectionFactory connectionFactory, ILogge
             payload.Phone,
             payload.ProductName,
             payload.ProblemSummary,
-            payload.ScheduledAt,
+            ScheduledAt = ParseDateTimeOffset(payload.ScheduledAt),
             payload.TechnicianName,
             payload.Status,
             payload.WorkResult,
-            payload.CompletedAt
+            CompletedAt = ParseDateTimeOffset(payload.CompletedAt)
         }, cancellationToken);
     }
 
@@ -162,7 +163,22 @@ public sealed class CrmRepository(CrmConnectionFactory connectionFactory, ILogge
             """;
         await ExecuteAsync(async connection =>
         {
-            await connection.ExecuteAsync(new CommandDefinition(sql, payload, cancellationToken: cancellationToken));
+            await connection.ExecuteAsync(new CommandDefinition(sql, new
+            {
+                payload.WorkOrderNumber,
+                payload.CaseId,
+                payload.CaseNumber,
+                payload.CustomerName,
+                payload.Address,
+                payload.Phone,
+                payload.ProductName,
+                payload.ProblemSummary,
+                ScheduledAt = ParseDateTimeOffset(payload.ScheduledAt),
+                payload.TechnicianName,
+                payload.Status,
+                payload.WorkResult,
+                CompletedAt = ParseDateTimeOffset(payload.CompletedAt)
+            }, cancellationToken: cancellationToken));
             return true;
         }, cancellationToken);
         return entityId;
@@ -254,6 +270,25 @@ public sealed class CrmRepository(CrmConnectionFactory connectionFactory, ILogge
         {
             throw new CrmDataException($"{entityLabel}のステータスが正しくありません。");
         }
+    }
+
+    private static DateTimeOffset? ParseDateTimeOffset(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        if (DateTimeOffset.TryParse(
+            value,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
+            out var parsed))
+        {
+            return parsed;
+        }
+
+        throw new CrmDataException("日時の形式が正しくありません。");
     }
 
     private const string SupportCaseSelectSql = """

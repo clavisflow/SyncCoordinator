@@ -5,14 +5,14 @@
 }
 
 <nav class="breadcrumb" aria-label="パンくず"><a asp-page="Index">問い合わせ一覧</a><span>›</span>@if (Model.SupportCase is not null) { <a asp-page="Edit" asp-route-id="@Model.SupportCase.EntityId">@Model.SupportCase.Payload.CaseNumber</a> }<span>›</span><span>作業指示作成</span></nav>
-<header class="record-header"><div><p class="page-kicker">作業指示管理</p><h1>作業指示を作成</h1><p>問い合わせ内容を引き継ぎ、訪問修理の担当者へ連携します。</p></div></header>
+<header class="record-header"><div><p class="page-kicker">作業指示管理</p><h1>作業指示を作成</h1><p>問い合わせ内容を引き継ぎ、訪問修理の担当者へ連携します。</p></div>@if (Model.SupportCase is not null) { <button class="button button-primary" type="submit" form="work-order-create-form">作成してField Serviceへ連携</button> }</header>
 
 <partial name="_DataError" model="Model.DataError ?? string.Empty" />
 
 @if (Model.SupportCase is not null)
 {
     <div class="record-layout">
-        <form method="post" class="section-card">
+        <form method="post" class="section-card" id="work-order-create-form">
             <header class="section-header"><div><h2>訪問作業の内容</h2><p>訪問先、予定日時、担当者と依頼内容を設定します。</p></div></header>
             <div asp-validation-summary="ModelOnly" class="validation"></div>
             <div class="edit-grid">

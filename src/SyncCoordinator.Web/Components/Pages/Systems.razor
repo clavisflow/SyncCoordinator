@@ -53,10 +53,10 @@
                 <RadzenDataGridColumn TItem="SystemListItem" Property="Enabled" Title="@L["Common_Status"]" Width="110px">
                     <Template Context="system"><span class="status-pill @SystemStatusClass(system)">@SystemStatusText(system)</span></Template>
                 </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="SystemListItem" Property="ConnectionConfigured" Title="@L["Systems_DbConnection"]" Width="100px">
+                <RadzenDataGridColumn TItem="SystemListItem" Property="ConnectionConfigured" Title="@L["Systems_DbConnection"]" Width="120px">
                     <Template Context="system"><span class="status-pill @(system.ConnectionConfigured ? "enabled" : "held")">@(system.ConnectionConfigured ? L["Common_Configured"] : L["Common_NotConfigured"])</span></Template>
                 </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="SystemListItem" Title="" Sortable="false" Filterable="false" Width="112px" TextAlign="TextAlign.Right">
+                <RadzenDataGridColumn TItem="SystemListItem" Title="" Sortable="false" Filterable="false" Width="88px" TextAlign="TextAlign.Right">
                     <Template Context="system">
                         <RadzenButton Icon="@(system.IsPaused ? "play_circle" : "pause_circle")"
                                       title="@(system.IsPaused ? L["Systems_Resume"] : L["Systems_Pause"])"

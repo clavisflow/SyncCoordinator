@@ -19,7 +19,10 @@
             </div>
 
             <div class="response-card {{ $case->value('ResponseMessage') ? 'has-response' : '' }}">
-                <div class="response-heading"><span aria-hidden="true"></span><h2>担当者からのご案内</h2></div>
+                <div class="response-heading">
+                    <span class="response-icon" aria-hidden="true"></span><h2>担当者からのご案内</h2>
+                    <small>{{ $case->value('ResponseMessage') ? 'Service CRMから反映' : 'Service CRMで確認中' }}</small>
+                </div>
                 @if ($case->value('ResponseMessage'))
                     <p>{{ $case->value('ResponseMessage') }}</p>
                 @else

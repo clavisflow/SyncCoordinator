@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using SyncCoordinator.Demo.Crm.Data;
@@ -28,7 +29,7 @@ public sealed class CreateWorkOrderModel(CrmRepository repository) : PageModel
             {
                 Address = null,
                 ProblemSummary = SupportCase.Payload.Description,
-                ScheduledAt = SupportCase.Payload.PreferredVisitDate,
+                ScheduledAt = SuggestedVisitTime(SupportCase.Payload.PreferredVisitDate),
                 TechnicianName = null,
                 Status = "Draft"
             };
@@ -87,5 +88,19 @@ public sealed class CreateWorkOrderModel(CrmRepository repository) : PageModel
         {
             DataError = exception.Message;
         }
+    }
+
+    private static string? SuggestedVisitTime(string? preferredVisitDate)
+    {
+        if (DateOnly.TryParse(
+            preferredVisitDate,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AllowWhiteSpaces,
+            out var parsed))
+        {
+            return $"{parsed:yyyy-MM-dd}T10:00";
+        }
+
+        return null;
     }
 }

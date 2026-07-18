@@ -7,10 +7,16 @@
 <nav class="breadcrumb" aria-label="パンくず"><a asp-page="Index">問い合わせ一覧</a><span>›</span><span>@(Model.Input.CaseNumber ?? "詳細")</span></nav>
 <header class="record-header">
     <div><p class="page-kicker">問い合わせ詳細</p><h1>@(Model.Input.CaseNumber ?? "問い合わせ詳細")</h1><p>@(Model.Input.Subject ?? "件名なし")</p></div>
-    @if (!string.IsNullOrWhiteSpace(Model.Input.Status))
-    {
-        <span class="status status-large status-@Model.Input.Status.ToLowerInvariant()">@StatusOptions.Label(Model.Input.Status)</span>
-    }
+    <div class="record-header-actions">
+        @if (!string.IsNullOrWhiteSpace(Model.Input.Status))
+        {
+            <span class="status status-large status-@Model.Input.Status.ToLowerInvariant()">@StatusOptions.Label(Model.Input.Status)</span>
+        }
+        @if (Model.DataError is null || !string.IsNullOrWhiteSpace(Model.Input.CaseNumber))
+        {
+            <button class="button button-primary" type="submit" form="case-edit-form">回答と変更を保存</button>
+        }
+    </div>
 </header>
 
 @if (TempData["SuccessMessage"] is string success) { <div class="alert alert-success" role="status">@success</div> }
@@ -18,13 +24,14 @@
 
 @if (Model.DataError is null || !string.IsNullOrWhiteSpace(Model.Input.CaseNumber))
 {
-    <form method="post" class="record-layout">
+    <form method="post" class="record-layout" id="case-edit-form">
         <section class="section-card">
             <header class="section-header"><div><h2>受付内容</h2><p>お客様情報、製品、問い合わせ内容と回答を編集します。</p></div></header>
             <div asp-validation-summary="ModelOnly" class="validation"></div>
             <div class="edit-grid">
                 <div class="form-field"><label asp-for="Input.CaseNumber">ケース番号</label><input asp-for="Input.CaseNumber" readonly /></div>
                 <div class="form-field"><label asp-for="Input.Status"></label><select asp-for="Input.Status">@foreach (var status in Model.Statuses) { <option value="@status">@StatusOptions.Label(status) (@status)</option> }</select><span asp-validation-for="Input.Status"></span></div>
+                <div class="form-field span-2 response-field demo-focus-field"><label asp-for="Input.ResponseMessage"></label><textarea asp-for="Input.ResponseMessage" rows="4" placeholder="お客様ポータルへ返す回答を入力"></textarea><small>保存するとCustomer Portalへ同期されます。</small><span asp-validation-for="Input.ResponseMessage"></span></div>
                 <div class="form-field"><label asp-for="Input.CustomerName"></label><input asp-for="Input.CustomerName" /><span asp-validation-for="Input.CustomerName"></span></div>
                 <div class="form-field"><label asp-for="Input.Email"></label><input asp-for="Input.Email" /><span asp-validation-for="Input.Email"></span></div>
                 <div class="form-field"><label asp-for="Input.Phone"></label><input asp-for="Input.Phone" /><span asp-validation-for="Input.Phone"></span></div>
@@ -33,7 +40,6 @@
                 <div class="form-field"><label asp-for="Input.SerialNumber"></label><input asp-for="Input.SerialNumber" /><span asp-validation-for="Input.SerialNumber"></span></div>
                 <div class="form-field span-2"><label asp-for="Input.Subject"></label><input asp-for="Input.Subject" /><span asp-validation-for="Input.Subject"></span></div>
                 <div class="form-field span-2"><label asp-for="Input.Description"></label><textarea asp-for="Input.Description" rows="6"></textarea><span asp-validation-for="Input.Description"></span></div>
-                <div class="form-field span-2 response-field"><label asp-for="Input.ResponseMessage"></label><textarea asp-for="Input.ResponseMessage" rows="5" placeholder="お客様ポータルへ返す回答を入力"></textarea><span asp-validation-for="Input.ResponseMessage"></span></div>
             </div>
             <div class="form-actions"><a class="button button-secondary" asp-page="Index">一覧へ戻る</a><button class="button button-primary" type="submit">変更を保存</button></div>
         </section>

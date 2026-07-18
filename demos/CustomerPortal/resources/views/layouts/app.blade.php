@@ -13,7 +13,7 @@
         <div class="site-width header-inner">
             <a class="brand" href="{{ route('home', absolute: false) }}" aria-label="製品おたすけ窓口 トップページ">
                 <span class="brand-symbol" aria-hidden="true"><i></i></span>
-                <strong>製品おたすけ窓口</strong>
+                <span class="brand-copy"><strong>製品おたすけ窓口</strong><small>Customer Portal</small></span>
             </a>
             <div class="header-support">
                 <span>サポート時間：9:00〜18:00<br class="mobile-only">（土日祝日を除く）</span>

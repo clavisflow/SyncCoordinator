@@ -21,21 +21,6 @@
 
 <div class="content-stack">
     <RadzenCard>
-        <div class="panel-title"><h2>@L["Operations_QueuePosition"]</h2><span>@L["Common_SystemCount", checkpoints.Count]</span></div>
-        <RadzenDataGrid Data="@checkpoints" TItem="CheckpointListItem" AllowSorting="true" EmptyText="@L["Operations_NoCheckpoints"]" Density="Density.Compact">
-            <Columns>
-                <RadzenDataGridColumn TItem="CheckpointListItem" Property="SystemName" Title="@L["Common_System"]">
-                    <Template Context="checkpoint">@checkpoint.SystemName</Template>
-                </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="CheckpointListItem" Property="LastQueueId" Title="@L["Operations_LastQueueId"]" />
-                <RadzenDataGridColumn TItem="CheckpointListItem" Property="UpdatedAtUtc" Title="@L["Common_UpdatedAt"]">
-                    <Template Context="checkpoint">@FormatDate(checkpoint.UpdatedAtUtc)</Template>
-                </RadzenDataGridColumn>
-            </Columns>
-        </RadzenDataGrid>
-    </RadzenCard>
-
-    <RadzenCard>
         <div class="panel-title"><h2>@L["Operations_RecentInbox"]</h2><span>@L["Common_Count", inbox.Count]</span></div>
         <RadzenDataGrid Data="@inbox" TItem="InboxListItem" AllowSorting="true" AllowFiltering="true" FilterMode="FilterMode.Simple" AllowPaging="true" PageSize="25" ShowPagingSummary="true" PagingSummaryFormat="@L["Common_PagingSummary"]" EmptyText="@L["Operations_NoInbox"]" Density="Density.Compact">
             <Columns>
@@ -69,6 +54,21 @@
                             <span>—</span>
                         }
                     </Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    </RadzenCard>
+
+    <RadzenCard>
+        <div class="panel-title"><h2>@L["Operations_QueuePosition"]</h2><span>@L["Common_SystemCount", checkpoints.Count]</span></div>
+        <RadzenDataGrid Data="@checkpoints" TItem="CheckpointListItem" AllowSorting="true" EmptyText="@L["Operations_NoCheckpoints"]" Density="Density.Compact">
+            <Columns>
+                <RadzenDataGridColumn TItem="CheckpointListItem" Property="SystemName" Title="@L["Common_System"]">
+                    <Template Context="checkpoint">@checkpoint.SystemName</Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="CheckpointListItem" Property="LastQueueId" Title="@L["Operations_LastQueueId"]" />
+                <RadzenDataGridColumn TItem="CheckpointListItem" Property="UpdatedAtUtc" Title="@L["Common_UpdatedAt"]">
+                    <Template Context="checkpoint">@FormatDate(checkpoint.UpdatedAtUtc)</Template>
                 </RadzenDataGridColumn>
             </Columns>
         </RadzenDataGrid>

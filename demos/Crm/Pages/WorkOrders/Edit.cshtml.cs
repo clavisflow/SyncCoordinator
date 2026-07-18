@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using SyncCoordinator.Demo.Crm.Data;
@@ -88,5 +89,22 @@ public sealed class EditModel(CrmRepository repository) : PageModel
         OriginSystem = record.OriginSystem;
         UpdatedAtUtc = record.UpdatedAtUtc;
         Input = record.Payload;
+        Input.ScheduledAt = ToDateTimeLocal(Input.ScheduledAt);
+        Input.CompletedAt = ToDateTimeLocal(Input.CompletedAt);
+    }
+
+    private static string? ToDateTimeLocal(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)
+            || !DateTimeOffset.TryParse(
+                value,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
+                out var parsed))
+        {
+            return value;
+        }
+
+        return parsed.ToLocalTime().ToString("yyyy-MM-ddTHH:mm", CultureInfo.InvariantCulture);
     }
 }

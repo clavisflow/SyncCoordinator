@@ -102,12 +102,6 @@ else
             <div class="inline-alert warning"><strong>@L["ConflictDetail_CurrentChanged"]</strong><span>@L["ConflictDetail_CurrentChangedHelp"]</span></div>
         }
 
-        <section class="detail-grid">
-            <RadzenCard class="detail-card"><span>@L["Conflicts_SyncPath"]</span><strong>@details.SourceSystemName → @details.DestinationSystemName</strong></RadzenCard>
-            <RadzenCard class="detail-card"><span>@L["Common_Scope"]</span><strong>@(details.Operation == ChangeOperation.Delete ? L["Common_RecordScope"] : ScopeText(details.Scope))</strong></RadzenCard>
-            <RadzenCard class="detail-card"><span>@L["Common_DetectedAt"]</span><strong>@UiFormat.LocalDateTime(details.DetectedAtUtc)</strong></RadzenCard>
-        </section>
-
         @if (details.ResolutionState == ConflictResolutionState.Pending)
         {
             <div class="inline-alert info"><strong>@L["ConflictDetail_PendingTitle"]</strong><span>@L["ConflictDetail_PendingHelp"]</span></div>
@@ -141,15 +135,15 @@ else
                     <thead>
                     <tr>
                         <th>@L["Common_Field"]</th>
-                        <th>@L["ConflictDetail_Previous"]</th>
+                        <th class="previous-column"><span>@L["ConflictDetail_Previous"]</span><small>@L["ConflictDetail_PreviousContext"]</small></th>
                         @if (details.Operation != ChangeOperation.Delete)
                         {
-                            <th>@L["ConflictDetail_Incoming"]</th>
+                            <th class="incoming-column"><span>@L["ConflictDetail_Incoming"]</span><small>@details.SourceSystemName</small></th>
                         }
-                        <th>@L["ConflictDetail_Current"]</th>
+                        <th class="current-column"><span>@L["ConflictDetail_Current"]</span><small>@details.DestinationSystemName</small></th>
                         @if (details.Operation != ChangeOperation.Delete)
                         {
-                            <th class="adopted-column">@L["ConflictDetail_Adopted"]</th>
+                            <th class="adopted-column"><span>@L["ConflictDetail_Adopted"]</span><small>@L["ConflictDetail_AdoptedContext"]</small></th>
                         }
                     </tr>
                     </thead>
@@ -163,14 +157,14 @@ else
                         var currentSelected = hasEditor && editor!.Choice == ManualConflictChoice.Current;
                         <tr>
                             <th scope="row"><strong>@(field.CurrentFieldName ?? field.FieldName)</strong><small>@(field.IncomingFieldName ?? field.FieldName) → @(field.CurrentFieldName ?? field.FieldName)</small></th>
-                            <td><pre class="json-value">@UiFormat.JsonValue(field.BaseValue)</pre></td>
+                            <td class="previous-column"><pre class="json-value">@UiFormat.JsonValue(field.BaseValue)</pre></td>
                             @if (details.Operation != ChangeOperation.Delete)
                             {
-                                <td>
+                                <td class="incoming-column @(incomingSelected ? "selected-candidate" : null)">
                                     <pre class="json-value @(incomingSelected ? "selected-value" : null)">@UiFormat.JsonValue(field.IncomingValue)</pre>
                                 </td>
                             }
-                            <td>
+                            <td class="current-column @(currentSelected ? "selected-candidate" : null)">
                                 <pre class="json-value @(currentSelected ? "selected-value" : null)">@UiFormat.JsonValue(details.CurrentVersionToken is null ? field.CurrentValue : field.LatestCurrentValue)</pre>
                             </td>
                             @if (details.Operation != ChangeOperation.Delete)
@@ -228,6 +222,12 @@ else
                 <div class="form-actions"><RadzenButton Text="@(submitting ? L["ConflictDetail_Submitting"] : L["ConflictDetail_Submit"])" Icon="task_alt" Disabled="@(submitting || string.IsNullOrWhiteSpace(details.CurrentVersionToken))" Click="@SubmitAsync" /></div>
             </RadzenCard>
         }
+
+        <section class="detail-grid conflict-metadata-grid">
+            <RadzenCard class="detail-card"><span>@L["Conflicts_SyncPath"]</span><strong>@details.SourceSystemName → @details.DestinationSystemName</strong></RadzenCard>
+            <RadzenCard class="detail-card"><span>@L["Common_Scope"]</span><strong>@(details.Operation == ChangeOperation.Delete ? L["Common_RecordScope"] : ScopeText(details.Scope))</strong></RadzenCard>
+            <RadzenCard class="detail-card"><span>@L["Common_DetectedAt"]</span><strong>@UiFormat.LocalDateTime(details.DetectedAtUtc)</strong></RadzenCard>
+        </section>
 
         <details class="technical-details"><summary>@L["Common_TechnicalDetails"]</summary><dl class="metadata-list"><dt>@L["ConflictDetail_SourceMessageId"]</dt><dd><code>@details.SourceMessageId</code></dd><dt>@L["ConflictDetail_DeliveryMessageId"]</dt><dd><code>@details.DeliveryMessageId</code></dd></dl></details>
     </div>

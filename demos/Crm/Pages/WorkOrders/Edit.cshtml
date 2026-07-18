@@ -7,7 +7,13 @@
 <nav class="breadcrumb" aria-label="パンくず"><a asp-page="Index">作業指示一覧</a><span>›</span><span>@(Model.Input.WorkOrderNumber ?? "詳細")</span></nav>
 <header class="record-header">
     <div><p class="page-kicker">作業指示詳細</p><h1>@(Model.Input.WorkOrderNumber ?? "作業指示詳細")</h1><p>@(Model.Input.CustomerName ?? "お客様未設定") / @(Model.Input.ProductName ?? "製品未設定")</p></div>
-    @if (!string.IsNullOrWhiteSpace(Model.Input.Status)) { <span class="status status-large status-@Model.Input.Status.ToLowerInvariant()">@StatusOptions.Label(Model.Input.Status)</span> }
+    <div class="record-header-actions">
+        @if (!string.IsNullOrWhiteSpace(Model.Input.Status)) { <span class="status status-large status-@Model.Input.Status.ToLowerInvariant()">@StatusOptions.Label(Model.Input.Status)</span> }
+        @if (Model.DataError is null || !string.IsNullOrWhiteSpace(Model.Input.WorkOrderNumber))
+        {
+            <button class="button button-primary" type="submit" form="work-order-edit-form">変更を保存</button>
+        }
+    </div>
 </header>
 
 @if (TempData["SuccessMessage"] is string success) { <div class="alert alert-success" role="status">@success</div> }
@@ -15,7 +21,7 @@
 
 @if (Model.DataError is null || !string.IsNullOrWhiteSpace(Model.Input.WorkOrderNumber))
 {
-    <form method="post" class="record-layout">
+    <form method="post" class="record-layout" id="work-order-edit-form">
         <section class="section-card">
             <header class="section-header"><div><h2>作業内容と進捗</h2><p>訪問手配、担当者、作業結果を編集します。</p></div></header>
             <div asp-validation-summary="ModelOnly" class="validation"></div>
@@ -23,16 +29,16 @@
                 <div class="form-field"><label asp-for="Input.WorkOrderNumber">作業指示番号</label><input asp-for="Input.WorkOrderNumber" readonly /></div>
                 <div class="form-field"><label asp-for="Input.CaseNumber">ケース番号</label><input asp-for="Input.CaseNumber" readonly /></div>
                 <input asp-for="Input.CaseId" type="hidden" />
+                <div class="form-field"><label asp-for="Input.Status"></label><select asp-for="Input.Status">@foreach (var status in Model.Statuses) { <option value="@status">@StatusOptions.Label(status) (@status)</option> }</select><span asp-validation-for="Input.Status"></span></div>
+                <div class="form-field"><label asp-for="Input.CompletedAt"></label><input asp-for="Input.CompletedAt" type="datetime-local" /></div>
+                <div class="form-field span-2 response-field demo-focus-field"><label asp-for="Input.WorkResult"></label><textarea asp-for="Input.WorkResult" rows="5" placeholder="Field Serviceから同期された作業結果"></textarea><small>現場の更新内容がこの欄へ戻ります。</small></div>
                 <div class="form-field"><label asp-for="Input.CustomerName">お客様名</label><input asp-for="Input.CustomerName" /></div>
                 <div class="form-field"><label asp-for="Input.Phone"></label><input asp-for="Input.Phone" /></div>
                 <div class="form-field"><label asp-for="Input.ProductName"></label><input asp-for="Input.ProductName" /></div>
-                <div class="form-field"><label asp-for="Input.Status"></label><select asp-for="Input.Status">@foreach (var status in Model.Statuses) { <option value="@status">@StatusOptions.Label(status) (@status)</option> }</select><span asp-validation-for="Input.Status"></span></div>
                 <div class="form-field span-2"><label asp-for="Input.Address"></label><input asp-for="Input.Address" /><span asp-validation-for="Input.Address"></span></div>
                 <div class="form-field"><label asp-for="Input.ScheduledAt"></label><input asp-for="Input.ScheduledAt" type="datetime-local" /></div>
                 <div class="form-field"><label asp-for="Input.TechnicianName"></label><input asp-for="Input.TechnicianName" /></div>
                 <div class="form-field span-2"><label asp-for="Input.ProblemSummary"></label><textarea asp-for="Input.ProblemSummary" rows="5"></textarea></div>
-                <div class="form-field span-2"><label asp-for="Input.WorkResult"></label><textarea asp-for="Input.WorkResult" rows="6" placeholder="診断内容、交換部品、お客様への説明など"></textarea></div>
-                <div class="form-field"><label asp-for="Input.CompletedAt"></label><input asp-for="Input.CompletedAt" type="datetime-local" /></div>
             </div>
             <div class="form-actions"><a class="button button-secondary" asp-page="Index">一覧へ戻る</a><button class="button button-primary" type="submit">変更を保存</button></div>
         </section>

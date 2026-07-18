@@ -615,6 +615,8 @@
   <data name="ConflictDetail_OlderConflictsHelp" xml:space="preserve"><value>There are {0} earlier conflicts. Resolving this latest conflict will make the earlier conflicts unavailable.</value></data>
   <data name="ConflictDetail_AllIncoming" xml:space="preserve"><value>Use all incoming</value></data>
   <data name="ConflictDetail_AllCurrent" xml:space="preserve"><value>Keep all current</value></data>
+  <data name="ConflictDetail_PreviousContext" xml:space="preserve"><value>At last sync</value></data>
+  <data name="ConflictDetail_AdoptedContext" xml:space="preserve"><value>After resolution</value></data>
   <data name="ConflictDetail_ChooseIncoming" xml:space="preserve"><value>Use incoming value</value></data>
   <data name="ConflictDetail_ChooseCurrent" xml:space="preserve"><value>Keep destination value</value></data>
   <data name="ConflictDetail_ChooseCustom" xml:space="preserve"><value>Enter a value</value></data>
