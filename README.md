@@ -1,33 +1,37 @@
 # SyncCoordinator
 
-SyncCoordinator（SynCo）は、複数の業務データベース間で変更を検知し、値変換、競合判定、再試行、ループ防止を行いながらデータを同期するセルフホスト型コーディネーターです。
+<p align="right">
+  <strong>English</strong> · <a href="./README.ja.md">日本語</a>
+</p>
 
-製品の考え方や利用イメージは、[SyncCoordinator 製品ドキュメント](https://synco.clavisflow.net/)を参照してください。
+SyncCoordinator (SynCo) is a self-hosted coordinator that detects changes across business databases and synchronizes data with value transformation, conflict detection, retries, and loop prevention.
 
-- [Overview](https://synco.clavisflow.net/overview): 製品概要、主な機能、ユースケース
-- [Architecture](https://synco.clavisflow.net/architecture): システム構成、コンポーネント、信頼性モデル
-- [Workflow](https://synco.clavisflow.net/workflow): 変更検知から競合解決、同期完了までの流れ
-- [Getting Started](https://synco.clavisflow.net/getting-started): デモ起動、初期設定、実際の業務DBへの接続
+For product concepts and usage guidance, see the [SyncCoordinator product documentation](https://synco.clavisflow.net/en/).
 
-## このリポジトリに含まれるもの
+- [Overview](https://synco.clavisflow.net/en/overview): Product scope, key capabilities, and use cases
+- [Architecture](https://synco.clavisflow.net/en/architecture): System topology, components, and reliability model
+- [Workflow](https://synco.clavisflow.net/en/workflow): From change detection and conflict resolution to completed synchronization
+- [Getting Started](https://synco.clavisflow.net/en/getting-started): Run the demo, complete initial setup, and connect real business databases
 
-- SQL Server、MySQL、PostgreSQLに対応するマッピング駆動のRDB Connector
-- Triggerと`SyncChangeQueue`による変更検知。業務テーブルの全件ポーリングは行わない
-- 前回値、受信値、同期先の現在値を比較する項目単位の3-way競合判定
-- 更新・削除競合の履歴、手動解決、後続競合の再評価
-- at-least-once配送、決定的な配送ID、同期先での冪等適用、同期ループ防止
-- システム、DB接続、同期ルール、列マッピング、値変換を管理するBlazor Web UI
-- Inbox、Checkpoint、運用イベント、監査履歴、Webhook通知、保持期間管理
-- Customer Portal、CRM、Field Serviceを使った3システムの実行可能デモ
+## What's included
 
-同期用の補助テーブルとTriggerは、管理画面でSQLを確認し、対象DBごとに反映・検証してからルールを有効化します。既存の業務アプリケーションや業務テーブル定義は変更しません。
+- Mapping-driven relational database connectors for SQL Server, MySQL, and PostgreSQL
+- Trigger-based change detection through `SyncChangeQueue`, with no full-table polling of business data
+- Per-field three-way conflict detection that compares the previous value, incoming value, and current destination value
+- Update and delete conflict history, manual resolution, and reevaluation of subsequent conflicts
+- At-least-once delivery, deterministic delivery IDs, idempotent destination writes, and synchronization-loop prevention
+- A Blazor Web UI for managing systems, database connections, sync rules, column mappings, and value transformations
+- Inbox and checkpoint state, operational events, audit history, Webhook notifications, and retention management
+- A runnable three-system demo using Customer Portal, CRM, and Field Service applications
 
-## クイックスタート
+Synchronization support tables and triggers are reviewed as SQL in the management UI, applied to each target database, and verified before a rule is enabled. Existing business applications and business-table definitions do not need to be changed.
 
-デモ構成の起動には次が必要です。
+## Quick start
 
-- Windows 10で動作確認済み
-- .NET SDK 10.0.301以降の互換SDK（`global.json`は`latestFeature`へロールフォワード）
+The demo environment requires:
+
+- Verified on Windows 10
+- .NET SDK 10.0.301 or a compatible later SDK (`global.json` rolls forward to `latestFeature`)
 - Aspire CLI 13.4.x
 - Docker Desktop
 
@@ -39,69 +43,69 @@ dotnet test SyncCoordinator.sln --no-build
 aspire run --apphost src/SyncCoordinator.AppHost/SyncCoordinator.AppHost.csproj
 ```
 
-既定の`Demo`モードでは、Aspire Dashboardから次のリソースをまとめて起動します。
+The default `Demo` mode starts the following resources together from the Aspire Dashboard:
 
-- SyncCoordinator Web / Worker / 管理DB
-- Customer Portal / MySQL
-- CRM / SQL Server
-- Field Service / PostgreSQL
+- SyncCoordinator Web, Worker, and coordinator database
+- Customer Portal and MySQL
+- CRM and SQL Server
+- Field Service and PostgreSQL
 
-初回はSyncCoordinator Webの`/account/setup`で管理者パスワードを設定します。デモルートの有効化、競合シナリオ、確認手順は[デモ環境](demos/README.md)を参照してください。
+On first use, set the administrator password at `/account/setup` in SyncCoordinator Web. See the [demo environment](demos/README.md) for demo-route activation, conflict scenarios, and verification steps. This supporting document is currently in Japanese.
 
-通常の`dotnet test`では、DockerとChromiumを使うE2Eテストをスキップします。明示的な実行方法は[E2Eテスト](docs/e2e-testing.md)にあります。
+The standard `dotnet test` command skips E2E tests that require Docker and Chromium. See [E2E testing](docs/e2e-testing.md) for explicit execution instructions. This supporting document is currently in Japanese.
 
-## 実行モード
+## Run modes
 
-`src/SyncCoordinator.AppHost/appsettings.Development.json`の`RunMode`で構成を切り替えます。
+Set `RunMode` in `src/SyncCoordinator.AppHost/appsettings.Development.json` to switch configurations.
 
-| モード | 用途 | 起動内容 |
-|---|---|---|
-| `Demo` | 製品確認、デモ撮影、開発 | Web、Worker、管理DB、3つの業務アプリと業務DB。デモ設定と競合シナリオを投入する |
-| `Core` | 実際の業務DBへ接続 | Web、Worker、外部またはコンテナの管理DB。システムとルールは管理画面から登録する |
-| `E2E` | 自動E2Eテスト | 一時DBとデモアプリを動的ポートで起動し、テスト終了後に破棄する |
+| Mode | Purpose | Resources |
+| --- | --- | --- |
+| `Demo` | Product evaluation, demo capture, and development | Web, Worker, coordinator database, three business applications, and their databases; also loads demo configuration and conflict scenarios |
+| `Core` | Connect to real business databases | Web, Worker, and either an external or containerized coordinator database; systems and rules are registered through the management UI |
+| `E2E` | Automated end-to-end testing | Starts temporary databases and demo applications on dynamic ports, then removes them after the tests finish |
 
-`Core`モードで外部SQL Serverを管理DBに使う場合、Docker Desktopは不要です。接続文字列、管理DBマイグレーション、本番運用前の確認事項は[Getting Started](https://synco.clavisflow.net/getting-started)と[技術仕様書](docs/technical-specification.md)を参照してください。
+Docker Desktop is not required in `Core` mode when an external SQL Server is used for the coordinator database. For connection strings, coordinator-database migrations, and production-readiness checks, see [Getting Started](https://synco.clavisflow.net/en/getting-started) and the [technical specification](docs/technical-specification.md). The technical specification is currently in Japanese.
 
-## ソリューション構成
+## Solution structure
 
-| パス | 責務 |
-|---|---|
-| `src/SyncCoordinator.Contracts` | 共通payload、変更キュー、適用要求の契約 |
-| `src/SyncCoordinator.Core` | 同期判断、競合解決、管理サービスのユースケースと抽象化 |
-| `src/SyncCoordinator.Infrastructure` | 管理DB、RDB Connector、DB配備、通知、認証関連の実装 |
-| `src/SyncCoordinator.Worker` | Queueの読取り、配送、再試行、競合解決要求の処理 |
-| `src/SyncCoordinator.Web` | Blazor Interactive Serverによる管理画面 |
-| `src/SyncCoordinator.AppHost` | `Demo`、`Core`、`E2E`のAspire構成 |
-| `src/SyncCoordinator.ServiceDefaults` | OpenTelemetry、Service Discovery、Resilience、Health Check |
-| `tests/SyncCoordinator.Tests` | CoreとInfrastructureを中心としたユニット／統合テスト |
-| `tests/SyncCoordinator.E2ETests` | 実DB、Worker、管理画面を含むE2Eテスト |
-| `demos` | 3つの業務アプリ、初期データ、撮影・リセット用ツール |
+| Path | Responsibility |
+| --- | --- |
+| `src/SyncCoordinator.Contracts` | Shared contracts for payloads, change queues, and apply requests |
+| `src/SyncCoordinator.Core` | Use cases and abstractions for synchronization decisions, conflict resolution, and management services |
+| `src/SyncCoordinator.Infrastructure` | Coordinator database, relational database connectors, database deployment, notifications, and authentication |
+| `src/SyncCoordinator.Worker` | Queue reads, delivery, retries, and conflict-resolution requests |
+| `src/SyncCoordinator.Web` | Management UI built with Blazor Interactive Server |
+| `src/SyncCoordinator.AppHost` | Aspire configurations for `Demo`, `Core`, and `E2E` modes |
+| `src/SyncCoordinator.ServiceDefaults` | OpenTelemetry, service discovery, resilience, and health checks |
+| `tests/SyncCoordinator.Tests` | Unit and integration tests focused on Core and Infrastructure |
+| `tests/SyncCoordinator.E2ETests` | End-to-end tests covering real databases, the Worker, and the management UI |
+| `demos` | Three business applications, seed data, and demo capture/reset tools |
 
-## ドキュメントの役割
+## Documentation map
 
-| ドキュメント | 内容 |
-|---|---|
-| [製品ドキュメント](https://synco.clavisflow.net/) | 製品概要、アーキテクチャ、処理フロー、導入手順 |
-| [操作マニュアル兼ヘルプ](docs/user-guide.md) | 管理画面の操作手順。アプリ内`/help`の正本 |
-| [技術仕様書](docs/technical-specification.md) | 同期処理、状態遷移、永続化、セキュリティ、配備上の制約 |
-| [Webhook連携ガイド](docs/webhooks.md) | イベント、payload、署名検証、再試行、受信側の契約 |
-| [デモ環境](demos/README.md) | 3システム構成、デモシード、確認・リセット手順 |
-| [E2Eテスト](docs/e2e-testing.md) | E2Eの前提、実行方法、失敗時の調査方法 |
-| [設計判断](docs/decisions) | 主要な設計判断と採用理由を記録したADR |
+| Document | Contents |
+| --- | --- |
+| [Product documentation](https://synco.clavisflow.net/en/) | Product overview, architecture, workflow, and setup guidance |
+| [User guide and in-app help](docs/user-guide.en.md) ([Japanese](docs/user-guide.md)) | Management-UI procedures and the source for the in-app `/help` page |
+| [Technical specification](docs/technical-specification.md) (Japanese) | Synchronization processing, state transitions, persistence, security, and deployment constraints |
+| [Webhook integration guide](docs/webhooks.md) (Japanese) | Events, payloads, signature verification, retries, and receiver contracts |
+| [Demo environment](demos/README.md) (Japanese) | Three-system topology, demo seed data, and verification/reset procedures |
+| [E2E testing](docs/e2e-testing.md) (Japanese) | Prerequisites, execution, and failure investigation |
+| [Architecture decisions](docs/decisions) (Japanese) | ADRs recording major design decisions and their rationale |
 
-## 実装上の境界
+## Implementation boundaries
 
-- Coordinator管理DBと業務DBをまたぐ分散トランザクションは使用しません。
-- 同期先では業務更新と`SyncAppliedMessage`を同じDBローカルトランザクションで保存します。
-- Workerは同じレコードの通知をまとめ、処理時点の最新状態へ収束させます。
-- DB接続情報はASP.NET Core Data Protectionで暗号化し、管理DBへ保存します。
-- 管理画面のDB直接反映は`DatabaseDeployment:AllowDirectApply=true`を明示した環境だけで使用できます。
-- 本番環境ではHTTPS、共有Key Ring、最小権限のDBアカウント、承認済みマイグレーション手順が必要です。
+- No distributed transaction spans the coordinator database and a business database.
+- At the destination, the business update and `SyncAppliedMessage` are stored in the same database-local transaction.
+- The Worker coalesces notifications for the same record and converges on the latest state at processing time.
+- Database connection details are encrypted with ASP.NET Core Data Protection before being stored in the coordinator database.
+- Direct database deployment from the management UI is available only when `DatabaseDeployment:AllowDirectApply=true` is explicitly configured.
+- Production environments require HTTPS, a shared key ring, least-privilege database accounts, and an approved migration process.
 
-詳細は[Architecture](https://synco.clavisflow.net/architecture)、[Workflow](https://synco.clavisflow.net/workflow)、[技術仕様書](docs/technical-specification.md)を参照してください。
+For details, see [Architecture](https://synco.clavisflow.net/en/architecture), [Workflow](https://synco.clavisflow.net/en/workflow), and the [technical specification](docs/technical-specification.md).
 
-## ライセンス
+## License
 
-SyncCoordinatorは[Apache License 2.0](LICENSE)で提供します。Copyright 2026 ClavisFlow.
+SyncCoordinator is available under the [Apache License 2.0](LICENSE). Copyright 2026 ClavisFlow.
 
-配布物に含まれる第三者コンポーネントには、それぞれのライセンスが適用されます。著作権表示とライセンス条件は[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)および[licenses](licenses)を参照してください。特にWindows向けSQL Server接続で同梱されるMicrosoft.Data.SqlClient.SNIは、MITではなくMicrosoft独自の再配布条件で提供されます。バイナリの利用・再配布条件は[BINARY-DISTRIBUTION-NOTICE.md](BINARY-DISTRIBUTION-NOTICE.md)も確認してください。
+Third-party components included in the distribution remain subject to their respective licenses. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) and [licenses](licenses) for copyright notices and license terms. In particular, Microsoft.Data.SqlClient.SNI, bundled for SQL Server connectivity on Windows, is distributed under Microsoft's own redistribution terms rather than the MIT License. Also review [BINARY-DISTRIBUTION-NOTICE.md](BINARY-DISTRIBUTION-NOTICE.md) for binary use and redistribution conditions.
