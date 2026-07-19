@@ -14,8 +14,16 @@
              Link="HelpContent\user-guide.md"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\docs\user-guide.en.md"
+             Link="HelpContent\user-guide.en.md"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\docs\images\pages\*.png"
              Link="HelpContent\images\pages\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\docs\images\pages\en\*.png"
+             Link="HelpContent\images\pages\en\%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>

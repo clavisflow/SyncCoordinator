@@ -1,9 +1,19 @@
 using SyncCoordinator.Web;
+using System.Globalization;
 
 namespace SyncCoordinator.Tests;
 
 public sealed class HelpContentServiceTests
 {
+    [Theory]
+    [InlineData("ja-JP", "user-guide.md")]
+    [InlineData("en-US", "user-guide.en.md")]
+    [InlineData("fr-FR", "user-guide.md")]
+    public void SelectsHelpDocumentForUiCulture(string cultureName, string expected)
+    {
+        Assert.Equal(expected, HelpContentService.GetDocumentFileName(new CultureInfo(cultureName)));
+    }
+
     [Fact]
     public void RenderMarkdownCreatesSafeHelpHtmlFromCanonicalDocument()
     {

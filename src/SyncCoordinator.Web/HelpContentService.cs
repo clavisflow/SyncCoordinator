@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using System.Globalization;
 using Markdig;
 using Markdig.Extensions.AutoIdentifiers;
 
@@ -39,9 +40,17 @@ public sealed class HelpContentService
 
     public async Task<string> GetHtmlAsync(CancellationToken cancellationToken)
     {
-        var path = Path.Combine(contentRoot, "user-guide.md");
+        var path = Path.Combine(contentRoot, GetDocumentFileName(CultureInfo.CurrentUICulture));
         var markdown = await File.ReadAllTextAsync(path, cancellationToken);
         return RenderMarkdown(markdown);
+    }
+
+    public static string GetDocumentFileName(CultureInfo culture)
+    {
+        ArgumentNullException.ThrowIfNull(culture);
+        return string.Equals(culture.TwoLetterISOLanguageName, "en", StringComparison.OrdinalIgnoreCase)
+            ? "user-guide.en.md"
+            : "user-guide.md";
     }
 
     public HelpAsset? TryResolveAsset(string? relativePath)
