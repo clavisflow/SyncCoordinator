@@ -354,7 +354,10 @@ public sealed class ConflictResolutionService(
                 entity.Operation == ChangeOperation.Delete
                     ? route.ResolveDeletionBehavior(entity.DestinationSystem)
                     : null,
-                payload), cancellationToken);
+                payload)
+            {
+                RouteId = entity.RouteId
+            }, cancellationToken);
         }
 
         UpsertSnapshot(entity.RouteId, entity.DestinationSystem, entity.EntityType, entity.EntityId,
@@ -485,7 +488,10 @@ public sealed class ConflictResolutionService(
                     next.Operation == ChangeOperation.Delete
                         ? route.ResolveDeletionBehavior(next.DestinationSystem)
                         : null,
-                    payload), cancellationToken);
+                    payload)
+                {
+                    RouteId = next.RouteId
+                }, cancellationToken);
             }
 
             UpsertSnapshot(next.RouteId, next.DestinationSystem, next.EntityType, next.EntityId,
@@ -637,7 +643,11 @@ public sealed class ConflictResolutionService(
         CancellationToken cancellationToken)
     {
         var connector = await connectors.GetRequiredAsync(entity.DestinationSystem, cancellationToken);
-        var physical = await connector.ReadCurrentAsync(entity.EntityType, entity.EntityId, cancellationToken);
+        var physical = await connector.ReadCurrentForRouteAsync(
+            entity.RouteId,
+            entity.EntityType,
+            entity.EntityId,
+            cancellationToken);
         return physical is null
             ? null
             : SyncPayloadTransformer.NormalizeToCanonical(physical, route, entity.DestinationSystem);

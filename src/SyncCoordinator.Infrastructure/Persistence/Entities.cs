@@ -127,6 +127,7 @@ public sealed class RouteFixedValueMappingEntity
     public MappingWriteDirection Direction { get; set; }
     public required string TargetColumn { get; set; }
     public required string Value { get; set; }
+    public bool IsKey { get; set; }
     public string TargetDataType { get; set; } = string.Empty;
     public bool TargetIsNullable { get; set; } = true;
     public int? TargetMaxLength { get; set; }

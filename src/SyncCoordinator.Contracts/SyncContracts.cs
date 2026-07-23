@@ -79,6 +79,13 @@ public sealed record ApplyRequest(
     string EntityId,
     ChangeOperation Operation,
     DeletionBehavior? DeletionBehavior,
-    EntityPayload Payload);
+    EntityPayload Payload)
+{
+    /// <summary>
+    /// Selects the route-specific physical mapping when more than one source writes
+    /// the same entity type into a shared destination table.
+    /// </summary>
+    public Guid? RouteId { get; init; }
+}
 
 public sealed record ApplyResult(ApplyStatus Status);

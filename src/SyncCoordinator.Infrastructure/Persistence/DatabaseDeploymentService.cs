@@ -217,12 +217,21 @@ public sealed class DatabaseDeploymentService(
             .Include(x => x.SourceSystem)
             .Include(x => x.DestinationSystem)
             .Include(x => x.TableMapping).ThenInclude(x => x!.Columns)
+            .Include(x => x.TableMapping).ThenInclude(x => x!.FixedValues)
             .Include(x => x.TableMapping).ThenInclude(x => x!.RelatedTables)
             .SingleOrDefaultAsync(x => x.Id == routeId, cancellationToken) ??
                     throw new KeyNotFoundException("指定された同期ルールは存在しません。");
         var mapping = route.TableMapping ??
                       throw new ConfigurationValidationException(["先にテーブル／列マッピングを保存してください。"]);
         var keys = mapping.Columns.Where(x => x.IsKey).OrderBy(x => x.SourceColumn, StringComparer.Ordinal).ToArray();
+        var sourceFixedKeys = mapping.FixedValues
+            .Where(x => x.IsKey && x.Direction == MappingWriteDirection.Reverse)
+            .OrderBy(x => x.TargetColumn, StringComparer.Ordinal)
+            .ToArray();
+        var destinationFixedKeys = mapping.FixedValues
+            .Where(x => x.IsKey && x.Direction == MappingWriteDirection.Forward)
+            .OrderBy(x => x.TargetColumn, StringComparer.Ordinal)
+            .ToArray();
         var columns = mapping.Columns.OrderBy(x => x.SourceColumn, StringComparer.Ordinal).ToArray();
         var sourceTableColumns = columns.Where(x => string.IsNullOrWhiteSpace(x.SourceTableAlias)).ToArray();
         if (keys.Length == 0)
@@ -248,7 +257,8 @@ public sealed class DatabaseDeploymentService(
         warnings.Add(mapping.SyncDeletes
             ? DisplayText.Create("DatabaseSetup_WarningDeleteEnabled")
             : DisplayText.Create("DatabaseSetup_WarningDeleteDisabled"));
-        if (keys.Length > 1)
+        if (keys.Length + sourceFixedKeys.Length > 1 ||
+            keys.Length + destinationFixedKeys.Length > 1)
         {
             warnings.Add(DisplayText.Create("DatabaseSetup_WarningCompositeKey"));
         }
@@ -260,7 +270,12 @@ public sealed class DatabaseDeploymentService(
                 source,
                 mapping.SourceSchema,
                 mapping.SourceTable,
-                keys.Select(x => new DeploymentColumn(x.SourceColumn, CanonicalFieldName(x))).ToArray(),
+                keys.Select(x => new DeploymentColumn(x.SourceColumn, CanonicalFieldName(x)))
+                    .Concat(sourceFixedKeys.Select(x => new DeploymentColumn(
+                        x.TargetColumn,
+                        $"@fixed:{x.TargetColumn}",
+                        x.Value)))
+                    .ToArray(),
                 sourceTableColumns.Select(x => new DeploymentColumn(x.SourceColumn, CanonicalFieldName(x))).ToArray(),
                 ToDeletionBehavior(mapping.SyncDeletes, mapping.SourceDeletionMode, mapping.SourceLogicalDeleteColumn, mapping.SourceLogicalDeleteValue),
                 MappingWriteDirection.Forward,
@@ -273,7 +288,12 @@ public sealed class DatabaseDeploymentService(
             destination,
             mapping.DestinationSchema,
             mapping.DestinationTable,
-            keys.Select(x => new DeploymentColumn(x.DestinationColumn, CanonicalFieldName(x))).ToArray(),
+            keys.Select(x => new DeploymentColumn(x.DestinationColumn, CanonicalFieldName(x)))
+                .Concat(destinationFixedKeys.Select(x => new DeploymentColumn(
+                    x.TargetColumn,
+                    $"@fixed:{x.TargetColumn}",
+                    x.Value)))
+                .ToArray(),
             columns.Select(x => new DeploymentColumn(x.DestinationColumn, CanonicalFieldName(x))).ToArray(),
             ToDeletionBehavior(mapping.SyncDeletes, mapping.DestinationDeletionMode, mapping.DestinationLogicalDeleteColumn, mapping.DestinationLogicalDeleteValue),
             MappingWriteDirection.Reverse,
@@ -574,9 +594,19 @@ public sealed class DatabaseDeploymentService(
             var triggerEvents = deletionBehavior?.Mode == DeletionMode.Physical
                 ? "AFTER INSERT, UPDATE, DELETE"
                 : "AFTER INSERT, UPDATE";
-            var upsertWhere = deletionBehavior?.Mode == DeletionMode.Logical
-                ? $"WHERE NOT ({SqlServerIsDeleted("i", deletionBehavior)})"
-                : string.Empty;
+            var upsertPredicates = new List<string>();
+            if (deletionBehavior?.Mode == DeletionMode.Logical)
+            {
+                upsertPredicates.Add($"NOT ({SqlServerIsDeleted("i", deletionBehavior)})");
+            }
+            var fixedFilter = SqlServerFixedKeyFilter("i", keys);
+            if (!string.IsNullOrEmpty(fixedFilter))
+            {
+                upsertPredicates.Add(fixedFilter);
+            }
+            var upsertWhere = upsertPredicates.Count == 0
+                ? string.Empty
+                : $"WHERE {string.Join(" AND ", upsertPredicates)}";
             var deleteBlock = BuildSqlServerDeleteBlock(
                 entityType,
                 systemCode,
@@ -860,12 +890,12 @@ public sealed class DatabaseDeploymentService(
         string entityType,
         string rowAlias,
         IReadOnlyList<DeploymentColumn> keys) =>
-        $$"""
+        PostgreSqlConditional(PostgreSqlFixedKeyFilter(rowAlias, keys), $$"""
         INSERT INTO public."SyncChangeQueue"
             ("MessageId", "EntityType", "EntityId", "Operation", "OccurredAtUtc")
         VALUES
             (v_message_id, '{{SqlLiteral(entityType)}}', {{PostgreSqlEntityId(rowAlias, keys)}}, 'Upsert', CURRENT_TIMESTAMP);
-        """;
+        """);
 
     private static string PostgreSqlDeleteEvent(
         string entityType,
@@ -881,7 +911,7 @@ public sealed class DatabaseDeploymentService(
                 WHERE "EntityType" = '{{SqlLiteral(entityType)}}' AND "EntityId" = v_entity_id;
                 """
             : string.Empty;
-        return $$"""
+        var statements = $$"""
             v_entity_id := {{PostgreSqlEntityId(rowAlias, keys)}};
             v_payload := {{PostgreSqlPayloadJson(rowAlias, payloadColumns)}};
             INSERT INTO public."SyncDeleteTombstone"
@@ -902,6 +932,7 @@ public sealed class DatabaseDeploymentService(
                 (v_message_id, '{{SqlLiteral(entityType)}}', v_entity_id, 'Delete', CURRENT_TIMESTAMP);
             {{removeOrigin}}
             """;
+        return PostgreSqlConditional(PostgreSqlFixedKeyFilter(rowAlias, keys), statements);
     }
 
     private static string BuildSqlServerDeleteBlock(
@@ -917,25 +948,33 @@ public sealed class DatabaseDeploymentService(
         }
 
         var keyMatch = SqlServerKeyMatch("i", "d", keys);
+        var deletedFixedFilter = SqlServerFixedKeyFilter("d", keys);
+        var insertedFixedFilter = SqlServerFixedKeyFilter("i", keys);
+        var deletedWhere = string.IsNullOrEmpty(deletedFixedFilter)
+            ? string.Empty
+            : deletedFixedFilter + " AND ";
+        var insertedWhere = string.IsNullOrEmpty(insertedFixedFilter)
+            ? string.Empty
+            : insertedFixedFilter + " AND ";
         var eventSource = deletionBehavior.Mode == DeletionMode.Physical
             ? $$"""
                 INSERT @DeleteEvents(MessageId, EntityId, PayloadJson)
                 SELECT COALESCE(@ContextMessageId, NEWID()), {{SqlServerEntityId("d", keys)}}, {{SqlServerPayloadJson("d", payloadColumns)}}
                 FROM deleted AS d
-                WHERE NOT EXISTS (SELECT 1 FROM inserted AS i WHERE {{keyMatch}});
+                WHERE {{deletedWhere}}NOT EXISTS (SELECT 1 FROM inserted AS i WHERE {{keyMatch}});
                 """
             : $$"""
                 INSERT @DeleteEvents(MessageId, EntityId, PayloadJson)
                 SELECT COALESCE(@ContextMessageId, NEWID()), {{SqlServerEntityId("d", keys)}}, {{SqlServerPayloadJson("d", payloadColumns)}}
                 FROM deleted AS d
                 INNER JOIN inserted AS i ON {{keyMatch}}
-                WHERE {{SqlServerIsDeleted("i", deletionBehavior)}}
+                WHERE {{deletedWhere}}{{SqlServerIsDeleted("i", deletionBehavior)}}
                   AND NOT ({{SqlServerIsDeleted("d", deletionBehavior)}});
 
                 INSERT @DeleteEvents(MessageId, EntityId, PayloadJson)
                 SELECT COALESCE(@ContextMessageId, NEWID()), {{SqlServerEntityId("i", keys)}}, {{SqlServerPayloadJson("i", payloadColumns)}}
                 FROM inserted AS i
-                WHERE {{SqlServerIsDeleted("i", deletionBehavior)}}
+                WHERE {{insertedWhere}}{{SqlServerIsDeleted("i", deletionBehavior)}}
                   AND NOT EXISTS (SELECT 1 FROM deleted AS d WHERE {{keyMatch}});
                 """;
         var deleteOrigin = deletionBehavior.Mode == DeletionMode.Physical
@@ -991,10 +1030,10 @@ public sealed class DatabaseDeploymentService(
         string systemCode,
         DeletionBehavior? deletionBehavior)
     {
-        var upsert = $$"""
+        var upsert = MySqlConditional(MySqlFixedKeyFilter("NEW", keys), $$"""
             INSERT SyncChangeQueue(MessageId, EntityType, EntityId, Operation, OccurredAtUtc)
             VALUES (COALESCE(@sync_message_id, UUID()), '{{SqlLiteral(entityType)}}', {{MySqlEntityId("NEW", keys)}}, 'Upsert', UTC_TIMESTAMP(6));
-            """;
+            """);
         if (deletionBehavior?.Mode != DeletionMode.Logical)
         {
             return $$"""
@@ -1075,7 +1114,7 @@ public sealed class DatabaseDeploymentService(
                 WHERE EntityType = '{{SqlLiteral(entityType)}}' AND EntityId = v_entity_id;
                 """
             : string.Empty;
-        return $$"""
+        var statements = $$"""
             SET v_message_id = COALESCE(@sync_message_id, UUID());
             SET v_entity_id = {{MySqlEntityId(rowAlias, keys)}};
             INSERT INTO SyncDeleteTombstone
@@ -1092,6 +1131,7 @@ public sealed class DatabaseDeploymentService(
             VALUES (v_message_id, '{{SqlLiteral(entityType)}}', v_entity_id, 'Delete', UTC_TIMESTAMP(6));
             {{removeOrigin}}
             """;
+        return MySqlConditional(MySqlFixedKeyFilter(rowAlias, keys), statements);
     }
 
     private static string SqlServerEntityId(string alias, IReadOnlyList<DeploymentColumn> keys) =>
@@ -1109,6 +1149,14 @@ public sealed class DatabaseDeploymentService(
         string.Join(" AND ", keys.Select(x =>
             $"({leftAlias}.{SqlServerIdentifier(x.PhysicalColumn)} = {rightAlias}.{SqlServerIdentifier(x.PhysicalColumn)} OR ({leftAlias}.{SqlServerIdentifier(x.PhysicalColumn)} IS NULL AND {rightAlias}.{SqlServerIdentifier(x.PhysicalColumn)} IS NULL))"));
 
+    private static string SqlServerFixedKeyFilter(
+        string alias,
+        IReadOnlyList<DeploymentColumn> keys) =>
+        string.Join(" AND ", keys
+            .Where(x => x.FixedValue is not null)
+            .Select(x =>
+                $"CONVERT(nvarchar(4000), {alias}.{SqlServerIdentifier(x.PhysicalColumn)}) = N'{SqlLiteral(x.FixedValue!)}'"));
+
     private static string SqlServerIsDeleted(string alias, DeletionBehavior behavior) =>
         $"CASE WHEN CONVERT(nvarchar(4000), {alias}.{SqlServerIdentifier(behavior.LogicalDeleteColumn!)}) = N'{SqlLiteral(behavior.LogicalDeleteValue!)}' THEN 1 ELSE 0 END = 1";
 
@@ -1120,6 +1168,19 @@ public sealed class DatabaseDeploymentService(
     private static string MySqlPayloadJson(string alias, IReadOnlyList<DeploymentColumn> columns) =>
         $"JSON_OBJECT({string.Join(", ", columns.Select(x => $"'{SqlLiteral(x.PayloadField)}', {alias}.{MySqlIdentifier(x.PhysicalColumn)}"))})";
 
+    private static string MySqlFixedKeyFilter(
+        string alias,
+        IReadOnlyList<DeploymentColumn> keys) =>
+        string.Join(" AND ", keys
+            .Where(x => x.FixedValue is not null)
+            .Select(x =>
+                $"CAST({alias}.{MySqlIdentifier(x.PhysicalColumn)} AS CHAR) = '{SqlLiteral(x.FixedValue!)}'"));
+
+    private static string MySqlConditional(string condition, string statements) =>
+        string.IsNullOrEmpty(condition)
+            ? statements
+            : $"IF {condition} THEN{Environment.NewLine}{statements}{Environment.NewLine}END IF;";
+
     private static string MySqlIsDeleted(string alias, DeletionBehavior behavior) =>
         $"COALESCE(CAST({alias}.{MySqlIdentifier(behavior.LogicalDeleteColumn!)} AS CHAR) = '{SqlLiteral(behavior.LogicalDeleteValue!)}', FALSE)";
 
@@ -1130,6 +1191,19 @@ public sealed class DatabaseDeploymentService(
 
     private static string PostgreSqlPayloadJson(string alias, IReadOnlyList<DeploymentColumn> columns) =>
         $"jsonb_build_object({string.Join(", ", columns.Select(x => $"'{SqlLiteral(x.PayloadField)}', {alias}.{PostgreSqlIdentifier(x.PhysicalColumn)}"))})";
+
+    private static string PostgreSqlFixedKeyFilter(
+        string alias,
+        IReadOnlyList<DeploymentColumn> keys) =>
+        string.Join(" AND ", keys
+            .Where(x => x.FixedValue is not null)
+            .Select(x =>
+                $"CAST({alias}.{PostgreSqlIdentifier(x.PhysicalColumn)} AS text) = '{SqlLiteral(x.FixedValue!)}'"));
+
+    private static string PostgreSqlConditional(string condition, string statements) =>
+        string.IsNullOrEmpty(condition)
+            ? statements
+            : $"IF {condition} THEN{Environment.NewLine}{statements}{Environment.NewLine}END IF;";
 
     private static string PostgreSqlIsDeleted(string alias, DeletionBehavior behavior) =>
         $"COALESCE(CAST({alias}.{PostgreSqlIdentifier(behavior.LogicalDeleteColumn!)} AS text) = '{SqlLiteral(behavior.LogicalDeleteValue!)}', FALSE)";
@@ -1296,5 +1370,8 @@ public sealed class DatabaseDeploymentService(
         IReadOnlyList<string> Batches,
         DatabaseDeploymentTarget Public);
 
-    internal sealed record DeploymentColumn(string PhysicalColumn, string PayloadField);
+    internal sealed record DeploymentColumn(
+        string PhysicalColumn,
+        string PayloadField,
+        string? FixedValue = null);
 }

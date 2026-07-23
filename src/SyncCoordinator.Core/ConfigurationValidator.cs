@@ -201,6 +201,15 @@ public static class ConfigurationValidator
                 errors.Add("片方向ルールに戻り方向の固定値は設定できません。");
             }
 
+            if (fixedValue.IsKey && fixedValue.TargetContract.IsNullable)
+            {
+                errors.Add($"固定値キー '{fixedValue.TargetColumn}' はNOT NULL列に設定してください。");
+            }
+            if (fixedValue.IsKey && string.IsNullOrWhiteSpace(fixedValue.Value))
+            {
+                errors.Add($"固定値キー '{fixedValue.TargetColumn}' の値は必須です。");
+            }
+
             try
             {
                 ValueTransformEngine.Transform(

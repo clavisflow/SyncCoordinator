@@ -364,6 +364,9 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("IsKey")
+                        .HasColumnType("bit");
+
                     b.Property<string>("Direction")
                         .IsRequired()
                         .HasMaxLength(16)

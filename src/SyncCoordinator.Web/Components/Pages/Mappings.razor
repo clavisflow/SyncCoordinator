@@ -178,6 +178,7 @@ else
                     <button type="button" class="mapping-section-toggle" @onclick="ToggleFixedValues" aria-expanded="@fixedValuesExpanded" title="@(fixedValuesExpanded ? L["Common_CollapseSection"] : L["Common_ExpandSection"])">
                         <RadzenIcon Icon="@(fixedValuesExpanded ? "expand_less" : "expand_more")" />
                         <strong>@L["Mappings_FixedValues"]</strong>
+                        <HelpTip Text="@L["Mappings_FixedValueKeyHelp"]" />
                     </button>
                     <small>@L["Common_Count", fixedValueRows.Count]</small>
                 </div>
@@ -188,7 +189,7 @@ else
                 <div class="fixed-value-list">
                     <div class="fixed-value-row fixed-value-labels @(SelectedRoute?.Direction == SyncDirection.Bidirectional ? "bidirectional" : null)" aria-hidden="true">
                         @if (SelectedRoute?.Direction == SyncDirection.Bidirectional) { <span>@L["Mappings_ApplyDirection"]</span> }
-                        <span>@L["Mappings_TargetColumn"]</span><span>@L["Mappings_FixedValue"]</span><span></span>
+                        <span>@L["Mappings_TargetColumn"]</span><span>@L["Mappings_FixedValue"]</span><span>@L["Mappings_Key"]</span><span></span>
                     </div>
                     @foreach (var fixedValue in fixedValueRows)
                     {
@@ -199,6 +200,10 @@ else
                             }
                             <RadzenDropDown TValue="string" @bind-Value="fixedValue.TargetColumn" Data="@FixedTargetColumns(fixedValue)" TextProperty="DisplayName" ValueProperty="Name" Placeholder="@L["Mappings_SelectColumn"]" AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive" class="form-control compact-control" />
                             <RadzenTextBox @bind-Value="fixedValue.Value" Placeholder="@L["Mappings_FixedValueExample"]" MaxLength="4000" class="form-control compact-control" />
+                            <div class="check-row key-check">
+                                <RadzenCheckBox TValue="bool" @bind-Value="fixedValue.IsKey" />
+                                <span>@L["Mappings_Key"]</span>
+                            </div>
                             <RadzenButton Icon="delete" title="@L["Common_Delete"]" aria-label="@L["Common_Delete"]" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => RemoveFixedValue(fixedValue))" />
                         </div>
                     }
@@ -514,7 +519,8 @@ else
                 {
                     Direction = x.Direction,
                     TargetColumn = x.TargetColumn,
-                    Value = x.Value
+                    Value = x.Value,
+                    IsKey = x.IsKey
                 }).ToList() : [];
             syncDeletes = mappingApplies && existingMapping!.SyncDeletes;
             sourceDeletionMode = mappingApplies ? existingMapping!.SourceDeletionMode : DeletionMode.Physical;
@@ -578,6 +584,7 @@ else
                     Direction = x.Direction,
                     TargetColumn = x.TargetColumn,
                     Value = x.Value,
+                    IsKey = x.IsKey,
                     TargetContract = FixedTargetColumns(x)
                         .FirstOrDefault(column => string.Equals(column.Name, x.TargetColumn, StringComparison.OrdinalIgnoreCase))
                         ?.Contract ?? ColumnValueContract.Unknown
@@ -815,6 +822,7 @@ else
     {
         row.Direction = (MappingWriteDirection)value;
         row.TargetColumn = string.Empty;
+        row.IsKey = false;
     }
 
     private void ToggleRelatedTables() => relatedTablesExpanded = !relatedTablesExpanded;
@@ -930,6 +938,7 @@ else
         public MappingWriteDirection Direction { get; set; }
         public string TargetColumn { get; set; } = string.Empty;
         public string Value { get; set; } = string.Empty;
+        public bool IsKey { get; set; }
     }
 
     private sealed class RelatedTableRow

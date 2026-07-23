@@ -558,6 +558,7 @@ public sealed class FixedValueMappingInput
     public MappingWriteDirection Direction { get; set; }
     public string TargetColumn { get; set; } = string.Empty;
     public string Value { get; set; } = string.Empty;
+    public bool IsKey { get; set; }
     public ColumnValueContract TargetContract { get; set; } = ColumnValueContract.Unknown;
 }
 

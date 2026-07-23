@@ -383,6 +383,7 @@
   <data name="Mappings_ChangeAndRemove" xml:space="preserve"><value>Change and remove</value></data>
   <data name="Mappings_DeleteAndRemove" xml:space="preserve"><value>Delete</value></data>
   <data name="Mappings_FixedValues" xml:space="preserve"><value>Fixed values on write (optional)</value></data>
+  <data name="Mappings_FixedValueKeyHelp" xml:space="preserve"><value>A fixed-value key is combined with the mapped key columns to identify a destination row. Records created at the destination are not sent to the source.</value></data>
   <data name="Mappings_AddFixedValue" xml:space="preserve"><value>Add fixed value</value></data>
   <data name="Mappings_ApplyDirection" xml:space="preserve"><value>Apply direction</value></data>
   <data name="Mappings_TargetColumn" xml:space="preserve"><value>Target column</value></data>

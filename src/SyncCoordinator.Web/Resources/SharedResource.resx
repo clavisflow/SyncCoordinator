@@ -242,7 +242,7 @@
   <data name="Mappings_NoMatchingColumns"><value>条件に一致する列はありません。</value></data>
   <data name="Mappings_SourceColumn"><value>同期元列</value></data><data name="Mappings_DestinationColumn"><value>同期先列</value></data><data name="Mappings_Key"><value>キー</value></data><data name="Mappings_OnConflict"><value>コンフリクト時</value></data>
   <data name="Mappings_FieldDirection"><value>項目方向</value></data><data name="Mappings_FieldForward"><value>送信元 → 送信先</value></data><data name="Mappings_FieldReverse"><value>送信先 → 送信元</value></data><data name="Mappings_FieldBidirectional"><value>双方向</value></data>
-  <data name="Mappings_SelectDestinationColumn"><value>同期先列を選択</value></data><data name="Mappings_FixedValues"><value>書き込み時の固定値（任意）</value></data>
+  <data name="Mappings_SelectDestinationColumn"><value>同期先列を選択</value></data><data name="Mappings_FixedValues"><value>書き込み時の固定値（任意）</value></data><data name="Mappings_FixedValueKeyHelp"><value>固定値をキーにすると、通常のキー列と合わせて同期先レコードを一意に識別します。同期先で新規作成したレコードは同期元へ送信されません。</value></data>
   <data name="Mappings_SelectSourceColumn"><value>同期元列を選択</value></data><data name="Mappings_AddSyncField"><value>同期項目を追加</value></data>
   <data name="Mappings_RelatedTables"><value>関連テーブル</value></data><data name="Mappings_RelatedTablesHelp"><value>同期元テーブルへ直接結合するテーブルを設定します。「同期項目として使用」は関連テーブルの列を同期項目に追加し、「同期対象の判定のみ」は条件に一致する行の有無で同期対象を判定します。関連テーブルの変更を同期のきっかけにすると、関連テーブルだけが変更された場合にも同期元レコードを読み直します。</value></data>
   <data name="Mappings_AddRelatedTable"><value>関連テーブルを追加</value></data><data name="Mappings_RelatedTable"><value>関連テーブル</value></data><data name="Mappings_RelatedAlias"><value>識別名</value></data><data name="Mappings_RelatedUsage"><value>用途</value></data>

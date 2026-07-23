@@ -366,6 +366,7 @@ public sealed class EfCoordinatorAdminService(
                 }
                 requiresDeployment = tableChanged ||
                                      HasPhysicalColumnContractChanged(entity.Columns, input.Columns) ||
+                                     HasFixedValueChanged(entity.FixedValues, input.FixedValues) ||
                                      HasRelatedTableChanged(entity.RelatedTables, input.RelatedTables);
                 requiresSnapshotReset = requiresDeployment ||
                                         HasValueSemanticsChanged(entity.Columns, input.Columns);
@@ -433,6 +434,7 @@ public sealed class EfCoordinatorAdminService(
                 Direction = x.Direction,
                 TargetColumn = x.TargetColumn,
                 Value = x.Value,
+                IsKey = x.IsKey,
                 TargetDataType = x.TargetContract.DataType,
                 TargetIsNullable = x.TargetContract.IsNullable,
                 TargetMaxLength = x.TargetContract.MaxLength,
@@ -813,6 +815,7 @@ public sealed class EfCoordinatorAdminService(
                     Direction = x.Direction,
                     TargetColumn = x.TargetColumn,
                     Value = x.Value,
+                    IsKey = x.IsKey,
                     TargetContract = TargetContract(x)
                 }).ToList(),
         RelatedTables = entity.RelatedTables.OrderBy(x => x.Alias).Select(x => new RelatedTableInput
@@ -859,7 +862,7 @@ public sealed class EfCoordinatorAdminService(
         FixedValues = entity.FixedValues
             .OrderBy(x => x.Direction)
             .ThenBy(x => x.TargetColumn)
-            .Select(x => new { x.Direction, x.TargetColumn, x.Value, TargetContract = TargetContract(x) })
+            .Select(x => new { x.Direction, x.TargetColumn, x.Value, x.IsKey, TargetContract = TargetContract(x) })
             .ToArray(),
         RelatedTables = entity.RelatedTables.OrderBy(x => x.Alias).Select(x => new
         {
@@ -988,6 +991,23 @@ public sealed class EfCoordinatorAdminService(
         string.IsNullOrWhiteSpace(column.SourceTableAlias)
             ? column.SourceColumn
             : $"{column.SourceTableAlias}.{column.SourceColumn}";
+
+    private static bool HasFixedValueChanged(
+        IReadOnlyCollection<RouteFixedValueMappingEntity> existing,
+        IReadOnlyCollection<FixedValueMappingInput> incoming)
+    {
+        var before = existing
+            .Where(x => x.IsKey)
+            .Select(x => $"{x.Direction}\u001f{x.TargetColumn}\u001f{x.Value}\u001f{x.IsKey}")
+            .OrderBy(x => x, StringComparer.Ordinal)
+            .ToArray();
+        var after = incoming
+            .Where(x => x.IsKey)
+            .Select(x => $"{x.Direction}\u001f{x.TargetColumn}\u001f{x.Value}\u001f{x.IsKey}")
+            .OrderBy(x => x, StringComparer.Ordinal)
+            .ToArray();
+        return !before.SequenceEqual(after, StringComparer.Ordinal);
+    }
 
     private static SyncFieldDirection EffectiveDirection(
         RouteColumnMappingEntity column,

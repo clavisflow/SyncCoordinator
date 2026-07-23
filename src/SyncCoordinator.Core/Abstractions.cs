@@ -28,6 +28,13 @@ public interface ISyncConnector
         string entityId,
         CancellationToken cancellationToken);
 
+    Task<EntityPayload?> ReadCurrentForRouteAsync(
+        Guid routeId,
+        string entityType,
+        string entityId,
+        CancellationToken cancellationToken) =>
+        ReadCurrentAsync(entityType, entityId, cancellationToken);
+
     Task<ApplyResult> ApplyAsync(ApplyRequest request, CancellationToken cancellationToken);
 }
 

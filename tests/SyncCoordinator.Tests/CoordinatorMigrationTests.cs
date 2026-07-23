@@ -28,7 +28,8 @@ public sealed class CoordinatorMigrationTests
             migration => Assert.EndsWith("_AddColumnMappingDisplayOrder", migration, StringComparison.Ordinal),
             migration => Assert.EndsWith("_ReplaceRelatedConditionWithExpression", migration, StringComparison.Ordinal),
             migration => Assert.EndsWith("_ReplaceRelatedJoinWithExpression", migration, StringComparison.Ordinal),
-            migration => Assert.EndsWith("_ExpandRelatedIdentifierLength", migration, StringComparison.Ordinal));
+            migration => Assert.EndsWith("_ExpandRelatedIdentifierLength", migration, StringComparison.Ordinal),
+            migration => Assert.EndsWith("_AddFixedValueKeys", migration, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -84,6 +85,15 @@ public sealed class CoordinatorMigrationTests
         Assert.DoesNotContain(
             context.Model.GetEntityTypes(),
             x => x.ClrType.Name == "RouteFieldPolicyEntity");
+    }
+
+    [Fact]
+    public void FixedValueMappingCanParticipateInThePhysicalKey()
+    {
+        using var context = CreateContext();
+        var entity = context.Model.FindEntityType(typeof(RouteFixedValueMappingEntity))!;
+
+        Assert.NotNull(entity.FindProperty(nameof(RouteFixedValueMappingEntity.IsKey)));
     }
 
     [Fact]

@@ -191,7 +191,8 @@ public sealed class SynchronizationCoordinator(
                 route,
                 message.SourceSystem,
                 flowDirection);
-            var destinationPayload = await destination.ReadCurrentAsync(
+            var destinationPayload = await destination.ReadCurrentForRouteAsync(
+                route.Id,
                 message.EntityType,
                 message.EntityId,
                 cancellationToken);
@@ -305,7 +306,10 @@ public sealed class SynchronizationCoordinator(
                     message.EntityId,
                     message.Operation,
                     deletionBehavior,
-                    payloadToWrite), cancellationToken);
+                    payloadToWrite)
+                {
+                    RouteId = route.Id
+                }, cancellationToken);
             }
 
             // 自動解決の履歴確定と既存競合の後続優先化は、同期先への適用成功後に行う。

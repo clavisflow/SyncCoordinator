@@ -193,8 +193,8 @@ code { background: var(--rz-base-200); border-radius: .3rem; color: var(--rz-tex
 .deletion-mode-grid { align-items: start; display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: .75rem; }
 .deletion-mode-panel { align-content: start; background: var(--rz-base-100); border: 1px solid var(--rz-base-300); border-radius: var(--rz-border-radius); display: grid; gap: .7rem; padding: 1rem; }
 .fixed-value-list { border: 1px solid var(--rz-base-300); border-radius: var(--rz-border-radius); overflow-x: auto; }
-.fixed-value-row { align-items: center; border-bottom: 1px solid var(--rz-base-300); display: grid; gap: .7rem; grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.3fr) 42px; min-width: 560px; padding: .42rem .7rem; }
-.fixed-value-row.bidirectional { grid-template-columns: minmax(150px, .8fr) minmax(180px, 1fr) minmax(220px, 1.3fr) 42px; min-width: 740px; }
+.fixed-value-row { align-items: center; border-bottom: 1px solid var(--rz-base-300); display: grid; gap: .7rem; grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.3fr) minmax(100px, .45fr) 42px; min-width: 680px; padding: .42rem .7rem; }
+.fixed-value-row.bidirectional { grid-template-columns: minmax(150px, .8fr) minmax(180px, 1fr) minmax(220px, 1.3fr) minmax(100px, .45fr) 42px; min-width: 860px; }
 .fixed-value-row:last-child { border-bottom: 0; }
 .related-table-header { margin-top: 1rem; }
 .related-table-panel { border-bottom: 1px solid var(--rz-base-300); padding: .75rem 2.75rem .75rem 0; position: relative; }

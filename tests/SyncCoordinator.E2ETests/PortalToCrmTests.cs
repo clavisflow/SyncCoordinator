@@ -15,7 +15,7 @@ using SyncCoordinator.Infrastructure;
 
 namespace SyncCoordinator.E2ETests;
 
-public sealed class PortalToCrmTests
+public sealed partial class PortalToCrmTests
 {
     [E2EFact]
     public async Task DemoRoutesSynchronizeBidirectionally()

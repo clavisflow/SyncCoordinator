@@ -65,13 +65,6 @@ internal sealed class MappedRelationalConnector(
         ChangeQueueItem change,
         CancellationToken cancellationToken)
     {
-        var mapping = await mappings.FindAsync(SystemCode, change.EntityType, cancellationToken);
-        if (mapping is null)
-        {
-            // 無効化済みルールなどが残した古い通知は適用対象にしない。
-            return null;
-        }
-
         await using var connection = CreateConnection();
         var latest = await connection.QuerySingleOrDefaultAsync<QueueRow>(new CommandDefinition(
             Sql.ReadLatestChange,
@@ -81,27 +74,45 @@ internal sealed class MappedRelationalConnector(
         {
             return null;
         }
+        RelationalEntityMapping mapping;
+        try
+        {
+            mapping = await mappings.ResolveRequiredAsync(
+                SystemCode,
+                latest.EntityType,
+                latest.EntityId,
+                cancellationToken);
+        }
+        catch (InvalidOperationException)
+        {
+            // 無効化済みルールなどが残した古い通知は適用対象にしない。
+            return null;
+        }
+        var canonicalEntityId = mapping.ToCanonicalEntityId(latest.EntityId);
 
         EntityPayload? current;
         try
         {
-            current = await ReadEntityAsync(connection, mapping, latest.EntityId, null, cancellationToken);
+            current = await ReadEntityAsync(
+                connection,
+                mapping,
+                latest.EntityId,
+                entityIdIsPhysical: true,
+                null,
+                cancellationToken);
         }
         catch (ValueTransformationException exception)
         {
-            var keyValues = ParseEntityId(mapping, latest.EntityId);
+            var keyValues = CanonicalKeyPayload(mapping, latest.EntityId);
             return new SyncMessage(
                 latest.MessageId,
                 SystemCode,
                 SystemCode,
                 latest.EntityType,
-                latest.EntityId,
+                canonicalEntityId,
                 ChangeOperation.Upsert,
                 latest.OccurredAtUtc,
-                new EntityPayload(keyValues.ToDictionary(
-                    pair => pair.Key,
-                    pair => (JsonNode?)JsonValue.Create(pair.Value),
-                    StringComparer.Ordinal)))
+                new EntityPayload(keyValues))
             {
                 ValidationFailure = new SyncValidationFailure(
                     exception.FieldName,
@@ -121,7 +132,7 @@ internal sealed class MappedRelationalConnector(
                 SystemCode,
                 string.IsNullOrWhiteSpace(origin) ? SystemCode : origin,
                 latest.EntityType,
-                latest.EntityId,
+                canonicalEntityId,
                 ChangeOperation.Upsert,
                 latest.OccurredAtUtc,
                 current);
@@ -131,19 +142,16 @@ internal sealed class MappedRelationalConnector(
         {
             if (mapping.RelatedTables.Any(x => x.Usage == RelatedTableUsage.Eligibility))
             {
-                var keyValues = ParseEntityId(mapping, latest.EntityId);
+                var keyValues = CanonicalKeyPayload(mapping, latest.EntityId);
                 return new SyncMessage(
                     latest.MessageId,
                     SystemCode,
                     SystemCode,
                     latest.EntityType,
-                    latest.EntityId,
+                    canonicalEntityId,
                     ChangeOperation.Delete,
                     latest.OccurredAtUtc,
-                    new EntityPayload(keyValues.ToDictionary(
-                        pair => pair.Key,
-                        pair => (JsonNode?)JsonValue.Create(pair.Value),
-                        StringComparer.Ordinal)))
+                    new EntityPayload(keyValues))
                 {
                     IsEligibilityRemoval = true
                 };
@@ -162,7 +170,7 @@ internal sealed class MappedRelationalConnector(
                 SystemCode,
                 string.IsNullOrWhiteSpace(tombstone.OriginSystem) ? SystemCode : tombstone.OriginSystem,
                 latest.EntityType,
-                latest.EntityId,
+                canonicalEntityId,
                 ChangeOperation.Delete,
                 latest.OccurredAtUtc,
                 DeserializePayload(tombstone.PayloadJson));
@@ -175,12 +183,42 @@ internal sealed class MappedRelationalConnector(
     {
         var mapping = await mappings.GetRequiredAsync(SystemCode, entityType, cancellationToken);
         await using var connection = CreateConnection();
-        return await ReadEntityAsync(connection, mapping, entityId, null, cancellationToken);
+        return await ReadEntityAsync(
+            connection,
+            mapping,
+            entityId,
+            entityIdIsPhysical: false,
+            null,
+            cancellationToken);
+    }
+
+    public async Task<EntityPayload?> ReadCurrentForRouteAsync(
+        Guid routeId,
+        string entityType,
+        string entityId,
+        CancellationToken cancellationToken)
+    {
+        var mapping = await mappings.GetRequiredAsync(routeId, SystemCode, cancellationToken);
+        if (!string.Equals(mapping.EntityType, entityType, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"同期ルール '{routeId}' のEntityTypeは '{entityType}' ではありません。");
+        }
+        await using var connection = CreateConnection();
+        return await ReadEntityAsync(
+            connection,
+            mapping,
+            entityId,
+            entityIdIsPhysical: false,
+            null,
+            cancellationToken);
     }
 
     public async Task<ApplyResult> ApplyAsync(ApplyRequest request, CancellationToken cancellationToken)
     {
-        var mapping = await mappings.GetRequiredAsync(SystemCode, request.EntityType, cancellationToken);
+        var mapping = request.RouteId is { } routeId
+            ? await mappings.GetRequiredAsync(routeId, SystemCode, cancellationToken)
+            : await mappings.GetRequiredAsync(SystemCode, request.EntityType, cancellationToken);
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
@@ -215,12 +253,20 @@ internal sealed class MappedRelationalConnector(
             {
                 var behavior = request.DeletionBehavior ??
                     throw new InvalidOperationException("削除方式が指定されていません。");
+                var physicalEntityId = behavior.Mode == DeletionMode.Physical
+                    ? await ReadPhysicalEntityIdAsync(
+                        connection,
+                        transaction,
+                        mapping,
+                        request.EntityId,
+                        cancellationToken)
+                    : null;
                 await DeleteAsync(connection, transaction, mapping, request.EntityId, behavior, cancellationToken);
-                if (behavior.Mode == DeletionMode.Physical)
+                if (physicalEntityId is not null)
                 {
                     await connection.ExecuteAsync(new CommandDefinition(
                         Sql.DeleteOrigin,
-                        new { request.EntityType, request.EntityId },
+                        new { request.EntityType, EntityId = physicalEntityId },
                         transaction,
                         cancellationToken: cancellationToken));
                 }
@@ -228,9 +274,17 @@ internal sealed class MappedRelationalConnector(
             else
             {
                 await UpsertAsync(connection, transaction, mapping, request, cancellationToken);
+                var physicalEntityId = await ReadPhysicalEntityIdAsync(
+                    connection,
+                    transaction,
+                    mapping,
+                    request.EntityId,
+                    cancellationToken) ??
+                    throw new InvalidOperationException(
+                        $"同期先へ適用したレコード '{request.EntityType}/{request.EntityId}' を読み戻せません。");
                 await connection.ExecuteAsync(new CommandDefinition(
                     Sql.UpsertOrigin,
-                    new { request.EntityType, request.EntityId, request.OriginSystem },
+                    new { request.EntityType, EntityId = physicalEntityId, request.OriginSystem },
                     transaction,
                     cancellationToken: cancellationToken));
             }
@@ -264,10 +318,11 @@ internal sealed class MappedRelationalConnector(
         DbConnection connection,
         RelationalEntityMapping mapping,
         string entityId,
+        bool entityIdIsPhysical,
         DbTransaction? transaction,
         CancellationToken cancellationToken)
     {
-        var parameters = CreateKeyParameters(mapping, entityId);
+        var parameters = CreateKeyParameters(mapping, entityId, entityIdIsPhysical);
         var sql = BuildReadEntitySql(mapping, parameters);
         var rows = (await connection.QueryAsync(new CommandDefinition(
             sql,
@@ -281,7 +336,7 @@ internal sealed class MappedRelationalConnector(
                 .Select(x => x.Alias));
             var hasProjection = aliases.Length > 0;
             throw new ValueTransformationException(
-                hasProjection ? aliases : string.Join(", ", mapping.Keys.Select(x => x.PayloadField)),
+                hasProjection ? aliases : string.Join(", ", mapping.Keys.Select(x => x.EntityIdField)),
                 mapping.Table,
                 hasProjection ? "related-projection-multiple-rows" : "entity-key-multiple-rows",
                 hasProjection
@@ -344,7 +399,7 @@ internal sealed class MappedRelationalConnector(
         }
         else
         {
-            var dynamicParameters = CreateKeyParameters(mapping, request.EntityId);
+            var dynamicParameters = CreateKeyParameters(mapping, request.EntityId, entityIdIsPhysical: false);
             var columns = writeValues.Keys.ToArray();
             for (var index = 0; index < columns.Length; index++)
             {
@@ -372,7 +427,7 @@ internal sealed class MappedRelationalConnector(
         DeletionBehavior behavior,
         CancellationToken cancellationToken)
     {
-        var parameters = CreateKeyParameters(mapping, entityId);
+        var parameters = CreateKeyParameters(mapping, entityId, entityIdIsPhysical: false);
         string sql;
         if (behavior.Mode == DeletionMode.Physical)
         {
@@ -396,11 +451,33 @@ internal sealed class MappedRelationalConnector(
             cancellationToken: cancellationToken));
     }
 
+    private async Task<string?> ReadPhysicalEntityIdAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        RelationalEntityMapping mapping,
+        string canonicalEntityId,
+        CancellationToken cancellationToken)
+    {
+        const string alias = "sc_identity";
+        var parameters = CreateKeyParameters(mapping, canonicalEntityId, entityIdIsPhysical: false);
+        var selectPrefix = provider == RelationalProvider.SqlServer ? "SELECT TOP (1)" : "SELECT";
+        var rowLimit = provider == RelationalProvider.SqlServer ? string.Empty : " LIMIT 1";
+        var sql =
+            $"{selectPrefix} {PhysicalEntityIdExpression(mapping, alias)} " +
+            $"FROM {QualifiedTable(mapping)} AS {Quote(alias)} " +
+            $"WHERE {KeyPredicate(mapping, alias)}{rowLimit};";
+        return await connection.QuerySingleOrDefaultAsync<string?>(new CommandDefinition(
+            sql,
+            parameters,
+            transaction,
+            cancellationToken: cancellationToken));
+    }
+
     private static Dictionary<string, JsonNode?> CreateWriteValues(
         RelationalEntityMapping mapping,
         ApplyRequest request)
     {
-        var keyValues = ParseEntityId(mapping, request.EntityId);
+        var keyValues = ResolveKeyValues(mapping, request.EntityId, entityIdIsPhysical: false);
         var values = new Dictionary<string, JsonNode?>(StringComparer.Ordinal);
         foreach (var column in mapping.Columns)
         {
@@ -411,7 +488,7 @@ internal sealed class MappedRelationalConnector(
             }
             else if (column.IsKey && keyValues.TryGetValue(column.PayloadField, out var keyValue))
             {
-                candidate = JsonValue.Create(keyValue);
+                candidate = keyValue;
             }
             else
             {
@@ -440,41 +517,112 @@ internal sealed class MappedRelationalConnector(
         return values;
     }
 
-    private static DynamicParameters CreateKeyParameters(RelationalEntityMapping mapping, string entityId)
+    private static DynamicParameters CreateKeyParameters(
+        RelationalEntityMapping mapping,
+        string entityId,
+        bool entityIdIsPhysical)
     {
-        var values = ParseEntityId(mapping, entityId);
+        var values = ResolveKeyValues(mapping, entityId, entityIdIsPhysical);
         var parameters = new DynamicParameters();
         for (var index = 0; index < mapping.Keys.Count; index++)
         {
-            parameters.Add($"Key{index}", values[mapping.Keys[index].PayloadField]);
+            var value = values[mapping.Keys[index].EntityIdField];
+            parameters.Add($"Key{index}", value is null ? null : JsonScalarText(value));
         }
         return parameters;
     }
 
-    private static Dictionary<string, string?> ParseEntityId(
+    private static Dictionary<string, JsonNode?> ResolveKeyValues(
         RelationalEntityMapping mapping,
-        string entityId)
+        string entityId,
+        bool entityIdIsPhysical)
     {
-        if (mapping.Keys.Count == 1)
+        if (entityIdIsPhysical)
         {
-            return new Dictionary<string, string?>(StringComparer.Ordinal)
-            {
-                [mapping.Keys[0].PayloadField] = entityId
-            };
+            var physical = RelationalEntityMapping.ParseEntityId(mapping.Keys, entityId);
+            return mapping.Keys.ToDictionary(
+                key => key.EntityIdField,
+                key => physical[key.EntityIdField]?.DeepClone(),
+                StringComparer.Ordinal);
         }
 
-        var json = JsonNode.Parse(entityId) as JsonObject ??
-            throw new InvalidOperationException($"複合キーのEntityIdがJSON objectではありません: {entityId}");
-        var result = new Dictionary<string, string?>(StringComparer.Ordinal);
+        JsonObject canonical;
+        if (mapping.ColumnKeys.Count == 1)
+        {
+            canonical = new JsonObject
+            {
+                [mapping.ColumnKeys[0].PayloadField] = JsonValue.Create(entityId)
+            };
+        }
+        else
+        {
+            canonical = JsonNode.Parse(entityId) as JsonObject ??
+                        throw new InvalidOperationException($"複合キーのEntityIdがJSON objectではありません: {entityId}");
+        }
+
+        var result = new Dictionary<string, JsonNode?>(StringComparer.Ordinal);
         foreach (var key in mapping.Keys)
         {
-            if (!json.TryGetPropertyValue(key.PayloadField, out var value))
+            if (key.IsFixed)
+            {
+                result[key.EntityIdField] = key.FixedValue?.DeepClone();
+                continue;
+            }
+
+            if (!canonical.TryGetPropertyValue(key.PayloadField!, out var value))
             {
                 throw new InvalidOperationException($"EntityIdにキー '{key.PayloadField}' がありません。");
             }
-            result[key.PayloadField] = value is null ? null : JsonScalarText(value);
+            result[key.EntityIdField] = ValueTransformEngine.Transform(
+                value,
+                new ValueTransformInput(),
+                key.Contract,
+                key.PayloadField!,
+                key.PhysicalColumn);
         }
         return result;
+    }
+
+    internal static string CreatePhysicalEntityId(RelationalEntityMapping mapping, string canonicalEntityId)
+    {
+        var values = ResolveKeyValues(mapping, canonicalEntityId, entityIdIsPhysical: false);
+        if (mapping.Keys.Count == 1)
+        {
+            var value = values[mapping.Keys[0].EntityIdField];
+            return value is null ? string.Empty : JsonScalarText(value);
+        }
+
+        var json = new JsonObject();
+        foreach (var key in mapping.Keys)
+        {
+            json[key.EntityIdField] = values[key.EntityIdField]?.DeepClone();
+        }
+        return json.ToJsonString();
+    }
+
+    private string PhysicalEntityIdExpression(RelationalEntityMapping mapping, string alias) =>
+        mapping.Keys.Count == 1
+            ? $"CAST({Quote(alias)}.{Quote(mapping.Keys[0].PhysicalColumn)} AS {TextType})"
+            : provider switch
+            {
+                RelationalProvider.SqlServer =>
+                    $"CONVERT(nvarchar(256), (SELECT {string.Join(", ", mapping.Keys.Select(key => $"{Quote(alias)}.{Quote(key.PhysicalColumn)} AS {Quote(key.EntityIdField)}"))} FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES))",
+                RelationalProvider.MySql =>
+                    $"CAST(JSON_OBJECT({string.Join(", ", mapping.Keys.Select(key => $"'{SqlLiteral(key.EntityIdField)}', {Quote(alias)}.{Quote(key.PhysicalColumn)}"))}) AS CHAR(256))",
+                RelationalProvider.PostgreSql =>
+                    $"CAST(jsonb_build_object({string.Join(", ", mapping.Keys.Select(key => $"'{SqlLiteral(key.EntityIdField)}', {Quote(alias)}.{Quote(key.PhysicalColumn)}"))}) AS varchar(256))",
+                _ => throw new InvalidOperationException($"未対応のProviderです: {provider}")
+            };
+
+    private static Dictionary<string, JsonNode?> CanonicalKeyPayload(
+        RelationalEntityMapping mapping,
+        string physicalEntityId)
+    {
+        var physical = RelationalEntityMapping.ParseEntityId(mapping.Keys, physicalEntityId);
+        return mapping.ColumnKeys.ToDictionary(
+            key => key.PayloadField,
+            key => physical[key.PayloadField]?.DeepClone(),
+            StringComparer.Ordinal);
     }
 
     private string KeyPredicate(RelationalEntityMapping mapping, string? tableAlias = null) => string.Join(" AND ",
