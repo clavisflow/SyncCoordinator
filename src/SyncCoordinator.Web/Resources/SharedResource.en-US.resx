@@ -340,6 +340,9 @@
   <data name="Mappings_SelectRule" xml:space="preserve"><value>Select a rule</value></data>
   <data name="Mappings_LoadingTables" xml:space="preserve"><value>Loading tables…</value></data>
   <data name="Mappings_SourceTableFor" xml:space="preserve"><value>Source table ({0})</value></data>
+  <data name="Mappings_SourceConditionExpression" xml:space="preserve"><value>Source eligibility condition (optional)</value></data>
+  <data name="Mappings_SourceConditionExpressionPlaceholder" xml:space="preserve"><value>Example: {source}.Status &lt;&gt; 'Draft'</value></data>
+  <data name="Mappings_SourceConditionExpressionHelp" xml:space="preserve"><value>{source} refers to the source table. Only matching records are synchronized. If a synchronized record stops matching, the deletion synchronization settings apply. Existing records are reevaluated on their next change.</value></data>
   <data name="Mappings_DestinationTableFor" xml:space="preserve"><value>Destination table ({0})</value></data>
   <data name="Mappings_SelectTable" xml:space="preserve"><value>Select a table</value></data>
   <data name="Mappings_LoadingColumns" xml:space="preserve"><value>Loading columns…</value></data>

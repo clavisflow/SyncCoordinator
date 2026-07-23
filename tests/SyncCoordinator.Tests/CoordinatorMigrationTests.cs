@@ -29,7 +29,8 @@ public sealed class CoordinatorMigrationTests
             migration => Assert.EndsWith("_ReplaceRelatedConditionWithExpression", migration, StringComparison.Ordinal),
             migration => Assert.EndsWith("_ReplaceRelatedJoinWithExpression", migration, StringComparison.Ordinal),
             migration => Assert.EndsWith("_ExpandRelatedIdentifierLength", migration, StringComparison.Ordinal),
-            migration => Assert.EndsWith("_AddFixedValueKeys", migration, StringComparison.Ordinal));
+            migration => Assert.EndsWith("_AddFixedValueKeys", migration, StringComparison.Ordinal),
+            migration => Assert.EndsWith("_AddSourceConditionExpression", migration, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -71,6 +72,9 @@ public sealed class CoordinatorMigrationTests
             nameof(RouteTableMappingEntity.RouteId),
             Assert.Single(entity.FindPrimaryKey()!.Properties).Name);
         Assert.True(Assert.Single(entity.GetForeignKeys()).IsUnique);
+        Assert.Equal(
+            4000,
+            entity.FindProperty(nameof(RouteTableMappingEntity.SourceConditionExpression))!.GetMaxLength());
     }
 
     [Fact]

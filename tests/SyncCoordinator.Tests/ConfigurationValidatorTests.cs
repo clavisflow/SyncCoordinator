@@ -76,6 +76,30 @@ public sealed class ConfigurationValidatorTests
     }
 
     [Fact]
+    public void SourceConditionSupportsTheSourcePlaceholder()
+    {
+        var input = ValidTableMapping();
+        input.SourceConditionExpression = "{source}.Status = 'Active'";
+
+        ConfigurationValidator.ValidateTableMapping(input, ValidRoute());
+    }
+
+    [Theory]
+    [InlineData("{source}.Status = 'Active'; DELETE FROM Source", "更新系SQL")]
+    [InlineData("{source}.Status = 'Active' -- bypass", "更新系SQL")]
+    [InlineData("{related}.Enabled = 1", "プレースホルダー")]
+    public void SourceConditionRejectsUnsafeSqlAndUnknownPlaceholders(string expression, string errorFragment)
+    {
+        var input = ValidTableMapping();
+        input.SourceConditionExpression = expression;
+
+        var exception = Assert.Throws<ConfigurationValidationException>(() =>
+            ConfigurationValidator.ValidateTableMapping(input, ValidRoute()));
+
+        Assert.Contains(exception.Errors, x => x.Contains(errorFragment, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void DirectionalFixedValuesAreAllowedForBidirectionalRule()
     {
         var route = ValidRoute();

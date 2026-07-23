@@ -182,7 +182,8 @@ internal sealed class RelationalMappingProvider(CoordinatorDbContext dbContext)
                     x.Schema, x.Table, x.Alias, x.JoinExpression, x.Usage,
                     x.ConditionExpression)).ToArray()
                 : [],
-            route.Id);
+            route.Id,
+            isSource ? tableMapping.SourceConditionExpression : null);
     }
 
     private static ColumnValueContract SourceContract(RouteColumnMappingEntity column) => new(
@@ -250,8 +251,13 @@ internal sealed record RelationalEntityMapping(
     IReadOnlyList<RelationalColumnBinding> Columns,
     IReadOnlyList<RelationalFixedValue> FixedValues,
     IReadOnlyList<RelationalRelatedTable> RelatedTables,
-    Guid RouteId = default)
+    Guid RouteId = default,
+    string? SourceConditionExpression = null)
 {
+    public bool HasEligibilityFilter =>
+        !string.IsNullOrWhiteSpace(SourceConditionExpression) ||
+        RelatedTables.Any(related => related.Usage == RelatedTableUsage.Eligibility);
+
     public IReadOnlyList<RelationalColumnBinding> ColumnKeys =>
         Columns.Where(column => column.IsKey).ToArray();
 
@@ -333,5 +339,6 @@ internal sealed record RelationalEntityMapping(
         string.Equals(Table, other.Table, StringComparison.OrdinalIgnoreCase) &&
         Columns.SequenceEqual(other.Columns) &&
         FixedValues.SequenceEqual(other.FixedValues) &&
-        RelatedTables.SequenceEqual(other.RelatedTables);
+        RelatedTables.SequenceEqual(other.RelatedTables) &&
+        string.Equals(SourceConditionExpression, other.SourceConditionExpression, StringComparison.Ordinal);
 }

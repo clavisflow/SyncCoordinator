@@ -59,6 +59,14 @@ else
                 <RadzenDropDown TValue="DatabaseTableInfo" Value="@selectedDestinationTable" Change="@OnDestinationTableChangedAsync" Data="@destinationTables" TextProperty="DisplayName" Placeholder="@L["Mappings_SelectTable"]" AllowFiltering="true" FilterCaseSensitivity="FilterCaseSensitivity.CaseInsensitive" Disabled="@(loadingColumns || TableSelectionLocked)" class="form-control" />
                 </div>
             </div>
+            @if (selectedSourceTable is not null)
+            {
+                <div class="form-field source-condition-field">
+                    <label>@L["Mappings_SourceConditionExpression"]</label>
+                    <RadzenTextArea @bind-Value="sourceConditionExpression" Rows="2" MaxLength="4000" Placeholder="@L["Mappings_SourceConditionExpressionPlaceholder"]" class="form-control" />
+                    <small>@L["Mappings_SourceConditionExpressionHelp"]</small>
+                </div>
+            }
             @if (loadingColumns)
             {
             <small class="inline-loading">@L["Mappings_LoadingColumns"]</small>
@@ -290,6 +298,7 @@ else
     private bool deletionSettingsExpanded;
     private bool syncDeletes;
     private DeletionMode sourceDeletionMode = DeletionMode.Physical;
+    private string sourceConditionExpression = string.Empty;
     private string sourceLogicalDeleteColumn = string.Empty;
     private string sourceLogicalDeleteValue = string.Empty;
     private DeletionMode destinationDeletionMode = DeletionMode.Physical;
@@ -384,6 +393,7 @@ else
         columnRows = [];
         fixedValueRows = [];
         relatedTableRows = [];
+        sourceConditionExpression = string.Empty;
         columnFilter = string.Empty;
         showUnmappedOnly = false;
         ResetDeletionSettings();
@@ -410,6 +420,7 @@ else
         columnRows = [];
         fixedValueRows = [];
         relatedTableRows = [];
+        sourceConditionExpression = string.Empty;
         ResetDeletionSettings();
         if (selectedSourceTable is not null && selectedDestinationTable is not null)
         {
@@ -469,6 +480,9 @@ else
                                  string.Equals(existingMapping.SourceTable, selectedSourceTable.Name, StringComparison.OrdinalIgnoreCase) &&
                                  string.Equals(existingMapping.DestinationSchema, selectedDestinationTable.Schema, StringComparison.OrdinalIgnoreCase) &&
                                  string.Equals(existingMapping.DestinationTable, selectedDestinationTable.Name, StringComparison.OrdinalIgnoreCase);
+            sourceConditionExpression = mappingApplies
+                ? existingMapping!.SourceConditionExpression
+                : string.Empty;
             relatedTableRows = mappingApplies
                 ? existingMapping!.RelatedTables.Select(x => new RelatedTableRow
                 {
@@ -555,6 +569,7 @@ else
                 RouteId = selectedRouteId!.Value,
                 SourceSchema = selectedSourceTable!.Schema,
                 SourceTable = selectedSourceTable.Name,
+                SourceConditionExpression = sourceConditionExpression,
                 DestinationSchema = selectedDestinationTable!.Schema,
                 DestinationTable = selectedDestinationTable.Name,
                 SyncDeletes = syncDeletes,

@@ -370,6 +370,12 @@ public sealed class EfCoordinatorAdminService(
                                      HasRelatedTableChanged(entity.RelatedTables, input.RelatedTables);
                 requiresSnapshotReset = requiresDeployment ||
                                         HasValueSemanticsChanged(entity.Columns, input.Columns);
+                var sourceConditionChanged =
+                    !string.Equals(
+                        entity.SourceConditionExpression ?? string.Empty,
+                        input.SourceConditionExpression,
+                        StringComparison.Ordinal);
+                requiresSnapshotReset |= sourceConditionChanged;
                 var deleteConfigurationChanged =
                     entity.SyncDeletes != input.SyncDeletes ||
                     entity.SourceDeletionMode != input.SourceDeletionMode ||
@@ -393,6 +399,7 @@ public sealed class EfCoordinatorAdminService(
             }
             entity.SourceSchema = input.SourceSchema;
             entity.SourceTable = input.SourceTable;
+            entity.SourceConditionExpression = NullIfEmpty(input.SourceConditionExpression);
             entity.DestinationSchema = input.DestinationSchema;
             entity.DestinationTable = input.DestinationTable;
             entity.SyncDeletes = input.SyncDeletes;
@@ -781,6 +788,7 @@ public sealed class EfCoordinatorAdminService(
         RouteId = entity.RouteId,
         SourceSchema = entity.SourceSchema,
         SourceTable = entity.SourceTable,
+        SourceConditionExpression = entity.SourceConditionExpression ?? string.Empty,
         DestinationSchema = entity.DestinationSchema,
         DestinationTable = entity.DestinationTable,
         SyncDeletes = entity.SyncDeletes,
@@ -834,6 +842,7 @@ public sealed class EfCoordinatorAdminService(
     {
         entity.RouteId,
         Source = entity.SourceSchema + "." + entity.SourceTable,
+        entity.SourceConditionExpression,
         Destination = entity.DestinationSchema + "." + entity.DestinationTable,
         DeleteSynchronization = new
         {
@@ -918,6 +927,7 @@ public sealed class EfCoordinatorAdminService(
     {
         input.SourceSchema = input.SourceSchema.Trim();
         input.SourceTable = input.SourceTable.Trim();
+        input.SourceConditionExpression = input.SourceConditionExpression.Trim();
         input.DestinationSchema = input.DestinationSchema.Trim();
         input.DestinationTable = input.DestinationTable.Trim();
         input.SourceLogicalDeleteColumn = input.SourceLogicalDeleteColumn.Trim();

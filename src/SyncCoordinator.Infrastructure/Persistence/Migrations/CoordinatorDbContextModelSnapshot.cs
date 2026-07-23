@@ -492,6 +492,10 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("nvarchar(16)");
 
+                    b.Property<string>("SourceConditionExpression")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
                     b.Property<string>("SourceLogicalDeleteColumn")
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");

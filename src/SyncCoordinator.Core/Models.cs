@@ -514,6 +514,7 @@ public sealed class TableMappingInput
     public Guid RouteId { get; set; }
     public string SourceSchema { get; set; } = string.Empty;
     public string SourceTable { get; set; } = string.Empty;
+    public string SourceConditionExpression { get; set; } = string.Empty;
     public string DestinationSchema { get; set; } = string.Empty;
     public string DestinationTable { get; set; } = string.Empty;
     public bool SyncDeletes { get; set; }

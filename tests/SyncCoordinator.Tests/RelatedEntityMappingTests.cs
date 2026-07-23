@@ -84,4 +84,28 @@ public sealed class RelatedEntityMappingTests
         Assert.Contains("Enabled = 1", sql, StringComparison.Ordinal);
         Assert.EndsWith(" LIMIT 2;", sql, StringComparison.Ordinal);
     }
+
+    [Theory]
+    [InlineData(RelationalProvider.SqlServer, "[sc_base].Status <> 'Draft'")]
+    [InlineData(RelationalProvider.MySql, "`sc_base`.Status <> 'Draft'")]
+    [InlineData(RelationalProvider.PostgreSql, "\"sc_base\".Status <> 'Draft'")]
+    public void ReadAppliesSourceConditionAsAnEligibilityFilter(
+        RelationalProvider provider,
+        string expectedCondition)
+    {
+        var mapping = new RelationalEntityMapping(
+            "WorkRequest",
+            "sales",
+            "WorkRequest",
+            [new RelationalColumnBinding("WorkRequestId", "WorkRequestId", null, true, ColumnValueContract.Unknown)],
+            [],
+            [],
+            SourceConditionExpression: "{source}.Status <> 'Draft'");
+        var connector = new MappedRelationalConnector(provider.ToString(), provider, "Server=(local)", null!);
+
+        var sql = connector.BuildReadEntitySql(mapping, new DynamicParameters());
+
+        Assert.True(mapping.HasEligibilityFilter);
+        Assert.Contains($"AND ({expectedCondition})", sql, StringComparison.Ordinal);
+    }
 }

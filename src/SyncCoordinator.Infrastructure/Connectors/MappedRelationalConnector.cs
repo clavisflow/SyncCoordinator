@@ -140,7 +140,7 @@ internal sealed class MappedRelationalConnector(
 
         if (!string.Equals(latest.Operation, nameof(ChangeOperation.Delete), StringComparison.OrdinalIgnoreCase))
         {
-            if (mapping.RelatedTables.Any(x => x.Usage == RelatedTableUsage.Eligibility))
+            if (mapping.HasEligibilityFilter)
             {
                 var keyValues = CanonicalKeyPayload(mapping, latest.EntityId);
                 return new SyncMessage(
@@ -372,6 +372,10 @@ internal sealed class MappedRelationalConnector(
                 RelatedConditionSql(related, baseAlias, includeAnd: true) + ")")
             .ToArray();
         var where = KeyPredicate(mapping, baseAlias);
+        if (!string.IsNullOrWhiteSpace(mapping.SourceConditionExpression))
+        {
+            where += $" AND ({SourceConditionSql(mapping.SourceConditionExpression, baseAlias)})";
+        }
         if (eligibility.Length > 0)
         {
             where += " AND " + string.Join(" AND ", eligibility);
@@ -689,6 +693,9 @@ internal sealed class MappedRelationalConnector(
 
     private string RelatedExpressionSql(string expression, string relatedAlias, string baseAlias) => expression
         .Replace("{related}", Quote(relatedAlias), StringComparison.OrdinalIgnoreCase)
+        .Replace("{source}", Quote(baseAlias), StringComparison.OrdinalIgnoreCase);
+
+    private string SourceConditionSql(string expression, string baseAlias) => expression
         .Replace("{source}", Quote(baseAlias), StringComparison.OrdinalIgnoreCase);
 
     private string Quote(string identifier) => provider switch

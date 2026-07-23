@@ -75,6 +75,7 @@ public sealed class CoordinatorDbContext(DbContextOptions<CoordinatorDbContext> 
             entity.HasKey(x => x.RouteId);
             entity.Property(x => x.SourceSchema).HasMaxLength(128);
             entity.Property(x => x.SourceTable).HasMaxLength(128);
+            entity.Property(x => x.SourceConditionExpression).HasMaxLength(4000);
             entity.Property(x => x.DestinationSchema).HasMaxLength(128);
             entity.Property(x => x.DestinationTable).HasMaxLength(128);
             entity.Property(x => x.SourceDeletionMode).HasConversion<string>().HasMaxLength(16);

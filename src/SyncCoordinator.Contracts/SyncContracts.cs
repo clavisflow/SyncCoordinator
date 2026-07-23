@@ -52,7 +52,7 @@ public sealed record SyncMessage(
     EntityPayload Payload)
 {
     /// <summary>
-    /// The physical row still exists, but it no longer satisfies a related-table eligibility rule.
+    /// The physical row still exists, but it no longer satisfies an eligibility condition.
     /// Consumers must not treat an entity that has never been synchronized as a deletion target.
     /// </summary>
     public bool IsEligibilityRemoval { get; init; }

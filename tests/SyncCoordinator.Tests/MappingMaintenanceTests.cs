@@ -178,6 +178,7 @@ public sealed class MappingMaintenanceTests
                 RouteId = routeId,
                 SourceSchema = mapping.SourceSchema,
                 SourceTable = mapping.SourceTable,
+                SourceConditionExpression = "{source}.Status <> 'Draft'",
                 DestinationSchema = mapping.DestinationSchema,
                 DestinationTable = mapping.DestinationTable,
                 Columns =
@@ -214,6 +215,9 @@ public sealed class MappingMaintenanceTests
             Assert.False(await context.SyncSnapshots.AnyAsync(x => x.RouteId == routeId));
             Assert.True((await context.RouteColumnMappings.SingleAsync(x =>
                 x.TableMappingId == routeId && x.SourceColumn == "Status")).ForwardTransformJson is not null);
+            Assert.Equal(
+                "{source}.Status <> 'Draft'",
+                (await context.RouteTableMappings.SingleAsync(x => x.RouteId == routeId)).SourceConditionExpression);
             Assert.Equal("SyncCoordinator", (await context.RouteFixedValueMappings.SingleAsync(x =>
                 x.TableMappingId == routeId && x.TargetColumn == "SyncOrigin")).Value);
         }

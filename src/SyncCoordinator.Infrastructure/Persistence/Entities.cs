@@ -65,6 +65,7 @@ public sealed class RouteTableMappingEntity
     public Guid RouteId { get; set; }
     public required string SourceSchema { get; set; }
     public required string SourceTable { get; set; }
+    public string? SourceConditionExpression { get; set; }
     public required string DestinationSchema { get; set; }
     public required string DestinationTable { get; set; }
     public bool SyncDeletes { get; set; }

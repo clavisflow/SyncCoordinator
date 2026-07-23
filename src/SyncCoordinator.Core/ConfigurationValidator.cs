@@ -97,6 +97,7 @@ public static class ConfigurationValidator
         if (input.RouteId == Guid.Empty) errors.Add("同期ルールは必須です。");
         if (string.IsNullOrWhiteSpace(input.SourceSchema) || string.IsNullOrWhiteSpace(input.SourceTable)) errors.Add("同期元テーブルは必須です。");
         if (string.IsNullOrWhiteSpace(input.DestinationSchema) || string.IsNullOrWhiteSpace(input.DestinationTable)) errors.Add("同期先テーブルは必須です。");
+        ValidateSourceConditionExpression(input.SourceConditionExpression, errors);
         if (input.Columns.Count == 0) errors.Add("列マッピングを1件以上指定してください。");
         if (input.Columns.Count > 0 && input.Columns.All(x => !x.IsKey)) errors.Add("キー列を1件以上指定してください。");
         if (input.Columns.Any(x => string.IsNullOrWhiteSpace(x.SourceColumn) || string.IsNullOrWhiteSpace(x.DestinationColumn))) errors.Add("同期元列と同期先列は必須です。");
@@ -285,6 +286,29 @@ public static class ConfigurationValidator
             return;
         }
         ValidateRelatedSqlExpression(related.Alias, "条件式", expression, errors);
+    }
+
+    private static void ValidateSourceConditionExpression(string expression, List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(expression))
+        {
+            return;
+        }
+        if (expression.Length > 4000)
+        {
+            errors.Add("同期元テーブルの同期対象条件は4000文字以内です。");
+        }
+        if (UnsafeRelatedConditionPattern.IsMatch(expression) || expression.Contains('\0'))
+        {
+            errors.Add("同期元テーブルの同期対象条件に、複数文、SQLコメント、または更新系SQLは使用できません。");
+        }
+
+        var remainingPlaceholders = expression
+            .Replace("{source}", string.Empty, StringComparison.OrdinalIgnoreCase);
+        if (remainingPlaceholders.Contains('{') || remainingPlaceholders.Contains('}'))
+        {
+            errors.Add("同期元テーブルの同期対象条件で使用できるプレースホルダーは '{source}' だけです。");
+        }
     }
 
     private static void ValidateRelatedJoinExpression(RelatedTableInput related, List<string> errors)

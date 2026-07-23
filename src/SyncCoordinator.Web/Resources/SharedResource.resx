@@ -235,6 +235,7 @@
   <data name="Mappings_Edit"><value>マッピング編集</value></data><data name="Mappings_EditHelp"><value>データベース接続が設定済みのシステムだけを参照できます。</value></data>
   <data name="Mappings_SelectRule"><value>ルールを選択</value></data><data name="Mappings_LoadingTables"><value>テーブル一覧を読み込んでいます…</value></data>
   <data name="Mappings_SourceTableFor"><value>同期元テーブル（{0}）</value></data><data name="Mappings_DestinationTableFor"><value>同期先テーブル（{0}）</value></data><data name="Mappings_SelectTable"><value>テーブルを選択</value></data>
+  <data name="Mappings_SourceConditionExpression"><value>同期元テーブルの同期対象条件（任意）</value></data><data name="Mappings_SourceConditionExpressionPlaceholder"><value>例: {source}.Status &lt;&gt; 'Draft'</value></data><data name="Mappings_SourceConditionExpressionHelp"><value>{source} は同期元テーブルです。条件を満たすレコードだけを同期します。同期済みレコードが条件を満たさなくなった場合は、削除同期の設定に従います。条件変更後の既存レコードは次回変更時に再評価されます。</value></data>
   <data name="Mappings_LoadingColumns"><value>列一覧を読み込んでいます…</value></data><data name="Mappings_ColumnsAndPolicies"><value>同期対象とコンフリクトポリシー</value></data>
   <data name="Mappings_ColumnsHelp"><value>同期項目を追加し、両システムの列と項目ごとの方向を設定します。同期先だけに必要な列は固定値として追加できます。</value></data><data name="Mappings_SelectedColumns"><value>{0} / {1} 列</value></data>
   <data name="Mappings_FilterColumns"><value>列名で検索</value></data>
