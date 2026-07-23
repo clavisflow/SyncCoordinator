@@ -1,10 +1,15 @@
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using SyncCoordinator.Contracts;
 
 namespace SyncCoordinator.Core;
 
 public static class ConfigurationValidator
 {
+    private static readonly Regex UnsafeRelatedConditionPattern = new(
+        @";|--|/\*|\*/|\b(?:INSERT|UPDATE|DELETE|MERGE|DROP|ALTER|CREATE|TRUNCATE|EXEC(?:UTE)?|CALL|GRANT|REVOKE|DENY|BACKUP|RESTORE|WAITFOR)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
     public static void ValidateSystem(SystemConfigurationInput input)
     {
         var errors = new List<string>();
@@ -95,17 +100,68 @@ public static class ConfigurationValidator
         if (input.Columns.Count == 0) errors.Add("列マッピングを1件以上指定してください。");
         if (input.Columns.Count > 0 && input.Columns.All(x => !x.IsKey)) errors.Add("キー列を1件以上指定してください。");
         if (input.Columns.Any(x => string.IsNullOrWhiteSpace(x.SourceColumn) || string.IsNullOrWhiteSpace(x.DestinationColumn))) errors.Add("同期元列と同期先列は必須です。");
-        if (input.Columns.GroupBy(x => x.SourceColumn, StringComparer.OrdinalIgnoreCase).Any(x => x.Count() > 1)) errors.Add("同期元列が重複しています。");
+        if (input.Columns.GroupBy(CanonicalFieldName, StringComparer.OrdinalIgnoreCase).Any(x => x.Count() > 1)) errors.Add("同期元列が重複しています。");
         if (input.Columns.GroupBy(x => x.DestinationColumn, StringComparer.OrdinalIgnoreCase).Any(x => x.Count() > 1)) errors.Add("同期先列が重複しています。");
 
         foreach (var column in input.Columns)
         {
+            var fieldDirection = EffectiveDirection(column, route);
+            if (!string.IsNullOrWhiteSpace(column.SourceTableAlias) &&
+                input.RelatedTables.All(x => !string.Equals(x.Alias, column.SourceTableAlias, StringComparison.OrdinalIgnoreCase)))
+            {
+                errors.Add($"列 '{column.SourceTableAlias}.{column.SourceColumn}' の関連テーブルが存在しません。");
+            }
+            if (!string.IsNullOrWhiteSpace(column.SourceTableAlias) && fieldDirection != SyncFieldDirection.Forward)
+            {
+                errors.Add($"関連テーブル列 '{column.SourceTableAlias}.{column.SourceColumn}' は送信元から同期先への片方向にしてください。");
+            }
+            if (column.IsKey && !string.IsNullOrWhiteSpace(column.SourceTableAlias))
+            {
+                errors.Add($"キー列 '{column.SourceTableAlias}.{column.SourceColumn}' は同期単位テーブルから選択してください。");
+            }
+            if (route.Direction != SyncDirection.Bidirectional && fieldDirection != SyncFieldDirection.Forward)
+            {
+                errors.Add($"片方向ルールの列 '{column.SourceColumn}' は正方向のみ指定できます。");
+            }
+            if (column.IsKey && fieldDirection != (route.Direction == SyncDirection.Bidirectional
+                    ? SyncFieldDirection.Bidirectional
+                    : SyncFieldDirection.Forward))
+            {
+                errors.Add($"キー列 '{column.SourceColumn}' はルール全体と同じ同期方向にしてください。");
+            }
             if (column.IsKey && (!column.ForwardTransform.IsIdentity || !column.ReverseTransform.IsIdentity))
             {
                 errors.Add($"キー列 '{column.SourceColumn}' には値変換を設定できません。");
             }
             ValidateTransform(column.ForwardTransform, $"{column.SourceColumn} → {column.DestinationColumn}", errors);
             ValidateTransform(column.ReverseTransform, $"{column.DestinationColumn} → {column.SourceColumn}", errors);
+        }
+
+        if (input.RelatedTables.GroupBy(x => x.Alias, StringComparer.OrdinalIgnoreCase).Any(x => x.Count() > 1))
+        {
+            errors.Add("関連テーブルの別名が重複しています。");
+        }
+        foreach (var related in input.RelatedTables)
+        {
+            if (string.IsNullOrWhiteSpace(related.Schema) || string.IsNullOrWhiteSpace(related.Table))
+                errors.Add("関連テーブルは必須です。");
+            else if (related.Schema.Length > 128 || related.Table.Length > 128)
+                errors.Add($"関連テーブル '{related.Schema}.{related.Table}' のschema名とtable名は128文字以内です。");
+            if (string.IsNullOrWhiteSpace(related.Alias)) errors.Add("関連テーブルの別名は必須です。");
+            else if (related.Alias.Contains('.'))
+                errors.Add($"関連テーブルの別名 '{related.Alias}' にピリオドは使用できません。");
+            else if (related.Alias.Length > 128)
+                errors.Add($"関連テーブルの識別名 '{related.Alias}' は128文字以内です。");
+            else if (string.Equals(related.Alias, "sc_base", StringComparison.OrdinalIgnoreCase))
+                errors.Add("関連テーブルの別名 'sc_base' は予約名のため使用できません。");
+            ValidateRelatedJoinExpression(related, errors);
+            ValidateRelatedConditionExpression(related, errors);
+            if (related.Usage == RelatedTableUsage.Eligibility && input.Columns.Any(x =>
+                    string.Equals(x.SourceTableAlias, related.Alias, StringComparison.OrdinalIgnoreCase)))
+                errors.Add($"対象判定専用の関連テーブル '{related.Alias}' から同期列は選択できません。");
+            if (related.Usage == RelatedTableUsage.Projection && input.Columns.All(x =>
+                    !string.Equals(x.SourceTableAlias, related.Alias, StringComparison.OrdinalIgnoreCase)))
+                errors.Add($"投影用の関連テーブル '{related.Alias}' から同期列を1件以上選択してください。");
         }
 
         if (input.SyncDeletes)
@@ -167,8 +223,14 @@ public static class ConfigurationValidator
             errors.Add("同じ方向と書き込み先列の固定値が重複しています。");
         }
 
-        var forwardColumns = input.Columns.Select(x => x.DestinationColumn).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var reverseColumns = input.Columns.Select(x => x.SourceColumn).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var forwardColumns = input.Columns
+            .Where(x => EffectiveDirection(x, route) is SyncFieldDirection.Forward or SyncFieldDirection.Bidirectional)
+            .Select(x => x.DestinationColumn)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var reverseColumns = input.Columns
+            .Where(x => EffectiveDirection(x, route) is SyncFieldDirection.Reverse or SyncFieldDirection.Bidirectional)
+            .Select(x => x.SourceColumn)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (input.FixedValues.Any(x =>
                 x.Direction == MappingWriteDirection.Forward && forwardColumns.Contains(x.TargetColumn) ||
                 x.Direction == MappingWriteDirection.Reverse && reverseColumns.Contains(x.TargetColumn)))
@@ -206,8 +268,70 @@ public static class ConfigurationValidator
         }
     }
 
+    private static void ValidateRelatedConditionExpression(RelatedTableInput related, List<string> errors)
+    {
+        var expression = related.ConditionExpression;
+        if (string.IsNullOrWhiteSpace(expression))
+        {
+            return;
+        }
+        ValidateRelatedSqlExpression(related.Alias, "条件式", expression, errors);
+    }
+
+    private static void ValidateRelatedJoinExpression(RelatedTableInput related, List<string> errors)
+    {
+        var expression = related.JoinExpression;
+        if (string.IsNullOrWhiteSpace(expression))
+        {
+            errors.Add($"関連テーブル '{related.Alias}' の結合式は必須です。");
+            return;
+        }
+        ValidateRelatedSqlExpression(related.Alias, "結合式", expression, errors);
+        if (!expression.Contains("{related}", StringComparison.OrdinalIgnoreCase) ||
+            !expression.Contains("{source}", StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add($"関連テーブル '{related.Alias}' の結合式では '{{source}}' と '{{related}}' の両方を参照してください。");
+        }
+    }
+
+    private static void ValidateRelatedSqlExpression(
+        string alias,
+        string label,
+        string expression,
+        List<string> errors)
+    {
+        if (expression.Length > 4000)
+        {
+            errors.Add($"関連テーブル '{alias}' の{label}は4000文字以内です。");
+        }
+        if (UnsafeRelatedConditionPattern.IsMatch(expression) || expression.Contains('\0'))
+        {
+            errors.Add($"関連テーブル '{alias}' の{label}に、複数文、SQLコメント、または更新系SQLは使用できません。");
+        }
+
+        var remainingPlaceholders = expression
+            .Replace("{related}", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("{source}", string.Empty, StringComparison.OrdinalIgnoreCase);
+        if (remainingPlaceholders.Contains('{') || remainingPlaceholders.Contains('}'))
+        {
+            errors.Add($"関連テーブル '{alias}' の{label}で使用できるプレースホルダーは '{{related}}' と '{{source}}' だけです。");
+        }
+    }
+
     private static bool ContainsCode(IReadOnlyCollection<string> codes, string? code) =>
         !string.IsNullOrWhiteSpace(code) && codes.Contains(code, StringComparer.OrdinalIgnoreCase);
+
+    private static SyncFieldDirection EffectiveDirection(
+        ColumnMappingInput column,
+        RouteConfigurationInput route) =>
+        column.Direction ?? (route.Direction == SyncDirection.Bidirectional
+            ? SyncFieldDirection.Bidirectional
+            : SyncFieldDirection.Forward);
+
+    private static string CanonicalFieldName(ColumnMappingInput column) =>
+        string.IsNullOrWhiteSpace(column.SourceTableAlias)
+            ? column.SourceColumn
+            : $"{column.SourceTableAlias}.{column.SourceColumn}";
 
     private static void ValidateDeletionMode(
         DeletionMode mode,

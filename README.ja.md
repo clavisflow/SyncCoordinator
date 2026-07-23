@@ -88,6 +88,8 @@ aspire run --apphost src/SyncCoordinator.AppHost/SyncCoordinator.AppHost.csproj
 | [製品ドキュメント](https://synco.clavisflow.net/) | 製品概要、アーキテクチャ、処理フロー、導入手順 |
 | [操作マニュアル兼ヘルプ](docs/user-guide.md) | 管理画面の操作手順。アプリ内`/help`の正本 |
 | [技術仕様書](docs/technical-specification.md) | 同期処理、状態遷移、永続化、セキュリティ、配備上の制約 |
+| [Windows Server導入手順](docs/windows-server-deployment.md) | 管理DB、IISのlocalhost限定Web、共有鍵、Workerを使うテスト環境の構築手順 |
+| [関連テーブル同期ガイド](docs/related-entity-sync.md) | JOIN項目、対象条件、親変更の1対多展開、項目方向、SQL Serverでの制約 |
 | [Webhook連携ガイド](docs/webhooks.md) | イベント、payload、署名検証、再試行、受信側の契約 |
 | [デモ環境](demos/README.md) | 3システム構成、デモシード、確認・リセット手順 |
 | [E2Eテスト](docs/e2e-testing.md) | E2Eの前提、実行方法、失敗時の調査方法 |

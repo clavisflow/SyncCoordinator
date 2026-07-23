@@ -308,6 +308,7 @@ public sealed class EfCoordinatorAdminService(
         var entity = await dbContext.RouteTableMappings.AsNoTracking()
             .Include(x => x.Columns)
             .Include(x => x.FixedValues)
+            .Include(x => x.RelatedTables)
             .Include(x => x.Route)
             .SingleOrDefaultAsync(x => x.RouteId == routeId, cancellationToken);
         return entity is null ? null : ToInput(entity);
@@ -327,6 +328,7 @@ public sealed class EfCoordinatorAdminService(
         var entity = await dbContext.RouteTableMappings
             .Include(x => x.Columns)
             .Include(x => x.FixedValues)
+            .Include(x => x.RelatedTables)
             .SingleOrDefaultAsync(x => x.RouteId == input.RouteId, cancellationToken);
         var originalRouteEnabled = route.Enabled;
         var originalMappingMaintenanceStartedAtUtc = route.MappingMaintenanceStartedAtUtc;
@@ -363,7 +365,8 @@ public sealed class EfCoordinatorAdminService(
                     ]);
                 }
                 requiresDeployment = tableChanged ||
-                                     HasPhysicalColumnContractChanged(entity.Columns, input.Columns);
+                                     HasPhysicalColumnContractChanged(entity.Columns, input.Columns) ||
+                                     HasRelatedTableChanged(entity.RelatedTables, input.RelatedTables);
                 requiresSnapshotReset = requiresDeployment ||
                                         HasValueSemanticsChanged(entity.Columns, input.Columns);
                 var deleteConfigurationChanged =
@@ -381,8 +384,10 @@ public sealed class EfCoordinatorAdminService(
                 await EnterMappingMaintenanceAsync(route, cancellationToken);
                 dbContext.RouteColumnMappings.RemoveRange(entity.Columns);
                 dbContext.RouteFixedValueMappings.RemoveRange(entity.FixedValues);
+                dbContext.RouteRelatedTables.RemoveRange(entity.RelatedTables);
                 entity.Columns = [];
                 entity.FixedValues = [];
+                entity.RelatedTables = [];
                 action = "Updated";
             }
             entity.SourceSchema = input.SourceSchema;
@@ -396,12 +401,15 @@ public sealed class EfCoordinatorAdminService(
             entity.DestinationDeletionMode = input.DestinationDeletionMode;
             entity.DestinationLogicalDeleteColumn = NullIfEmpty(input.DestinationLogicalDeleteColumn);
             entity.DestinationLogicalDeleteValue = NullIfEmpty(input.DestinationLogicalDeleteValue);
-            entity.Columns.AddRange(input.Columns.Select(x => new RouteColumnMappingEntity
+            entity.Columns.AddRange(input.Columns.Select((x, displayOrder) => new RouteColumnMappingEntity
             {
                 Id = Guid.NewGuid(),
                 TableMappingId = entity.RouteId,
+                DisplayOrder = displayOrder,
+                SourceTableAlias = x.SourceTableAlias,
                 SourceColumn = x.SourceColumn,
                 DestinationColumn = x.DestinationColumn,
+                Direction = x.Direction,
                 IsKey = x.IsKey,
                 ConflictPolicy = x.ConflictPolicy,
                 SourceDataType = x.SourceContract.DataType,
@@ -432,6 +440,21 @@ public sealed class EfCoordinatorAdminService(
                 TargetNumericScale = x.TargetContract.NumericScale
             }));
             dbContext.RouteFixedValueMappings.AddRange(entity.FixedValues);
+            entity.RelatedTables.AddRange(input.RelatedTables.Select(x => new RouteRelatedTableEntity
+            {
+                // Existing children are marked Deleted above. Reusing their keys here would make
+                // EF Core track two instances with the same primary key in one save operation.
+                Id = Guid.NewGuid(),
+                TableMappingId = entity.RouteId,
+                Schema = x.Schema,
+                Table = x.Table,
+                Alias = x.Alias,
+                JoinExpression = x.JoinExpression,
+                Usage = x.Usage,
+                DetectChanges = x.DetectChanges,
+                ConditionExpression = NullIfEmpty(x.ConditionExpression)
+            }));
+            dbContext.RouteRelatedTables.AddRange(entity.RelatedTables);
 
             route.Enabled = false;
             if (requiresDeployment)
@@ -510,20 +533,38 @@ public sealed class EfCoordinatorAdminService(
         IEnumerable<ColumnMappingInput> incoming)
     {
         var currentColumns = current
-            .Select(x => $"{x.SourceColumn}\u001f{x.DestinationColumn}\u001f{x.IsKey}")
+            .Select(x => $"{x.SourceTableAlias}\u001f{x.SourceColumn}\u001f{x.DestinationColumn}\u001f{x.IsKey}")
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var incomingColumns = incoming
-            .Select(x => $"{x.SourceColumn}\u001f{x.DestinationColumn}\u001f{x.IsKey}")
+            .Select(x => $"{x.SourceTableAlias}\u001f{x.SourceColumn}\u001f{x.DestinationColumn}\u001f{x.IsKey}")
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         return !currentColumns.SetEquals(incomingColumns);
+    }
+
+    private static bool HasRelatedTableChanged(
+        IEnumerable<RouteRelatedTableEntity> current,
+        IEnumerable<RelatedTableInput> incoming)
+    {
+        static string Key(string schema, string table, string alias, string joinExpression,
+            RelatedTableUsage usage, bool detectChanges, string? conditionExpression) =>
+            string.Join('\u001f', schema, table, alias, joinExpression, usage, detectChanges,
+                conditionExpression ?? string.Empty);
+
+        var currentSet = current.Select(x => Key(x.Schema, x.Table, x.Alias, x.JoinExpression,
+            x.Usage, x.DetectChanges, x.ConditionExpression))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var incomingSet = incoming.Select(x => Key(x.Schema, x.Table, x.Alias, x.JoinExpression,
+            x.Usage, x.DetectChanges, x.ConditionExpression))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return !currentSet.SetEquals(incomingSet);
     }
 
     internal static bool HasValueSemanticsChanged(
         IEnumerable<RouteColumnMappingEntity> current,
         IEnumerable<ColumnMappingInput> incoming)
     {
-        var currentBySource = current.ToDictionary(x => x.SourceColumn, StringComparer.OrdinalIgnoreCase);
-        var incomingBySource = incoming.ToDictionary(x => x.SourceColumn, StringComparer.OrdinalIgnoreCase);
+        var currentBySource = current.ToDictionary(CanonicalFieldName, StringComparer.OrdinalIgnoreCase);
+        var incomingBySource = incoming.ToDictionary(CanonicalFieldName, StringComparer.OrdinalIgnoreCase);
         if (!currentBySource.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase)
                 .SetEquals(incomingBySource.Keys))
         {
@@ -533,7 +574,8 @@ public sealed class EfCoordinatorAdminService(
         foreach (var (sourceColumn, stored) in currentBySource)
         {
             var candidate = incomingBySource[sourceColumn];
-            if (SourceContract(stored) != candidate.SourceContract ||
+            if ((stored.Direction ?? candidate.Direction) != candidate.Direction ||
+                SourceContract(stored) != candidate.SourceContract ||
                 DestinationContract(stored) != candidate.DestinationContract ||
                 !string.Equals(
                     SerializeTransform(DeserializeTransform(stored.ForwardTransformJson)),
@@ -746,10 +788,12 @@ public sealed class EfCoordinatorAdminService(
         DestinationDeletionMode = entity.DestinationDeletionMode,
         DestinationLogicalDeleteColumn = entity.DestinationLogicalDeleteColumn ?? string.Empty,
         DestinationLogicalDeleteValue = entity.DestinationLogicalDeleteValue ?? string.Empty,
-        Columns = entity.Columns.OrderBy(x => x.SourceColumn).Select(x => new ColumnMappingInput
+        Columns = entity.Columns.OrderBy(x => x.DisplayOrder).ThenBy(x => x.SourceColumn).Select(x => new ColumnMappingInput
         {
             SourceColumn = x.SourceColumn,
+            SourceTableAlias = x.SourceTableAlias ?? string.Empty,
             DestinationColumn = x.DestinationColumn,
+            Direction = EffectiveDirection(x, entity.Route.Direction),
             IsKey = x.IsKey,
             ConflictPolicy = x.ConflictPolicy,
             SourceContract = SourceContract(x),
@@ -770,7 +814,17 @@ public sealed class EfCoordinatorAdminService(
                     TargetColumn = x.TargetColumn,
                     Value = x.Value,
                     TargetContract = TargetContract(x)
-                }).ToList()
+                }).ToList(),
+        RelatedTables = entity.RelatedTables.OrderBy(x => x.Alias).Select(x => new RelatedTableInput
+        {
+            Schema = x.Schema,
+            Table = x.Table,
+            Alias = x.Alias,
+            JoinExpression = x.JoinExpression,
+            Usage = x.Usage,
+            DetectChanges = x.DetectChanges,
+            ConditionExpression = x.ConditionExpression ?? string.Empty
+        }).ToList()
     };
 
     private static object TableMappingSnapshot(RouteTableMappingEntity entity) => new
@@ -788,11 +842,13 @@ public sealed class EfCoordinatorAdminService(
             entity.DestinationLogicalDeleteColumn,
             entity.DestinationLogicalDeleteValue
         },
-        Columns = entity.Columns.OrderBy(x => x.SourceColumn)
+        Columns = entity.Columns.OrderBy(x => x.DisplayOrder).ThenBy(x => x.SourceColumn)
             .Select(x => new
             {
                 x.SourceColumn,
+                x.SourceTableAlias,
                 x.DestinationColumn,
+                x.Direction,
                 x.IsKey,
                 x.ConflictPolicy,
                 SourceContract = SourceContract(x),
@@ -804,7 +860,12 @@ public sealed class EfCoordinatorAdminService(
             .OrderBy(x => x.Direction)
             .ThenBy(x => x.TargetColumn)
             .Select(x => new { x.Direction, x.TargetColumn, x.Value, TargetContract = TargetContract(x) })
-            .ToArray()
+            .ToArray(),
+        RelatedTables = entity.RelatedTables.OrderBy(x => x.Alias).Select(x => new
+        {
+            x.Schema, x.Table, x.Alias, x.JoinExpression, x.Usage,
+            x.DetectChanges, x.ConditionExpression
+        }).ToArray()
     };
 
     private static ColumnValueContract SourceContract(RouteColumnMappingEntity column) => new(
@@ -872,12 +933,32 @@ public sealed class EfCoordinatorAdminService(
         }
         foreach (var column in input.Columns)
         {
+            column.SourceTableAlias = column.SourceTableAlias.Trim();
             column.SourceColumn = column.SourceColumn.Trim();
             column.DestinationColumn = column.DestinationColumn.Trim();
         }
         foreach (var fixedValue in input.FixedValues)
         {
             fixedValue.TargetColumn = fixedValue.TargetColumn.Trim();
+        }
+        foreach (var related in input.RelatedTables)
+        {
+            related.Schema = related.Schema.Trim();
+            related.Table = related.Table.Trim();
+            related.Alias = related.Alias.Trim();
+            related.JoinExpression = related.JoinExpression.Trim();
+            related.ConditionExpression = related.ConditionExpression.Trim();
+        }
+        foreach (var column in input.Columns.Where(x => !string.IsNullOrWhiteSpace(x.SourceTableAlias)))
+        {
+            var related = input.RelatedTables.FirstOrDefault(x =>
+                string.Equals(x.Alias, column.SourceTableAlias, StringComparison.OrdinalIgnoreCase));
+            if (related is not null)
+            {
+                // Quoted PostgreSQL aliases are case-sensitive. Persist the alias casing from the
+                // related-table definition even when an API client supplied different casing.
+                column.SourceTableAlias = related.Alias;
+            }
         }
     }
 
@@ -890,12 +971,30 @@ public sealed class EfCoordinatorAdminService(
 
         foreach (var column in input.Columns)
         {
+            column.Direction = SyncFieldDirection.Forward;
             column.ReverseTransform = new ValueTransformInput();
         }
         input.FixedValues.RemoveAll(x => x.Direction == MappingWriteDirection.Reverse);
     }
 
     private static string CreateInternalEntityType(Guid routeId) => $"rule:{routeId:N}";
+
+    private static string CanonicalFieldName(RouteColumnMappingEntity column) =>
+        string.IsNullOrWhiteSpace(column.SourceTableAlias)
+            ? column.SourceColumn
+            : $"{column.SourceTableAlias}.{column.SourceColumn}";
+
+    private static string CanonicalFieldName(ColumnMappingInput column) =>
+        string.IsNullOrWhiteSpace(column.SourceTableAlias)
+            ? column.SourceColumn
+            : $"{column.SourceTableAlias}.{column.SourceColumn}";
+
+    private static SyncFieldDirection EffectiveDirection(
+        RouteColumnMappingEntity column,
+        SyncDirection routeDirection) =>
+        column.Direction ?? (routeDirection == SyncDirection.Bidirectional
+            ? SyncFieldDirection.Bidirectional
+            : SyncFieldDirection.Forward);
 
     private static string? NullIfEmpty(string value) => string.IsNullOrEmpty(value) ? null : value;
 

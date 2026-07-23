@@ -40,6 +40,19 @@ public sealed class ConflictResolver(IConflictValueMerger valueMerger)
             var currentChanged = baseline is not null && !SlotEquals(currentSlot, destinationBaseSlot);
             var isConflict = incomingChanged && currentChanged && !SlotEquals(incomingSlot, currentSlot);
 
+            // 片方向項目は、その方向の送信側が常に正となる。
+            // 宛先側で値が変更されていてもコンフリクトにはせず、受信値で戻す。
+            if (route.ValueMappings.TryGetValue(fieldName, out var directionalMapping) &&
+                directionalMapping.Direction != SyncFieldDirection.Bidirectional)
+            {
+                if (incomingChanged)
+                {
+                    SetSlot(adopted, fieldName, incomingSlot);
+                    adoptedExists = true;
+                }
+                continue;
+            }
+
             if (!isConflict)
             {
                 if (incomingChanged)

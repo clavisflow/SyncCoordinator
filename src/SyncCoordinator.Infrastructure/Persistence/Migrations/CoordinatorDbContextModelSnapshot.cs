@@ -301,6 +301,13 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
                     b.Property<int?>("DestinationNumericScale")
                         .HasColumnType("int");
 
+                    b.Property<string>("Direction")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
                     b.Property<string>("ForwardTransformJson")
                         .HasColumnType("nvarchar(max)");
 
@@ -332,6 +339,11 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
                     b.Property<int?>("SourceNumericScale")
                         .HasColumnType("int");
 
+                    b.Property<string>("SourceTableAlias")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
                     b.Property<Guid>("TableMappingId")
                         .HasColumnType("uniqueidentifier");
 
@@ -340,7 +352,7 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
                     b.HasIndex("TableMappingId", "DestinationColumn")
                         .IsUnique();
 
-                    b.HasIndex("TableMappingId", "SourceColumn")
+                    b.HasIndex("TableMappingId", "SourceTableAlias", "SourceColumn")
                         .IsUnique();
 
                     b.ToTable("RouteColumnMapping", (string)null);
@@ -393,6 +405,55 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("RouteFixedValueMapping", (string)null);
+                });
+
+            modelBuilder.Entity("SyncCoordinator.Infrastructure.Persistence.RouteRelatedTableEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Alias")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("ConditionExpression")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<bool>("DetectChanges")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("JoinExpression")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("Schema")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("Table")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<Guid>("TableMappingId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Usage")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TableMappingId", "Alias")
+                        .IsUnique();
+
+                    b.ToTable("RouteRelatedTable", (string)null);
                 });
 
             modelBuilder.Entity("SyncCoordinator.Infrastructure.Persistence.RouteTableMappingEntity", b =>
@@ -856,6 +917,17 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
                     b.Navigation("TableMapping");
                 });
 
+            modelBuilder.Entity("SyncCoordinator.Infrastructure.Persistence.RouteRelatedTableEntity", b =>
+                {
+                    b.HasOne("SyncCoordinator.Infrastructure.Persistence.RouteTableMappingEntity", "TableMapping")
+                        .WithMany("RelatedTables")
+                        .HasForeignKey("TableMappingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("TableMapping");
+                });
+
             modelBuilder.Entity("SyncCoordinator.Infrastructure.Persistence.RouteTableMappingEntity", b =>
                 {
                     b.HasOne("SyncCoordinator.Infrastructure.Persistence.SyncRouteEntity", "Route")
@@ -921,6 +993,8 @@ namespace SyncCoordinator.Infrastructure.Persistence.Migrations
                     b.Navigation("Columns");
 
                     b.Navigation("FixedValues");
+
+                    b.Navigation("RelatedTables");
                 });
 
             modelBuilder.Entity("SyncCoordinator.Infrastructure.Persistence.SyncRouteEntity", b =>

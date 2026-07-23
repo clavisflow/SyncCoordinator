@@ -125,6 +125,89 @@ public sealed class SynchronizationCoordinatorTests
     }
 
     [Fact]
+    public async Task EligibilityRemovalDoesNotDeleteEntityThatWasNeverSynchronized()
+    {
+        var messageId = Guid.NewGuid();
+        var payload = Payload("destination-owned");
+        var source = new FakeConnector
+        {
+            SystemCode = "A",
+            MessageId = messageId,
+            Operation = ChangeOperation.Delete,
+            Message = new SyncMessage(
+                messageId, "A", "A", "Sample", "1", ChangeOperation.Delete, DateTimeOffset.UtcNow, payload)
+            {
+                IsEligibilityRemoval = true
+            }
+        };
+        var destination = new FakeConnector { SystemCode = "C", EmitChange = false, Current = payload };
+        var route = Route(destinationDeletion: new DeletionBehavior(DeletionMode.Physical));
+        var store = new RecordingStore(route, null);
+
+        var processed = await Coordinator(source, destination, store).RunOnceAsync(10, CancellationToken.None);
+
+        Assert.Equal(1, processed);
+        Assert.Equal(0, destination.ApplyCalls);
+        Assert.Empty(store.SavedSnapshots);
+        Assert.Null(store.CompletedWebhook);
+        Assert.Equal(42, store.Checkpoint);
+    }
+
+    [Fact]
+    public async Task EligibilityRemovalDeletesEntityThatWasPreviouslySynchronized()
+    {
+        var messageId = Guid.NewGuid();
+        var payload = Payload("previously-synchronized");
+        var source = new FakeConnector
+        {
+            SystemCode = "A",
+            MessageId = messageId,
+            Operation = ChangeOperation.Delete,
+            Message = new SyncMessage(
+                messageId, "A", "A", "Sample", "1", ChangeOperation.Delete, DateTimeOffset.UtcNow, payload)
+            {
+                IsEligibilityRemoval = true
+            }
+        };
+        var destination = new FakeConnector { SystemCode = "C", EmitChange = false, Current = payload };
+        var route = Route(destinationDeletion: new DeletionBehavior(DeletionMode.Physical));
+        var store = new RecordingStore(route, Snapshot(route, payload));
+
+        await Coordinator(source, destination, store).RunOnceAsync(10, CancellationToken.None);
+
+        Assert.Equal(1, destination.ApplyCalls);
+        Assert.Equal(ChangeOperation.Delete, destination.AppliedRequest!.Operation);
+    }
+
+    [Fact]
+    public async Task SourceReadValidationFailureIsHeldWithoutBlockingCheckpoint()
+    {
+        var messageId = Guid.NewGuid();
+        var payload = Payload("key-only");
+        var source = new FakeConnector
+        {
+            SystemCode = "A",
+            MessageId = messageId,
+            Message = new SyncMessage(
+                messageId, "A", "A", "Sample", "1", ChangeOperation.Upsert, DateTimeOffset.UtcNow, payload)
+            {
+                ValidationFailure = new SyncValidationFailure(
+                    "reception", "WorkRequest", "related-projection-multiple-rows", "projection returned two rows")
+            }
+        };
+        var destination = new FakeConnector { SystemCode = "C", EmitChange = false };
+        var route = Route();
+        var store = new RecordingStore(route, null);
+
+        var processed = await Coordinator(source, destination, store).RunOnceAsync(10, CancellationToken.None);
+
+        Assert.Equal(1, processed);
+        Assert.Equal(1, store.HeldDeliveries);
+        Assert.Equal(0, destination.ApplyCalls);
+        Assert.Equal(42, store.Checkpoint);
+    }
+
+    [Fact]
     public async Task RunOnceCoalescesNotificationsAndAppliesLatestStateOnce()
     {
         var firstMessageId = Guid.NewGuid();

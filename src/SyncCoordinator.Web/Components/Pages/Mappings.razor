@@ -8,6 +8,7 @@
 @inject IDatabaseMetadataService MetadataService
 @inject NavigationManager Navigation
 @inject NotificationService NotificationService
+@inject DialogService DialogService
 @inject UiErrorReporter ErrorReporter
 @inject IStringLocalizer<SharedResource> L
 
@@ -37,26 +38,7 @@ else if (SelectedRoute is null)
 }
 else
 {
-<div class="content-stack">
-    <RadzenCard>
-        <div class="panel-title"><h2>@L["Mappings_Registered"]</h2><span>@L["Common_Count", savedMappings.Count]</span></div>
-        <RadzenDataGrid Data="@savedMappings" TItem="TableMappingListItem" AllowSorting="true" EmptyText="@L["Mappings_Empty"]" Density="Density.Compact">
-            <Columns>
-                <RadzenDataGridColumn TItem="TableMappingListItem" Title="@L["Common_System"]" Sortable="false" Filterable="false">
-                    <Template Context="item"><code>@item.SourceSystemName @DirectionMark(item.RouteId) @item.DestinationSystemName</code></Template>
-                </RadzenDataGridColumn>
-                <RadzenDataGridColumn TItem="TableMappingListItem" Property="SourceTable" Title="@L["Mappings_SourceTable"]" />
-                <RadzenDataGridColumn TItem="TableMappingListItem" Property="DestinationTable" Title="@L["Mappings_DestinationTable"]" />
-                <RadzenDataGridColumn TItem="TableMappingListItem" Property="ColumnCount" Title="@L["Mappings_ColumnCount"]" Width="80px" />
-                <RadzenDataGridColumn TItem="TableMappingListItem" Title="" Sortable="false" Filterable="false" Width="70px" TextAlign="TextAlign.Right">
-                    <Template Context="item">
-                        <RadzenButton Icon="edit" title="@L["Common_Edit"]" aria-label="@L["Common_Edit"]" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => EditMappingAsync(item))" />
-                    </Template>
-                </RadzenDataGridColumn>
-            </Columns>
-        </RadzenDataGrid>
-    </RadzenCard>
-
+<div class="content-stack" data-testid="mappings-page">
     <RadzenCard>
         <div class="panel-title"><div class="caption-title"><h2>@L["Mappings_Edit"]</h2><HelpTip Text="@L["Mappings_EditHelp"]" /></div></div>
         @if (loadingTables)
@@ -83,60 +65,125 @@ else
             }
         }
 
-        @if (columnRows.Count > 0)
+        @if (baseSourceColumns.Count > 0)
         {
-            <div class="column-mapping-header">
-                <div>
-                    <div class="caption-title"><strong>@L["Mappings_ColumnsAndPolicies"]</strong><HelpTip Text="@L["Mappings_ColumnsHelp"]" /></div>
-                    <small>@L["Mappings_SelectedColumns", columnRows.Count(x => x.Included), columnRows.Count]</small>
+            <div class="fixed-value-header related-table-header @(!relatedTablesExpanded ? "collapsed" : null)">
+                <div class="mapping-section-caption">
+                    <button type="button" class="mapping-section-toggle" data-testid="related-tables-toggle" @onclick="ToggleRelatedTables" aria-expanded="@relatedTablesExpanded" title="@(relatedTablesExpanded ? L["Common_CollapseSection"] : L["Common_ExpandSection"])">
+                        <RadzenIcon Icon="@(relatedTablesExpanded ? "expand_less" : "expand_more")" />
+                        <strong>@L["Mappings_RelatedTables"]</strong>
+                    </button>
+                    <HelpTip Text="@L["Mappings_RelatedTablesHelp"]" />
+                    <small>@L["Common_Count", relatedTableRows.Count]</small>
                 </div>
-                <div class="column-mapping-tools">
-                    <input type="search" @bind="columnFilter" @bind:event="oninput" placeholder="@L["Mappings_FilterColumns"]" aria-label="@L["Mappings_FilterColumns"]" class="form-control column-filter" />
-                    <label class="check-row"><RadzenCheckBox TValue="bool" @bind-Value="showUnmappedOnly" /><span>@L["Mappings_ShowUnmappedOnly"]</span></label>
-                </div>
+                <RadzenButton Text="@L["Mappings_AddRelatedTable"]" Icon="add" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" Click="@AddRelatedTable" />
             </div>
-            <div class="column-mapping-list">
-                <div class="column-mapping-row column-mapping-labels" aria-hidden="true">
-                    <span>@L["Common_Target"]</span><span>@L["Mappings_SourceColumn"]</span><span></span><span>@L["Mappings_DestinationColumn"]</span><span>@L["Mappings_Key"]</span><span>@L["Mappings_OnConflict"]</span>
-                </div>
-                @if (!VisibleColumnRows.Any())
+            @if (relatedTablesExpanded)
+            {
+                @foreach (var related in relatedTableRows)
                 {
-                    <div class="column-mapping-empty">@L["Mappings_NoMatchingColumns"]</div>
-                }
-                @foreach (var row in VisibleColumnRows)
-                {
-                    <div class="column-mapping-item" @key="row.Source.Name">
-                        <div class="column-mapping-row">
-                            <RadzenCheckBox TValue="bool" @bind-Value="row.Included" />
-                            <div class="column-source">
-                                <strong>@row.Source.Name</strong>
-                                <small>@row.Source.Contract.DisplayType @(row.Source.IsNullable ? "NULL" : "NOT NULL")</small>
+                    <div class="related-table-panel" data-testid="related-table-panel" data-related-alias="@related.Alias" @key="related">
+                        <div class="related-table-grid">
+                            <div class="form-field related-table-table">
+                                <label>@L["Mappings_RelatedTable"]</label>
+                                <RadzenDropDown TValue="DatabaseTableInfo" Value="@related.SelectedTable" Change="@(value => OnRelatedTableChangedAsync(related, value))" Data="@sourceTables" TextProperty="DisplayName" Placeholder="@L["Mappings_SelectTable"]" AllowFiltering="true" class="form-control" />
                             </div>
-                            <RadzenIcon Icon="arrow_forward" />
-                            <RadzenDropDown TValue="string" @bind-Value="row.DestinationColumn" Data="@destinationColumns" TextProperty="DisplayName" ValueProperty="Name" Placeholder="@L["Mappings_SelectDestinationColumn"]" AllowClear="true" AllowFiltering="true" class="form-control" />
-                            <div class="check-row key-check">
-                                <RadzenCheckBox TValue="bool" @bind-Value="row.IsKey" Disabled="@(!row.Included)" />
-                                <span>@L["Mappings_Key"]</span>
+                            <div class="form-field related-table-alias"><label>@L["Mappings_RelatedAlias"]</label><RadzenTextBox Value="@related.Alias" Change="@(value => ChangeRelatedAlias(related, value))" MaxLength="128" class="form-control" data-testid="related-alias" /></div>
+                            <div class="form-field related-table-usage"><label>@L["Mappings_RelatedUsage"]</label><RadzenDropDown TValue="RelatedTableUsage" Value="@related.Usage" Change="@(value => ChangeRelatedUsageAsync(related, value))" Data="@relatedUsages" TextProperty="Text" ValueProperty="Value" class="form-control" data-testid="related-usage" /></div>
+                            <RadzenButton class="related-table-delete" data-testid="related-delete" Icon="delete" title="@L["Common_Delete"]" aria-label="@L["Common_Delete"]" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => RemoveRelatedTableAsync(related))" />
+                            <div class="form-field related-table-join-expression">
+                                <label>@L["Mappings_JoinExpression"]</label>
+                                <RadzenTextArea @bind-Value="related.JoinExpression" Rows="2" MaxLength="4000" Placeholder="@L["Mappings_JoinExpressionPlaceholder"]" class="form-control" />
+                                <small>@L["Mappings_JoinExpressionHelp"]</small>
                             </div>
-                            <RadzenDropDown TValue="ConflictPolicy?" @bind-Value="row.ConflictPolicy" Data="@columnConflictPolicies" TextProperty="Text" ValueProperty="Value" Disabled="@(!row.Included)" class="form-control compact-control" />
+                            <div class="form-field related-table-condition-expression">
+                                <label>@L["Mappings_ConditionExpression"]</label>
+                                <RadzenTextArea @bind-Value="related.ConditionExpression" Rows="3" MaxLength="4000" Placeholder="@L["Mappings_ConditionExpressionPlaceholder"]" class="form-control" />
+                                <small>@L["Mappings_ConditionExpressionHelp"]</small>
+                            </div>
+                            <label class="check-row related-table-detect-changes"><RadzenCheckBox TValue="bool" @bind-Value="related.DetectChanges" /><span>@L["Mappings_DetectRelatedChanges"]</span></label>
                         </div>
-                        @if (row.Included && !row.IsKey && DestinationColumn(row) is { } targetColumn)
-                        {
-                            <ValueTransformEditor Title="@L["Mappings_ForwardTransform"]" Transform="@row.ForwardTransform" SourceContract="@row.Source.Contract" Contract="@targetColumn.Contract" FieldName="@row.Source.Name" TargetColumn="@targetColumn.Name" />
-                            @if (IsBidirectional)
-                            {
-                                <ValueTransformEditor Title="@L["Mappings_ReverseTransform"]" Transform="@row.ReverseTransform" SourceContract="@targetColumn.Contract" Contract="@row.Source.Contract" FieldName="@row.Source.Name" TargetColumn="@row.Source.Name" />
-                            }
-                        }
                     </div>
                 }
-            </div>
+            }
+        }
 
-            <div class="fixed-value-header">
-                <strong>@L["Mappings_FixedValues"]</strong>
+        @if (sourceColumns.Count > 0 && destinationColumns.Count > 0)
+        {
+            <div class="column-mapping-header @(!columnMappingsExpanded ? "collapsed" : null)">
+                <div class="mapping-section-caption">
+                    <button type="button" class="mapping-section-toggle" data-testid="column-mappings-toggle" @onclick="ToggleColumnMappings" aria-expanded="@columnMappingsExpanded" title="@(columnMappingsExpanded ? L["Common_CollapseSection"] : L["Common_ExpandSection"])">
+                        <RadzenIcon Icon="@(columnMappingsExpanded ? "expand_less" : "expand_more")" />
+                        <strong>@L["Mappings_ColumnsAndPolicies"]</strong>
+                    </button>
+                    <HelpTip Text="@L["Mappings_ColumnsHelp"]" />
+                    <small>@L["Common_Count", columnRows.Count]</small>
+                </div>
+                <div class="column-mapping-tools">
+                    @if (columnMappingsExpanded)
+                    {
+                        <input type="search" @bind="columnFilter" @bind:event="oninput" placeholder="@L["Mappings_FilterColumns"]" aria-label="@L["Mappings_FilterColumns"]" class="form-control column-filter" />
+                        <label class="check-row"><RadzenCheckBox TValue="bool" @bind-Value="showUnmappedOnly" /><span>@L["Mappings_ShowUnmappedOnly"]</span></label>
+                    }
+                    <RadzenButton Text="@L["Mappings_AddSyncField"]" Icon="add" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" Click="@AddColumnMapping" />
+                </div>
+            </div>
+            @if (columnMappingsExpanded)
+            {
+                <div class="column-mapping-list">
+                    <div class="column-mapping-row column-mapping-labels" aria-hidden="true">
+                        <span>@L["Mappings_SourceColumn"]</span><span></span><span>@L["Mappings_DestinationColumn"]</span><span>@L["Mappings_FieldDirection"]</span><span>@L["Mappings_Key"]</span><span>@L["Mappings_OnConflict"]</span><span></span>
+                    </div>
+                    @if (!VisibleColumnRows.Any())
+                    {
+                        <div class="column-mapping-empty">@L["Mappings_NoMatchingColumns"]</div>
+                    }
+                    @foreach (var row in VisibleColumnRows)
+                    {
+                        <div class="column-mapping-item" data-testid="column-mapping-item" data-source-column="@row.SourceColumn" @key="row">
+                            <div class="column-mapping-row">
+                                <RadzenDropDown TValue="string" Value="@row.SourceColumn" Change="@(value => ChangeSourceColumn(row, value))" Data="@AvailableSourceColumns(row)" TextProperty="DisplayName" ValueProperty="Name" Placeholder="@L["Mappings_SelectSourceColumn"]" AllowClear="true" AllowFiltering="true" class="form-control" />
+                                <RadzenIcon Icon="arrow_forward" />
+                                <RadzenDropDown TValue="string" @bind-Value="row.DestinationColumn" Data="@AvailableDestinationColumns(row)" TextProperty="DisplayName" ValueProperty="Name" Placeholder="@L["Mappings_SelectDestinationColumn"]" AllowClear="true" AllowFiltering="true" class="form-control" />
+                                <RadzenDropDown TValue="SyncFieldDirection" @bind-Value="row.Direction" Data="@fieldDirections" TextProperty="Text" ValueProperty="Value" Disabled="@(!IsBidirectional || row.IsKey || IsRelatedSource(row))" class="form-control compact-control" />
+                                <div class="check-row key-check">
+                                    <RadzenCheckBox TValue="bool" @bind-Value="row.IsKey" Disabled="@IsRelatedSource(row)" />
+                                    <span>@L["Mappings_Key"]</span>
+                                </div>
+                                <RadzenDropDown TValue="ConflictPolicy?" @bind-Value="row.ConflictPolicy" Data="@columnConflictPolicies" TextProperty="Text" ValueProperty="Value" Disabled="@(row.Direction != SyncFieldDirection.Bidirectional)" class="form-control compact-control" />
+                                <div class="column-mapping-actions">
+                                    <RadzenButton class="column-order-button" data-testid="move-column-up" Icon="arrow_upward" title="@L["Mappings_MoveUp"]" aria-label="@L["Mappings_MoveUp"]" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Size="ButtonSize.Small" Disabled="@(!CanMoveColumnMapping(row, -1))" Click="@(() => MoveColumnMapping(row, -1))" />
+                                    <RadzenButton class="column-order-button" data-testid="move-column-down" Icon="arrow_downward" title="@L["Mappings_MoveDown"]" aria-label="@L["Mappings_MoveDown"]" ButtonStyle="ButtonStyle.Light" Variant="Variant.Text" Size="ButtonSize.Small" Disabled="@(!CanMoveColumnMapping(row, 1))" Click="@(() => MoveColumnMapping(row, 1))" />
+                                    <RadzenButton Icon="delete" title="@L["Common_Delete"]" aria-label="@L["Common_Delete"]" ButtonStyle="ButtonStyle.Danger" Variant="Variant.Text" Size="ButtonSize.Small" Click="@(() => RemoveColumnMapping(row))" />
+                                </div>
+                            </div>
+                            @if (!row.IsKey && SourceColumn(row) is { } sourceColumn && DestinationColumn(row) is { } targetColumn)
+                            {
+                                @if (row.Direction is SyncFieldDirection.Forward or SyncFieldDirection.Bidirectional)
+                                {
+                                    <ValueTransformEditor Title="@L["Mappings_ForwardTransform"]" Transform="@row.ForwardTransform" SourceContract="@sourceColumn.Contract" Contract="@targetColumn.Contract" FieldName="@sourceColumn.Name" TargetColumn="@targetColumn.Name" />
+                                }
+                                @if (IsBidirectional && row.Direction is SyncFieldDirection.Reverse or SyncFieldDirection.Bidirectional)
+                                {
+                                    <ValueTransformEditor Title="@L["Mappings_ReverseTransform"]" Transform="@row.ReverseTransform" SourceContract="@targetColumn.Contract" Contract="@sourceColumn.Contract" FieldName="@sourceColumn.Name" TargetColumn="@sourceColumn.Name" />
+                                }
+                            }
+                        </div>
+                    }
+                </div>
+            }
+
+            <div class="fixed-value-header @(!fixedValuesExpanded ? "collapsed" : null)">
+                <div class="mapping-section-caption">
+                    <button type="button" class="mapping-section-toggle" @onclick="ToggleFixedValues" aria-expanded="@fixedValuesExpanded" title="@(fixedValuesExpanded ? L["Common_CollapseSection"] : L["Common_ExpandSection"])">
+                        <RadzenIcon Icon="@(fixedValuesExpanded ? "expand_less" : "expand_more")" />
+                        <strong>@L["Mappings_FixedValues"]</strong>
+                    </button>
+                    <small>@L["Common_Count", fixedValueRows.Count]</small>
+                </div>
                 <RadzenButton Text="@L["Mappings_AddFixedValue"]" Icon="add" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" Click="@AddFixedValue" />
             </div>
-            @if (fixedValueRows.Count > 0)
+            @if (fixedValuesExpanded && fixedValueRows.Count > 0)
             {
                 <div class="fixed-value-list">
                     <div class="fixed-value-row fixed-value-labels @(SelectedRoute?.Direction == SyncDirection.Bidirectional ? "bidirectional" : null)" aria-hidden="true">
@@ -157,17 +204,20 @@ else
                     }
                 </div>
             }
-            <div class="fixed-value-header deletion-header">
-                <div class="caption-title">
-                    <strong>@L["Mappings_DeleteSync"]</strong>
+            <div class="fixed-value-header deletion-header @(!deletionSettingsExpanded ? "collapsed" : null)">
+                <div class="mapping-section-caption">
+                    <button type="button" class="mapping-section-toggle" @onclick="ToggleDeletionSettings" aria-expanded="@deletionSettingsExpanded" title="@(deletionSettingsExpanded ? L["Common_CollapseSection"] : L["Common_ExpandSection"])">
+                        <RadzenIcon Icon="@(deletionSettingsExpanded ? "expand_less" : "expand_more")" />
+                        <strong>@L["Mappings_DeleteSync"]</strong>
+                    </button>
                     <HelpTip Text="@L["Mappings_DeleteSyncHelp"]" />
                 </div>
                 <div class="check-row">
-                    <RadzenCheckBox TValue="bool" @bind-Value="syncDeletes" />
+                    <RadzenCheckBox TValue="bool" Value="@syncDeletes" Change="@ChangeSyncDeletes" />
                     <span>@L["Mappings_SyncDeletes"]</span>
                 </div>
             </div>
-            @if (syncDeletes)
+            @if (deletionSettingsExpanded && syncDeletes)
             {
                 <div class="deletion-mode-grid">
                     <div class="deletion-mode-panel">
@@ -180,7 +230,7 @@ else
                         {
                             <div class="form-field">
                             <label>@L["Mappings_LogicalDeleteColumn"]</label>
-                            <RadzenDropDown TValue="string" @bind-Value="sourceLogicalDeleteColumn" Data="@sourceColumns" TextProperty="DisplayName" ValueProperty="Name" Placeholder="@L["Mappings_SelectColumn"]" AllowFiltering="true" class="form-control compact-control" />
+                            <RadzenDropDown TValue="string" @bind-Value="sourceLogicalDeleteColumn" Data="@baseSourceColumns" TextProperty="DisplayName" ValueProperty="Name" Placeholder="@L["Mappings_SelectColumn"]" AllowFiltering="true" class="form-control compact-control" />
                             </div>
                             <div class="form-field">
                             <label>@L["Mappings_DeleteValue"]</label>
@@ -209,7 +259,7 @@ else
                 </div>
             }
             <div class="form-actions page-actions">
-                <RadzenButton Text="@(saving ? L["Common_Saving"] : L["Mappings_Save"])" Icon="save" Click="@SaveMappingAsync" Disabled="@saving" />
+                <RadzenButton Text="@(saving ? L["Common_Saving"] : L["Mappings_Save"])" Icon="save" Click="@SaveMappingAsync" Disabled="@saving" data-testid="save-mapping" />
             </div>
         }
     </RadzenCard>
@@ -221,13 +271,18 @@ else
 
     private IReadOnlyList<RouteListItem> routes = [];
     private IReadOnlyList<SystemListItem> systems = [];
-    private IReadOnlyList<TableMappingListItem> savedMappings = [];
     private IReadOnlyList<DatabaseTableInfo> sourceTables = [];
     private IReadOnlyList<DatabaseTableInfo> destinationTables = [];
+    private IReadOnlyList<DatabaseColumnInfo> baseSourceColumns = [];
     private IReadOnlyList<DatabaseColumnInfo> sourceColumns = [];
     private IReadOnlyList<DatabaseColumnInfo> destinationColumns = [];
     private List<ColumnMappingRow> columnRows = [];
     private List<FixedValueRow> fixedValueRows = [];
+    private List<RelatedTableRow> relatedTableRows = [];
+    private bool relatedTablesExpanded = true;
+    private bool columnMappingsExpanded = true;
+    private bool fixedValuesExpanded;
+    private bool deletionSettingsExpanded;
     private bool syncDeletes;
     private DeletionMode sourceDeletionMode = DeletionMode.Physical;
     private string sourceLogicalDeleteColumn = string.Empty;
@@ -260,25 +315,32 @@ else
         new(MappingWriteDirection.Forward, L["Mappings_WriteDestination"]),
         new(MappingWriteDirection.Reverse, L["Mappings_WriteSource"])
     ];
+    private FieldDirectionOption[] fieldDirections =>
+    [
+        new(SyncFieldDirection.Forward, L["Mappings_FieldForward"]),
+        new(SyncFieldDirection.Reverse, L["Mappings_FieldReverse"]),
+        new(SyncFieldDirection.Bidirectional, L["Mappings_FieldBidirectional"])
+    ];
     private DeletionModeOption[] deletionModes =>
     [
         new(DeletionMode.Physical, L["Mappings_PhysicalDelete"]),
         new(DeletionMode.Logical, L["Mappings_LogicalDelete"])
     ];
-
+    private RelatedUsageOption[] relatedUsages =>
+    [
+        new(RelatedTableUsage.Projection, L["Mappings_RelatedUsageProjection"]),
+        new(RelatedTableUsage.Eligibility, L["Mappings_RelatedUsageEligibility"])
+    ];
     private RouteListItem? SelectedRoute => routes.SingleOrDefault(x => x.Id == selectedRouteId);
     private bool IsBidirectional => SelectedRoute?.Direction == SyncDirection.Bidirectional;
     private bool TableSelectionLocked => SelectedRoute?.DeploymentState == DatabaseDeploymentState.Prepared;
     private string SelectedDestinationSystemName =>
         systems.SingleOrDefault(x => x.Code == selectedDestinationSystem)?.DisplayName ?? selectedDestinationSystem;
 
-    private string DirectionMark(Guid routeId) =>
-        routes.SingleOrDefault(x => x.Id == routeId)?.Direction == SyncDirection.Bidirectional ? "⇄" : "→";
-
     private IEnumerable<ColumnMappingRow> VisibleColumnRows => columnRows.Where(row =>
-        (!showUnmappedOnly || !row.Included || string.IsNullOrWhiteSpace(row.DestinationColumn)) &&
+        (!showUnmappedOnly || string.IsNullOrWhiteSpace(row.SourceColumn) || string.IsNullOrWhiteSpace(row.DestinationColumn)) &&
         (string.IsNullOrWhiteSpace(columnFilter) ||
-         row.Source.Name.Contains(columnFilter, StringComparison.OrdinalIgnoreCase) ||
+         row.SourceColumn.Contains(columnFilter, StringComparison.OrdinalIgnoreCase) ||
          row.DestinationColumn.Contains(columnFilter, StringComparison.OrdinalIgnoreCase)));
 
     protected override async Task OnParametersSetAsync()
@@ -298,8 +360,6 @@ else
             return;
         }
 
-        var mappings = await AdminService.GetTableMappingsAsync(CancellationToken.None);
-        savedMappings = mappings.Where(x => x.RouteId == RouteId.Value).ToArray();
         await OnRouteChangedAsync(RouteId.Value);
         loadingPage = false;
     }
@@ -310,6 +370,7 @@ else
         selectedRouteId = routeId;
         sourceTables = [];
         destinationTables = [];
+        baseSourceColumns = [];
         sourceColumns = [];
         destinationColumns = [];
         selectedSourceTable = null;
@@ -317,6 +378,7 @@ else
         existingMapping = null;
         columnRows = [];
         fixedValueRows = [];
+        relatedTableRows = [];
         columnFilter = string.Empty;
         showUnmappedOnly = false;
         ResetDeletionSettings();
@@ -342,6 +404,7 @@ else
     {
         columnRows = [];
         fixedValueRows = [];
+        relatedTableRows = [];
         ResetDeletionSettings();
         if (selectedSourceTable is not null && selectedDestinationTable is not null)
         {
@@ -393,31 +456,58 @@ else
             var route = SelectedRoute ?? throw new InvalidOperationException(L["Mappings_SelectRuleError"]);
             var source = GetConfiguredSystem(route.SourceSystem);
             var destination = GetConfiguredSystem(selectedDestinationSystem);
-            sourceColumns = await MetadataService.GetColumnsAsync(source.Id, selectedSourceTable!.Schema, selectedSourceTable.Name, CancellationToken.None);
+            baseSourceColumns = await MetadataService.GetColumnsAsync(source.Id, selectedSourceTable!.Schema, selectedSourceTable.Name, CancellationToken.None);
+            sourceColumns = baseSourceColumns;
             destinationColumns = await MetadataService.GetColumnsAsync(destination.Id, selectedDestinationTable!.Schema, selectedDestinationTable.Name, CancellationToken.None);
             var mappingApplies = existingMapping is not null &&
                                  string.Equals(existingMapping.SourceSchema, selectedSourceTable.Schema, StringComparison.OrdinalIgnoreCase) &&
                                  string.Equals(existingMapping.SourceTable, selectedSourceTable.Name, StringComparison.OrdinalIgnoreCase) &&
                                  string.Equals(existingMapping.DestinationSchema, selectedDestinationTable.Schema, StringComparison.OrdinalIgnoreCase) &&
                                  string.Equals(existingMapping.DestinationTable, selectedDestinationTable.Name, StringComparison.OrdinalIgnoreCase);
-            var saved = mappingApplies
-                ? existingMapping!.Columns.ToDictionary(x => x.SourceColumn, StringComparer.OrdinalIgnoreCase)
-                : [];
-            columnRows = sourceColumns.Select(sourceColumn =>
-            {
-                saved.TryGetValue(sourceColumn.Name, out var savedColumn);
-                var sameName = destinationColumns.FirstOrDefault(x => string.Equals(x.Name, sourceColumn.Name, StringComparison.OrdinalIgnoreCase));
-                return new ColumnMappingRow
+            relatedTableRows = mappingApplies
+                ? existingMapping!.RelatedTables.Select(x => new RelatedTableRow
                 {
-                    Source = sourceColumn,
-                    Included = savedColumn is not null || sameName is not null,
-                    DestinationColumn = savedColumn?.DestinationColumn ?? sameName?.Name ?? string.Empty,
-                    IsKey = savedColumn?.IsKey ?? sourceColumn.IsPrimaryKey,
-                    ConflictPolicy = savedColumn?.ConflictPolicy,
-                    ForwardTransform = savedColumn?.ForwardTransform ?? new ValueTransformInput(),
-                    ReverseTransform = savedColumn?.ReverseTransform ?? new ValueTransformInput()
-                };
-            }).ToList();
+                    SelectedTable = FindTable(sourceTables, x.Schema, x.Table),
+                    Alias = x.Alias,
+                    JoinExpression = x.JoinExpression,
+                    Usage = x.Usage,
+                    DetectChanges = x.DetectChanges,
+                    ConditionExpression = x.ConditionExpression
+                }).ToList()
+                : [];
+            foreach (var related in relatedTableRows)
+            {
+                await LoadRelatedColumnsAsync(related, source.Id);
+            }
+            RebuildSourceColumns();
+            columnRows = mappingApplies
+                ? existingMapping!.Columns.Select(savedColumn => new ColumnMappingRow
+                {
+                    SourceColumn = SourceField(savedColumn.SourceTableAlias, savedColumn.SourceColumn),
+                    DestinationColumn = savedColumn.DestinationColumn,
+                    Direction = savedColumn.Direction ?? (IsBidirectional
+                        ? SyncFieldDirection.Bidirectional
+                        : SyncFieldDirection.Forward),
+                    IsKey = savedColumn.IsKey,
+                    ConflictPolicy = savedColumn.ConflictPolicy,
+                    ForwardTransform = savedColumn.ForwardTransform,
+                    ReverseTransform = savedColumn.ReverseTransform
+                }).ToList()
+                : baseSourceColumns
+                    .Select(sourceColumn => new
+                    {
+                        Source = sourceColumn,
+                        Destination = destinationColumns.FirstOrDefault(x =>
+                            string.Equals(x.Name, sourceColumn.Name, StringComparison.OrdinalIgnoreCase))
+                    })
+                    .Where(x => x.Source.IsPrimaryKey || x.Destination is not null)
+                    .Select(x => new ColumnMappingRow
+                    {
+                        SourceColumn = x.Source.Name,
+                        DestinationColumn = x.Destination?.Name ?? string.Empty,
+                        Direction = IsBidirectional ? SyncFieldDirection.Bidirectional : SyncFieldDirection.Forward,
+                        IsKey = x.Source.IsPrimaryKey
+                    }).ToList();
             fixedValueRows = mappingApplies ? existingMapping!.FixedValues
                 .Where(x => IsBidirectional || x.Direction == MappingWriteDirection.Forward)
                 .Select(x => new FixedValueRow
@@ -433,6 +523,10 @@ else
             destinationDeletionMode = mappingApplies ? existingMapping!.DestinationDeletionMode : DeletionMode.Physical;
             destinationLogicalDeleteColumn = mappingApplies ? existingMapping!.DestinationLogicalDeleteColumn : string.Empty;
             destinationLogicalDeleteValue = mappingApplies ? existingMapping!.DestinationLogicalDeleteValue : string.Empty;
+            relatedTablesExpanded = true;
+            columnMappingsExpanded = true;
+            fixedValuesExpanded = fixedValueRows.Count > 0;
+            deletionSettingsExpanded = syncDeletes;
         }
         catch (Exception exception)
         {
@@ -464,13 +558,15 @@ else
                 DestinationDeletionMode = destinationDeletionMode,
                 DestinationLogicalDeleteColumn = destinationLogicalDeleteColumn,
                 DestinationLogicalDeleteValue = destinationLogicalDeleteValue,
-                Columns = columnRows.Where(x => x.Included).Select(x => new ColumnMappingInput
+                Columns = columnRows.Select(x => new ColumnMappingInput
                 {
-                    SourceColumn = x.Source.Name,
+                    SourceTableAlias = SplitSourceField(x.SourceColumn).Alias,
+                    SourceColumn = SplitSourceField(x.SourceColumn).Column,
                     DestinationColumn = x.DestinationColumn,
+                    Direction = IsBidirectional ? x.Direction : SyncFieldDirection.Forward,
                     IsKey = x.IsKey,
                     ConflictPolicy = x.ConflictPolicy,
-                    SourceContract = x.Source.Contract,
+                    SourceContract = SourceColumn(x)?.Contract ?? ColumnValueContract.Unknown,
                     DestinationContract = DestinationColumn(x)?.Contract ?? ColumnValueContract.Unknown,
                     ForwardTransform = x.ForwardTransform,
                     ReverseTransform = IsBidirectional ? x.ReverseTransform : new ValueTransformInput()
@@ -485,12 +581,20 @@ else
                     TargetContract = FixedTargetColumns(x)
                         .FirstOrDefault(column => string.Equals(column.Name, x.TargetColumn, StringComparison.OrdinalIgnoreCase))
                         ?.Contract ?? ColumnValueContract.Unknown
+                }).ToList(),
+                RelatedTables = relatedTableRows.Select(x => new RelatedTableInput
+                {
+                    Schema = x.SelectedTable?.Schema ?? string.Empty,
+                    Table = x.SelectedTable?.Name ?? string.Empty,
+                    Alias = x.Alias,
+                    JoinExpression = x.JoinExpression,
+                    Usage = x.Usage,
+                    DetectChanges = x.DetectChanges,
+                    ConditionExpression = x.ConditionExpression
                 }).ToList()
             };
             await AdminService.SaveTableMappingAsync(model, CancellationToken.None);
             existingMapping = await AdminService.GetTableMappingAsync(model.RouteId, CancellationToken.None);
-            var mappings = await AdminService.GetTableMappingsAsync(CancellationToken.None);
-            savedMappings = mappings.Where(x => x.RouteId == model.RouteId).ToArray();
             NotificationService.ShowSuccess(L["Mappings_Saved"], L["Common_Completed"]);
         }
         catch (ConfigurationValidationException exception)
@@ -508,14 +612,202 @@ else
         }
     }
 
-    private async Task EditMappingAsync(TableMappingListItem item)
-    {
-        await OnRouteChangedAsync(item.RouteId);
-    }
-
     private void BackToList() => Navigation.NavigateTo("/routes");
 
-    private void AddFixedValue() => fixedValueRows.Add(new FixedValueRow());
+    private void AddFixedValue()
+    {
+        fixedValueRows.Add(new FixedValueRow());
+        fixedValuesExpanded = true;
+    }
+
+    private void AddRelatedTable()
+    {
+        relatedTablesExpanded = true;
+        relatedTableRows.Add(new RelatedTableRow
+        {
+            Usage = RelatedTableUsage.Eligibility,
+            DetectChanges = true
+        });
+    }
+
+    private async Task OnRelatedTableChangedAsync(RelatedTableRow row, object? value)
+    {
+        var previousAlias = row.Alias;
+        row.SelectedTable = value as DatabaseTableInfo;
+        row.Alias = row.SelectedTable is null
+            ? string.Empty
+            : CreateUniqueRelatedAlias(row.SelectedTable.Name, row);
+        row.JoinExpression = string.Empty;
+        row.ConditionExpression = string.Empty;
+        row.Columns = [];
+        if (row.SelectedTable is not null && SelectedRoute is { } route)
+        {
+            var source = GetConfiguredSystem(route.SourceSystem);
+            await LoadRelatedColumnsAsync(row, source.Id);
+        }
+        if (!string.IsNullOrWhiteSpace(previousAlias))
+        {
+            columnRows.RemoveAll(x =>
+                string.Equals(SplitSourceField(x.SourceColumn).Alias, previousAlias, StringComparison.OrdinalIgnoreCase));
+        }
+        RebuildSourceColumns();
+    }
+
+    private string CreateUniqueRelatedAlias(string tableName, RelatedTableRow current)
+    {
+        const int maxLength = 128;
+        var baseName = tableName.Trim()
+            .Replace('.', '_')
+            .Replace('{', '_')
+            .Replace('}', '_');
+        if (baseName.Length > maxLength)
+        {
+            baseName = baseName[..maxLength];
+        }
+
+        var candidate = baseName;
+        var suffix = 2;
+        while (string.Equals(candidate, "sc_base", StringComparison.OrdinalIgnoreCase) ||
+               relatedTableRows.Any(x => !ReferenceEquals(x, current) &&
+                   string.Equals(x.Alias, candidate, StringComparison.OrdinalIgnoreCase)))
+        {
+            var suffixText = $"_{suffix++}";
+            candidate = baseName[..Math.Min(baseName.Length, maxLength - suffixText.Length)] + suffixText;
+        }
+        return candidate;
+    }
+
+    private async Task LoadRelatedColumnsAsync(RelatedTableRow row, Guid sourceSystemId)
+    {
+        if (row.SelectedTable is null) return;
+        row.Columns = await MetadataService.GetColumnsAsync(
+            sourceSystemId, row.SelectedTable.Schema, row.SelectedTable.Name, CancellationToken.None);
+    }
+
+    private void ChangeRelatedAlias(RelatedTableRow row, object value)
+    {
+        var oldPrefix = row.Alias + ".";
+        row.Alias = value?.ToString()?.Trim() ?? string.Empty;
+        var newPrefix = row.Alias + ".";
+        foreach (var mapping in columnRows.Where(x => x.SourceColumn.StartsWith(oldPrefix, StringComparison.OrdinalIgnoreCase)))
+        {
+            mapping.SourceColumn = newPrefix + mapping.SourceColumn[oldPrefix.Length..];
+        }
+        RebuildSourceColumns();
+    }
+
+    private async Task ChangeRelatedUsageAsync(RelatedTableRow row, object value)
+    {
+        var newUsage = (RelatedTableUsage)value;
+        var affectedMappings = RelatedColumnMappings(row);
+        if (newUsage == RelatedTableUsage.Eligibility && affectedMappings.Count > 0)
+        {
+            var confirmed = await DialogService.Confirm(
+                L["Mappings_ConfirmEligibilityRemovesFields", row.Alias, affectedMappings.Count],
+                L["Mappings_ConfirmRelatedFieldsTitle"],
+                new ConfirmOptions
+                {
+                    OkButtonText = L["Mappings_ChangeAndRemove"],
+                    CancelButtonText = L["Common_Cancel"]
+                });
+            if (confirmed != true)
+            {
+                return;
+            }
+
+            columnRows.RemoveAll(affectedMappings.Contains);
+        }
+        row.Usage = newUsage;
+        RebuildSourceColumns();
+    }
+
+    private async Task RemoveRelatedTableAsync(RelatedTableRow row)
+    {
+        var affectedMappings = RelatedColumnMappings(row);
+        if (affectedMappings.Count > 0)
+        {
+            var confirmed = await DialogService.Confirm(
+                L["Mappings_ConfirmRelatedTableRemovesFields", row.Alias, affectedMappings.Count],
+                L["Mappings_ConfirmRelatedFieldsTitle"],
+                new ConfirmOptions
+                {
+                    OkButtonText = L["Mappings_DeleteAndRemove"],
+                    CancelButtonText = L["Common_Cancel"]
+                });
+            if (confirmed != true)
+            {
+                return;
+            }
+        }
+
+        relatedTableRows.Remove(row);
+        columnRows.RemoveAll(affectedMappings.Contains);
+        RebuildSourceColumns();
+    }
+
+    private List<ColumnMappingRow> RelatedColumnMappings(RelatedTableRow row) =>
+        columnRows.Where(x =>
+            string.Equals(SplitSourceField(x.SourceColumn).Alias, row.Alias, StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    private void RebuildSourceColumns()
+    {
+        var combined = new List<DatabaseColumnInfo>(baseSourceColumns);
+        foreach (var related in relatedTableRows.Where(x => x.Usage == RelatedTableUsage.Projection && !string.IsNullOrWhiteSpace(x.Alias)))
+        {
+            combined.AddRange(related.Columns.Select(column => new DatabaseColumnInfo(
+                SourceField(related.Alias, column.Name), column.DataType, column.IsNullable,
+                column.Ordinal, false, column.MaxLength, column.NumericPrecision, column.NumericScale)));
+        }
+        sourceColumns = combined;
+    }
+
+    private void AddColumnMapping()
+    {
+        columnRows.Insert(0, new ColumnMappingRow
+        {
+            Direction = IsBidirectional ? SyncFieldDirection.Bidirectional : SyncFieldDirection.Forward
+        });
+        columnFilter = string.Empty;
+        columnMappingsExpanded = true;
+    }
+
+    private void RemoveColumnMapping(ColumnMappingRow row) => columnRows.Remove(row);
+
+    private bool CanMoveColumnMapping(ColumnMappingRow row, int offset)
+    {
+        var visibleRows = VisibleColumnRows.ToList();
+        var index = visibleRows.IndexOf(row);
+        return index >= 0 && index + offset >= 0 && index + offset < visibleRows.Count;
+    }
+
+    private void MoveColumnMapping(ColumnMappingRow row, int offset)
+    {
+        var visibleRows = VisibleColumnRows.ToList();
+        var visibleIndex = visibleRows.IndexOf(row);
+        var targetVisibleIndex = visibleIndex + offset;
+        if (visibleIndex < 0 || targetVisibleIndex < 0 || targetVisibleIndex >= visibleRows.Count)
+        {
+            return;
+        }
+
+        var target = visibleRows[targetVisibleIndex];
+        var rowIndex = columnRows.IndexOf(row);
+        var targetIndex = columnRows.IndexOf(target);
+        (columnRows[rowIndex], columnRows[targetIndex]) = (columnRows[targetIndex], columnRows[rowIndex]);
+    }
+
+    private void ChangeSourceColumn(ColumnMappingRow row, object value)
+    {
+        row.SourceColumn = value?.ToString() ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(SplitSourceField(row.SourceColumn).Alias))
+        {
+            row.Direction = SyncFieldDirection.Forward;
+            row.IsKey = false;
+            row.ConflictPolicy = null;
+            row.ReverseTransform = new ValueTransformInput();
+        }
+    }
 
     private void RemoveFixedValue(FixedValueRow row) => fixedValueRows.Remove(row);
 
@@ -523,6 +815,23 @@ else
     {
         row.Direction = (MappingWriteDirection)value;
         row.TargetColumn = string.Empty;
+    }
+
+    private void ToggleRelatedTables() => relatedTablesExpanded = !relatedTablesExpanded;
+
+    private void ToggleColumnMappings() => columnMappingsExpanded = !columnMappingsExpanded;
+
+    private void ToggleFixedValues() => fixedValuesExpanded = !fixedValuesExpanded;
+
+    private void ToggleDeletionSettings() => deletionSettingsExpanded = !deletionSettingsExpanded;
+
+    private void ChangeSyncDeletes(bool value)
+    {
+        syncDeletes = value;
+        if (value)
+        {
+            deletionSettingsExpanded = true;
+        }
     }
 
     private void ResetDeletionSettings()
@@ -540,10 +849,10 @@ else
     {
         var candidates = row.Direction == MappingWriteDirection.Forward
             ? destinationColumns
-            : sourceColumns;
+            : baseSourceColumns;
         var normallyMapped = row.Direction == MappingWriteDirection.Forward
-            ? columnRows.Where(x => x.Included).Select(x => x.DestinationColumn)
-            : columnRows.Where(x => x.Included).Select(x => x.Source.Name);
+            ? columnRows.Select(x => x.DestinationColumn)
+            : columnRows.Select(x => x.SourceColumn);
         var usedByOtherFixedValues = fixedValueRows
             .Where(x => !ReferenceEquals(x, row) && x.Direction == row.Direction)
             .Select(x => x.TargetColumn);
@@ -559,6 +868,29 @@ else
         destinationColumns.FirstOrDefault(column =>
             string.Equals(column.Name, row.DestinationColumn, StringComparison.OrdinalIgnoreCase));
 
+    private DatabaseColumnInfo? SourceColumn(ColumnMappingRow row) =>
+        sourceColumns.FirstOrDefault(column =>
+            string.Equals(column.Name, row.SourceColumn, StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsRelatedSource(ColumnMappingRow row) =>
+        !string.IsNullOrWhiteSpace(SplitSourceField(row.SourceColumn).Alias);
+
+    private IReadOnlyList<DatabaseColumnInfo> AvailableSourceColumns(ColumnMappingRow row)
+    {
+        var used = columnRows.Where(x => !ReferenceEquals(x, row)).Select(x => x.SourceColumn)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return sourceColumns.Where(x =>
+            string.Equals(x.Name, row.SourceColumn, StringComparison.OrdinalIgnoreCase) || !used.Contains(x.Name)).ToArray();
+    }
+
+    private IReadOnlyList<DatabaseColumnInfo> AvailableDestinationColumns(ColumnMappingRow row)
+    {
+        var used = columnRows.Where(x => !ReferenceEquals(x, row)).Select(x => x.DestinationColumn)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return destinationColumns.Where(x =>
+            string.Equals(x.Name, row.DestinationColumn, StringComparison.OrdinalIgnoreCase) || !used.Contains(x.Name)).ToArray();
+    }
+
     private SystemListItem GetConfiguredSystem(string code)
     {
         var system = systems.SingleOrDefault(x => string.Equals(x.Code, code, StringComparison.OrdinalIgnoreCase)) ??
@@ -573,11 +905,20 @@ else
     private static DatabaseTableInfo? FindTable(IReadOnlyList<DatabaseTableInfo> tables, string? schema, string? name) =>
         tables.FirstOrDefault(x => string.Equals(x.Schema, schema, StringComparison.OrdinalIgnoreCase) && string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
 
+    private static string SourceField(string? alias, string column) =>
+        string.IsNullOrWhiteSpace(alias) ? column : $"{alias}.{column}";
+
+    private static (string Alias, string Column) SplitSourceField(string value)
+    {
+        var separator = value.IndexOf('.');
+        return separator < 0 ? (string.Empty, value) : (value[..separator], value[(separator + 1)..]);
+    }
+
     private sealed class ColumnMappingRow
     {
-        public required DatabaseColumnInfo Source { get; init; }
-        public bool Included { get; set; }
+        public string SourceColumn { get; set; } = string.Empty;
         public string DestinationColumn { get; set; } = string.Empty;
+        public SyncFieldDirection Direction { get; set; }
         public bool IsKey { get; set; }
         public ConflictPolicy? ConflictPolicy { get; set; }
         public ValueTransformInput ForwardTransform { get; set; } = new();
@@ -591,7 +932,20 @@ else
         public string Value { get; set; } = string.Empty;
     }
 
+    private sealed class RelatedTableRow
+    {
+        public DatabaseTableInfo? SelectedTable { get; set; }
+        public string Alias { get; set; } = string.Empty;
+        public string JoinExpression { get; set; } = string.Empty;
+        public RelatedTableUsage Usage { get; set; }
+        public bool DetectChanges { get; set; }
+        public string ConditionExpression { get; set; } = string.Empty;
+        public IReadOnlyList<DatabaseColumnInfo> Columns { get; set; } = [];
+    }
+
     private sealed record ColumnPolicyOption(ConflictPolicy? Value, string Text);
     private sealed record WriteDirectionOption(MappingWriteDirection Value, string Text);
+    private sealed record FieldDirectionOption(SyncFieldDirection Value, string Text);
     private sealed record DeletionModeOption(DeletionMode Value, string Text);
+    private sealed record RelatedUsageOption(RelatedTableUsage Value, string Text);
 }

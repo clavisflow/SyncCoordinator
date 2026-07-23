@@ -7,6 +7,7 @@ const CONTRACT_FIELDS = [
   "WorkOrderNumber", "CaseId", "CaseNumber", "CustomerName", "Address", "Phone",
   "ProductName", "ProblemSummary", "ScheduledAt", "TechnicianName", "Status",
   "WorkResult", "CompletedAt",
+  "EstimatedMinutes", "EstimatedCost", "RequiresParts", "WorkNote", "ExternalTrackingId",
 ] as const;
 
 type Row = QueryResultRow & {
@@ -23,6 +24,11 @@ type Row = QueryResultRow & {
   Status: string;
   WorkResult: string | null;
   CompletedAt: Date | string | null;
+  EstimatedMinutes: number | string | null;
+  EstimatedCost: number | string | null;
+  RequiresParts: boolean | string | null;
+  WorkNote: string | null;
+  ExternalTrackingId: string | null;
   OriginSystem: string;
   UpdatedAtUtc: Date | string;
 };
@@ -107,7 +113,9 @@ const selectColumns = `
   customer_display_name AS "CustomerName", service_address AS "Address", contact_phone AS "Phone",
   product_label AS "ProductName", problem_summary AS "ProblemSummary", scheduled_at AS "ScheduledAt",
   technician_name AS "TechnicianName", job_status AS "Status", work_result AS "WorkResult",
-  completed_at AS "CompletedAt", source_code AS "OriginSystem", modified_at AS "UpdatedAtUtc"`;
+  completed_at AS "CompletedAt", estimated_minutes AS "EstimatedMinutes", estimated_cost AS "EstimatedCost",
+  requires_parts AS "RequiresParts", work_note AS "WorkNote", external_tracking_id AS "ExternalTrackingId",
+  source_code AS "OriginSystem", modified_at AS "UpdatedAtUtc"`;
 
 export async function listWorkOrders(): Promise<WorkOrder[]> {
   try {
@@ -139,7 +147,8 @@ export async function findWorkOrder(entityId: string): Promise<WorkOrder | null>
 }
 
 export type WorkOrderUpdate = Pick<WorkOrderPayload,
-  "ScheduledAt" | "TechnicianName" | "Status" | "WorkResult" | "CompletedAt">;
+  "ScheduledAt" | "TechnicianName" | "Status" | "WorkResult" | "CompletedAt" |
+  "EstimatedMinutes" | "EstimatedCost" | "RequiresParts" | "WorkNote" | "ExternalTrackingId">;
 
 export async function updateWorkOrder(entityId: string, update: WorkOrderUpdate): Promise<boolean> {
   const client = await pool().connect();
@@ -153,9 +162,13 @@ export async function updateWorkOrder(entityId: string, update: WorkOrderUpdate)
     const result = await client.query(`
       UPDATE public.work_order
       SET scheduled_at=$1, technician_name=$2, job_status=$3,
-          work_result=$4, completed_at=$5, modified_at=CURRENT_TIMESTAMP
-      WHERE work_order_no=$6`,
-    [update.ScheduledAt, update.TechnicianName, update.Status, update.WorkResult, update.CompletedAt, entityId]);
+          work_result=$4, completed_at=$5, estimated_minutes=$6, estimated_cost=$7,
+          requires_parts=$8, work_note=$9, external_tracking_id=$10,
+          modified_at=CURRENT_TIMESTAMP
+      WHERE work_order_no=$11`,
+    [update.ScheduledAt, update.TechnicianName, update.Status, update.WorkResult, update.CompletedAt,
+      update.EstimatedMinutes, update.EstimatedCost, update.RequiresParts, update.WorkNote,
+      update.ExternalTrackingId, entityId]);
     await client.query("COMMIT");
     return result.rowCount === 1;
   } catch (error) {

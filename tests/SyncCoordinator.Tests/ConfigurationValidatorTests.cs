@@ -121,6 +121,184 @@ public sealed class ConfigurationValidatorTests
     }
 
     [Fact]
+    public void OneWayRuleRejectsReverseFieldDirection()
+    {
+        var input = ValidTableMapping();
+        input.Columns[0].Direction = SyncFieldDirection.Reverse;
+
+        var exception = Assert.Throws<ConfigurationValidationException>(() =>
+            ConfigurationValidator.ValidateTableMapping(input, ValidRoute()));
+
+        Assert.Contains(exception.Errors, x => x.Contains("正方向", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void BidirectionalRuleAllowsSourceOwnedField()
+    {
+        var route = ValidRoute();
+        route.Direction = SyncDirection.Bidirectional;
+        var input = ValidTableMapping();
+        input.Columns[0].Direction = SyncFieldDirection.Bidirectional;
+        input.Columns.Add(new ColumnMappingInput
+        {
+            SourceColumn = "ReceptionName",
+            DestinationColumn = "ReceptionName",
+            Direction = SyncFieldDirection.Forward
+        });
+
+        ConfigurationValidator.ValidateTableMapping(input, route);
+    }
+
+    [Fact]
+    public void RelatedProjectionFieldMustBeForwardOnly()
+    {
+        var route = ValidRoute();
+        route.Direction = SyncDirection.Bidirectional;
+        var input = ValidTableMapping();
+        input.Columns[0].Direction = SyncFieldDirection.Bidirectional;
+        input.RelatedTables.Add(new RelatedTableInput
+        {
+            Schema = "dbo",
+            Table = "Reception",
+            Alias = "reception",
+            JoinExpression = "{source}.ReceptionId = {related}.Id",
+            Usage = RelatedTableUsage.Projection
+        });
+        input.Columns.Add(new ColumnMappingInput
+        {
+            SourceTableAlias = "reception",
+            SourceColumn = "ReceptionName",
+            DestinationColumn = "ReceptionName",
+            Direction = SyncFieldDirection.Bidirectional
+        });
+
+        var exception = Assert.Throws<ConfigurationValidationException>(() =>
+            ConfigurationValidator.ValidateTableMapping(input, route));
+
+        Assert.Contains(exception.Errors, x => x.Contains("片方向", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void EligibilityTableSupportsStaffNumberCondition()
+    {
+        var input = ValidTableMapping();
+        input.RelatedTables.Add(new RelatedTableInput
+        {
+            Schema = "dbo",
+            Table = "WorkRequestStaff",
+            Alias = "staff",
+            JoinExpression = "{source}.Id = {related}.WorkRequestId",
+            Usage = RelatedTableUsage.Eligibility,
+            DetectChanges = true,
+            ConditionExpression = "{related}.StaffNo IS NOT NULL AND {source}.Enabled = 1"
+        });
+
+        ConfigurationValidator.ValidateTableMapping(input, ValidRoute());
+    }
+
+    [Theory]
+    [InlineData("{related}.StaffNo IS NOT NULL; DELETE FROM Staff")]
+    [InlineData("{related}.StaffNo IS NOT NULL -- bypass")]
+    [InlineData("{related}.StaffNo IS NOT NULL /* bypass */")]
+    public void RelatedConditionRejectsMultipleStatementsCommentsAndMutationSql(string expression)
+    {
+        var input = ValidTableMapping();
+        input.RelatedTables.Add(new RelatedTableInput
+        {
+            Schema = "dbo",
+            Table = "WorkRequestStaff",
+            Alias = "staff",
+            JoinExpression = "{source}.Id = {related}.WorkRequestId",
+            Usage = RelatedTableUsage.Eligibility,
+            ConditionExpression = expression
+        });
+
+        var exception = Assert.Throws<ConfigurationValidationException>(() =>
+            ConfigurationValidator.ValidateTableMapping(input, ValidRoute()));
+
+        Assert.Contains(exception.Errors, x => x.Contains("更新系SQL", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("{source}.Id = WorkRequestId")]
+    [InlineData("Id = {related}.WorkRequestId")]
+    public void RelatedJoinRequiresSourceAndRelatedPlaceholders(string expression)
+    {
+        var input = ValidTableMapping();
+        input.RelatedTables.Add(new RelatedTableInput
+        {
+            Schema = "dbo",
+            Table = "WorkRequestStaff",
+            Alias = "staff",
+            JoinExpression = expression,
+            Usage = RelatedTableUsage.Eligibility
+        });
+
+        var exception = Assert.Throws<ConfigurationValidationException>(() =>
+            ConfigurationValidator.ValidateTableMapping(input, ValidRoute()));
+
+        Assert.Contains(exception.Errors, x => x.Contains("両方を参照", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void RelatedExpressionRejectsUnknownPlaceholder()
+    {
+        var input = ValidTableMapping();
+        input.RelatedTables.Add(new RelatedTableInput
+        {
+            Schema = "dbo",
+            Table = "WorkRequestStaff",
+            Alias = "staff",
+            JoinExpression = "{source}.Id = {related}.WorkRequestId",
+            Usage = RelatedTableUsage.Eligibility,
+            ConditionExpression = "{other}.Enabled = 1"
+        });
+
+        var exception = Assert.Throws<ConfigurationValidationException>(() =>
+            ConfigurationValidator.ValidateTableMapping(input, ValidRoute()));
+
+        Assert.Contains(exception.Errors, x => x.Contains("プレースホルダー", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ProjectionTableRequiresAtLeastOneProjectedField()
+    {
+        var input = ValidTableMapping();
+        input.RelatedTables.Add(new RelatedTableInput
+        {
+            Schema = "dbo",
+            Table = "Reception",
+            Alias = "reception",
+            JoinExpression = "{source}.ReceptionId = {related}.Id",
+            Usage = RelatedTableUsage.Projection
+        });
+
+        var exception = Assert.Throws<ConfigurationValidationException>(() =>
+            ConfigurationValidator.ValidateTableMapping(input, ValidRoute()));
+
+        Assert.Contains(exception.Errors, x => x.Contains("同期列を1件以上", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void RelatedTableAliasCannotUseConnectorBaseAlias()
+    {
+        var input = ValidTableMapping();
+        input.RelatedTables.Add(new RelatedTableInput
+        {
+            Schema = "dbo",
+            Table = "WorkRequestStaff",
+            Alias = "sc_base",
+            JoinExpression = "{source}.Id = {related}.WorkRequestId",
+            Usage = RelatedTableUsage.Eligibility
+        });
+
+        var exception = Assert.Throws<ConfigurationValidationException>(() =>
+            ConfigurationValidator.ValidateTableMapping(input, ValidRoute()));
+
+        Assert.Contains(exception.Errors, x => x.Contains("予約名", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void FixedValueCannotOverwriteNormallyMappedColumn()
     {
         var input = ValidTableMapping();

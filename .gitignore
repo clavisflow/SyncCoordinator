@@ -11,3 +11,4 @@ artifacts/
 *.db
 *.bak
 /outputs
+/efbundle.exe

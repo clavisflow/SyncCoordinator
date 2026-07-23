@@ -27,24 +27,29 @@
             <div asp-validation-summary="ModelOnly" class="validation"></div>
             <div class="edit-grid">
                 <div class="form-field"><label asp-for="Input.WorkOrderNumber">作業指示番号</label><input asp-for="Input.WorkOrderNumber" readonly /></div>
-                <div class="form-field"><label asp-for="Input.CaseNumber">ケース番号</label><input asp-for="Input.CaseNumber" readonly /></div>
-                <input asp-for="Input.CaseId" type="hidden" />
+                <div class="form-field"><label asp-for="Input.CaseRef"></label><input asp-for="Input.CaseRef" readonly /></div>
                 <div class="form-field"><label asp-for="Input.Status"></label><select asp-for="Input.Status">@foreach (var status in Model.Statuses) { <option value="@status">@StatusOptions.Label(status) (@status)</option> }</select><span asp-validation-for="Input.Status"></span></div>
                 <div class="form-field"><label asp-for="Input.CompletedAt"></label><input asp-for="Input.CompletedAt" type="datetime-local" /></div>
                 <div class="form-field span-2 response-field demo-focus-field"><label asp-for="Input.WorkResult"></label><textarea asp-for="Input.WorkResult" rows="5" placeholder="Field Serviceから同期された作業結果"></textarea><small>現場の更新内容がこの欄へ戻ります。</small></div>
-                <div class="form-field"><label asp-for="Input.CustomerName">お客様名</label><input asp-for="Input.CustomerName" /></div>
-                <div class="form-field"><label asp-for="Input.Phone"></label><input asp-for="Input.Phone" /></div>
-                <div class="form-field"><label asp-for="Input.ProductName"></label><input asp-for="Input.ProductName" /></div>
+                <div class="form-field"><label asp-for="Input.CustomerName">お客様名（受付から取得）</label><input asp-for="Input.CustomerName" readonly /></div>
+                <div class="form-field"><label asp-for="Input.Phone">電話番号（受付から取得）</label><input asp-for="Input.Phone" readonly /></div>
+                <div class="form-field"><label asp-for="Input.ProductName">製品名（受付から取得）</label><input asp-for="Input.ProductName" readonly /></div>
                 <div class="form-field span-2"><label asp-for="Input.Address"></label><input asp-for="Input.Address" /><span asp-validation-for="Input.Address"></span></div>
                 <div class="form-field"><label asp-for="Input.ScheduledAt"></label><input asp-for="Input.ScheduledAt" type="datetime-local" /></div>
                 <div class="form-field"><label asp-for="Input.TechnicianName"></label><input asp-for="Input.TechnicianName" /></div>
+                <div class="form-field"><label asp-for="Input.StaffNo"></label><input asp-for="Input.StaffNo" placeholder="例: STAFF-001（空欄なら同期対象外）" /><span asp-validation-for="Input.StaffNo"></span><small>保存時に担当割当を置き換えます。現在: @(Model.Input.AssignedStaffNumbers ?? "未割当")</small></div>
+                <div class="form-field"><label asp-for="Input.EstimatedMinutes"></label><input asp-for="Input.EstimatedMinutes" type="number" min="0" /><span asp-validation-for="Input.EstimatedMinutes"></span></div>
+                <div class="form-field"><label asp-for="Input.EstimatedCost"></label><input asp-for="Input.EstimatedCost" type="number" min="0" step="0.0001" /><span asp-validation-for="Input.EstimatedCost"></span></div>
+                <div class="form-field"><label asp-for="Input.RequiresParts"></label><select asp-for="Input.RequiresParts"><option value="">未判定</option><option value="true">必要</option><option value="false">不要</option></select></div>
+                <div class="form-field"><label asp-for="Input.ExternalTrackingId"></label><input asp-for="Input.ExternalTrackingId" /></div>
                 <div class="form-field span-2"><label asp-for="Input.ProblemSummary"></label><textarea asp-for="Input.ProblemSummary" rows="5"></textarea></div>
+                <div class="form-field span-2"><label asp-for="Input.WorkNote"></label><textarea asp-for="Input.WorkNote" rows="4"></textarea><span asp-validation-for="Input.WorkNote"></span></div>
             </div>
             <div class="form-actions"><a class="button button-secondary" asp-page="Index">一覧へ戻る</a><button class="button button-primary" type="submit">変更を保存</button></div>
         </section>
         <aside class="aside-stack">
             <section class="section-card compact-card"><header class="section-header"><h2>同期情報</h2></header><dl class="metadata-list"><div><dt>作成元</dt><dd>@(Model.OriginSystem.Length > 0 ? Model.OriginSystem : "—")</dd></div><div><dt>Entity ID</dt><dd class="mono">@Model.EntityId</dd></div><div><dt>最終更新</dt><dd>@(Model.UpdatedAtUtc == default ? "—" : Model.UpdatedAtUtc.ToLocalTime().ToString("yyyy/MM/dd HH:mm:ss"))</dd></div></dl></section>
-            <section class="notice-box"><h2>双方向同期</h2><p>Field Serviceで入力された担当者、進捗、作業結果もこのレコードへ同期されます。</p></section>
+            <section class="notice-box"><h2>関連テーブル同期</h2><p>受付の顧客情報を結合し、StaffNoがある作業指示だけField Serviceへ同期します。Field側の進捗と作業結果はCRMへ戻ります。</p></section>
         </aside>
     </form>
 }

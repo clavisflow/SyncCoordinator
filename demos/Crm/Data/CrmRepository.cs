@@ -102,28 +102,45 @@ public sealed class CrmRepository(CrmConnectionFactory connectionFactory, ILogge
     {
         EnsureAllowedStatus(payload.Status, StatusOptions.WorkOrders, "作業指示");
         const string sql = """
+            SET XACT_ABORT ON;
+            BEGIN TRANSACTION;
+
             UPDATE dbo.WorkOrder
-            SET CaseId=@CaseId, CaseNumber=@CaseNumber, CustomerName=@CustomerName, Address=@Address,
-                Phone=@Phone, ProductName=@ProductName, ProblemSummary=@ProblemSummary,
+            SET ServiceAddress=@Address, ProblemSummary=@ProblemSummary,
                 ScheduledAt=@ScheduledAt, TechnicianName=@TechnicianName, Status=@Status,
-                WorkResult=@WorkResult, CompletedAt=@CompletedAt, UpdatedAtUtc=SYSUTCDATETIME()
+                WorkResult=@WorkResult, CompletedAt=@CompletedAt,
+                EstimatedMinutes=@EstimatedMinutes, EstimatedCost=@EstimatedCost,
+                RequiresParts=@RequiresParts, WorkNote=@WorkNote,
+                ExternalTrackingId=@ExternalTrackingId, UpdatedAtUtc=SYSUTCDATETIME()
             WHERE WorkOrderNumber=@EntityId;
+
+            DELETE FROM dbo.WorkOrderAssignment WHERE WorkOrderNumber=@EntityId;
+            IF @StaffNo IS NOT NULL
+            BEGIN
+                INSERT dbo.WorkOrderAssignment
+                    (WorkOrderNumber, StaffNo, AssignmentType, AssignedAtUtc, UpdatedAtUtc)
+                VALUES
+                    (@EntityId, @StaffNo, N'Primary', SYSUTCDATETIME(), SYSUTCDATETIME());
+            END;
+
+            COMMIT TRANSACTION;
             """;
         return UpdateAsync(sql, new
         {
             EntityId = entityId,
-            payload.CaseId,
-            payload.CaseNumber,
-            payload.CustomerName,
             payload.Address,
-            payload.Phone,
-            payload.ProductName,
             payload.ProblemSummary,
             ScheduledAt = ParseDateTimeOffset(payload.ScheduledAt),
             payload.TechnicianName,
             payload.Status,
             payload.WorkResult,
-            CompletedAt = ParseDateTimeOffset(payload.CompletedAt)
+            CompletedAt = ParseDateTimeOffset(payload.CompletedAt),
+            payload.EstimatedMinutes,
+            payload.EstimatedCost,
+            payload.RequiresParts,
+            payload.WorkNote,
+            payload.ExternalTrackingId,
+            StaffNo = NullIfWhiteSpace(payload.StaffNo)
         }, cancellationToken);
     }
 
@@ -137,8 +154,7 @@ public sealed class CrmRepository(CrmConnectionFactory connectionFactory, ILogge
         var payload = new WorkOrderPayload
         {
             WorkOrderNumber = entityId,
-            CaseId = supportCase.EntityId,
-            CaseNumber = supportCase.Payload.CaseNumber,
+            CaseRef = supportCase.EntityId,
             CustomerName = supportCase.Payload.CustomerName,
             Address = input.Address,
             Phone = supportCase.Payload.Phone,
@@ -148,36 +164,59 @@ public sealed class CrmRepository(CrmConnectionFactory connectionFactory, ILogge
             TechnicianName = input.TechnicianName,
             Status = input.Status,
             WorkResult = null,
-            CompletedAt = null
+            CompletedAt = null,
+            EstimatedMinutes = input.EstimatedMinutes,
+            EstimatedCost = input.EstimatedCost,
+            RequiresParts = input.RequiresParts,
+            WorkNote = input.WorkNote,
+            ExternalTrackingId = input.ExternalTrackingId ?? Guid.NewGuid(),
+            StaffNo = input.StaffNo
         };
 
         const string sql = """
+            SET XACT_ABORT ON;
+            BEGIN TRANSACTION;
+
             INSERT dbo.WorkOrder
-                (WorkOrderNumber, CaseId, CaseNumber, CustomerName, Address, Phone, ProductName,
-                 ProblemSummary, ScheduledAt, TechnicianName, Status, WorkResult, CompletedAt,
+                (WorkOrderNumber, CaseRef, ServiceAddress, ProblemSummary, ScheduledAt, TechnicianName,
+                 Status, WorkResult, CompletedAt, EstimatedMinutes, EstimatedCost, RequiresParts,
+                 WorkNote, ExternalTrackingId,
                  OriginSystem, UpdatedAtUtc)
             VALUES
-                (@WorkOrderNumber, @CaseId, @CaseNumber, @CustomerName, @Address, @Phone, @ProductName,
-                 @ProblemSummary, @ScheduledAt, @TechnicianName, @Status, @WorkResult, @CompletedAt,
+                (@WorkOrderNumber, @CaseRef, @Address, @ProblemSummary, @ScheduledAt, @TechnicianName,
+                 @Status, @WorkResult, @CompletedAt, @EstimatedMinutes, @EstimatedCost, @RequiresParts,
+                 @WorkNote, @ExternalTrackingId,
                  N'CRM', SYSUTCDATETIME());
+
+            IF @StaffNo IS NOT NULL
+            BEGIN
+                INSERT dbo.WorkOrderAssignment
+                    (WorkOrderNumber, StaffNo, AssignmentType, AssignedAtUtc, UpdatedAtUtc)
+                VALUES
+                    (@WorkOrderNumber, @StaffNo, N'Primary', SYSUTCDATETIME(), SYSUTCDATETIME());
+            END;
+
+            COMMIT TRANSACTION;
             """;
         await ExecuteAsync(async connection =>
         {
             await connection.ExecuteAsync(new CommandDefinition(sql, new
             {
                 payload.WorkOrderNumber,
-                payload.CaseId,
-                payload.CaseNumber,
-                payload.CustomerName,
+                payload.CaseRef,
                 payload.Address,
-                payload.Phone,
-                payload.ProductName,
                 payload.ProblemSummary,
                 ScheduledAt = ParseDateTimeOffset(payload.ScheduledAt),
                 payload.TechnicianName,
                 payload.Status,
                 payload.WorkResult,
-                CompletedAt = ParseDateTimeOffset(payload.CompletedAt)
+                CompletedAt = ParseDateTimeOffset(payload.CompletedAt),
+                payload.EstimatedMinutes,
+                payload.EstimatedCost,
+                payload.RequiresParts,
+                payload.WorkNote,
+                payload.ExternalTrackingId,
+                StaffNo = NullIfWhiteSpace(payload.StaffNo)
             }, cancellationToken: cancellationToken));
             return true;
         }, cancellationToken);
@@ -291,6 +330,9 @@ public sealed class CrmRepository(CrmConnectionFactory connectionFactory, ILogge
         throw new CrmDataException("日時の形式が正しくありません。");
     }
 
+    private static string? NullIfWhiteSpace(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
     private const string SupportCaseSelectSql = """
         SELECT s.CaseRef AS EntityId, s.SourceCode AS OriginSystem, s.ModifiedAtUtc AS UpdatedAtUtc,
                (SELECT s.CaseRef AS CaseNumber, s.ContactName AS CustomerName,
@@ -304,11 +346,29 @@ public sealed class CrmRepository(CrmConnectionFactory connectionFactory, ILogge
 
     private const string WorkOrderSelectSql = """
         SELECT w.WorkOrderNumber AS EntityId, w.OriginSystem, w.UpdatedAtUtc,
-               (SELECT w.WorkOrderNumber, w.CaseId, w.CaseNumber, w.CustomerName, w.Address,
-                       w.Phone, w.ProductName, w.ProblemSummary, w.ScheduledAt,
-                       w.TechnicianName, w.Status, w.WorkResult, w.CompletedAt
+               (SELECT w.WorkOrderNumber, w.CaseRef,
+                       s.ContactName AS CustomerName, s.ContactPhone AS Phone, s.ProductLabel AS ProductName,
+                       w.ServiceAddress AS Address, w.ProblemSummary, w.ScheduledAt,
+                       w.TechnicianName, primary_assignment.StaffNo,
+                       assignments.AssignedStaffNumbers, w.Status, w.WorkResult, w.CompletedAt,
+                       w.EstimatedMinutes, w.EstimatedCost, w.RequiresParts, w.WorkNote,
+                       w.ExternalTrackingId
                 FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES) AS PayloadJson
         FROM dbo.WorkOrder AS w
+        INNER JOIN dbo.SupportCase AS s ON s.CaseRef = w.CaseRef
+        OUTER APPLY
+        (
+            SELECT TOP (1) a.StaffNo
+            FROM dbo.WorkOrderAssignment AS a
+            WHERE a.WorkOrderNumber = w.WorkOrderNumber AND a.StaffNo IS NOT NULL
+            ORDER BY CASE WHEN a.AssignmentType = N'Primary' THEN 0 ELSE 1 END, a.AssignmentId
+        ) AS primary_assignment
+        OUTER APPLY
+        (
+            SELECT STRING_AGG(a.StaffNo, N', ') AS AssignedStaffNumbers
+            FROM dbo.WorkOrderAssignment AS a
+            WHERE a.WorkOrderNumber = w.WorkOrderNumber AND a.StaffNo IS NOT NULL
+        ) AS assignments
         """;
 
     private sealed record DashboardRow(

@@ -139,6 +139,102 @@ public sealed class PortalToCrmTests
                 TimeSpan.FromSeconds(90),
                 cancellationToken);
 
+            var eligibilityWorkOrderNumber = $"E2E-ELIGIBILITY-{Guid.NewGuid():N}";
+            const string eligibilityProblem = "Verify related-table eligibility changes";
+            var unassignedMessageId = await InsertUnassignedCrmWorkOrderAsync(
+                crmConnection,
+                eligibilityWorkOrderNumber,
+                caseNumber,
+                eligibilityProblem,
+                cancellationToken);
+            await WaitForInboxCompletionAsync(
+                coordinatorConnection,
+                unassignedMessageId,
+                "FIELD",
+                TimeSpan.FromSeconds(90),
+                cancellationToken);
+            Assert.Null(await ReadFieldWorkOrderAsync(
+                fieldConnection,
+                eligibilityWorkOrderNumber,
+                cancellationToken));
+
+            var emptyAssignmentMessageId = await InsertCrmWorkOrderAssignmentAsync(
+                crmConnection,
+                eligibilityWorkOrderNumber,
+                staffNumber: null,
+                cancellationToken);
+            await WaitForInboxCompletionAsync(
+                coordinatorConnection,
+                emptyAssignmentMessageId,
+                "FIELD",
+                TimeSpan.FromSeconds(90),
+                cancellationToken);
+            Assert.Null(await ReadFieldWorkOrderAsync(
+                fieldConnection,
+                eligibilityWorkOrderNumber,
+                cancellationToken));
+
+            var eligibleMessageId = await UpdateCrmWorkOrderAssignmentAsync(
+                crmConnection,
+                eligibilityWorkOrderNumber,
+                "E2E-STAFF-ELIGIBLE",
+                cancellationToken);
+            var eligibleFieldWorkOrder = await WaitForFieldWorkOrderAsync(
+                fieldConnection,
+                eligibilityWorkOrderNumber,
+                TimeSpan.FromSeconds(90),
+                cancellationToken);
+            Assert.Equal(expectedCustomer, eligibleFieldWorkOrder.CustomerDisplayName);
+            Assert.Equal(eligibilityProblem, eligibleFieldWorkOrder.ProblemSummary);
+            await WaitForInboxCompletionAsync(
+                coordinatorConnection,
+                eligibleMessageId,
+                "FIELD",
+                TimeSpan.FromSeconds(90),
+                cancellationToken);
+
+            const string projectedCustomer = "E2E Related Projection Customer";
+            var projectionChangeMessageId = await UpdateCrmCaseContactNameAsync(
+                crmConnection,
+                caseNumber,
+                eligibilityWorkOrderNumber,
+                projectedCustomer,
+                cancellationToken);
+            var projectedFieldWorkOrder = await WaitForFieldWorkOrderCustomerAsync(
+                fieldConnection,
+                eligibilityWorkOrderNumber,
+                projectedCustomer,
+                TimeSpan.FromSeconds(90),
+                cancellationToken);
+            Assert.Equal(eligibilityProblem, projectedFieldWorkOrder.ProblemSummary);
+            await WaitForInboxCompletionAsync(
+                coordinatorConnection,
+                projectionChangeMessageId,
+                "FIELD",
+                TimeSpan.FromSeconds(90),
+                cancellationToken);
+
+            var eligibilityRemovalMessageId = await UpdateCrmWorkOrderAssignmentAsync(
+                crmConnection,
+                eligibilityWorkOrderNumber,
+                staffNumber: null,
+                cancellationToken);
+            await WaitForInboxCompletionAsync(
+                coordinatorConnection,
+                eligibilityRemovalMessageId,
+                "FIELD",
+                TimeSpan.FromSeconds(90),
+                cancellationToken);
+            await WaitForFieldWorkOrderDeletionAsync(
+                fieldConnection,
+                eligibilityWorkOrderNumber,
+                TimeSpan.FromSeconds(90),
+                cancellationToken);
+            Assert.NotNull(await ReadCrmWorkOrderAsync(
+                crmConnection,
+                eligibilityWorkOrderNumber,
+                cancellationToken));
+
             var workOrderNumber = $"E2E-WO-{Guid.NewGuid():N}";
             const string expectedWorkOrderCustomer = "E2E Field Customer";
             const string expectedProblemSummary = "Verify mapped status codes";
@@ -214,7 +310,36 @@ public sealed class PortalToCrmTests
 
             var recoveryWorkOrderNumber = $"E2E-RECOVERY-{Guid.NewGuid():N}";
             const string recoveryCustomer = "E2E Recovery Customer";
+            const string recoveryInitialProblem = "Before destination connection failure";
             const string recoveryProblem = "Recover after destination connection failure";
+            var recoverySeedMessageId = await InsertCrmWorkOrderAsync(
+                crmConnection,
+                recoveryWorkOrderNumber,
+                caseNumber,
+                recoveryCustomer,
+                recoveryInitialProblem,
+                cancellationToken);
+            await WaitForInboxCompletionAsync(
+                coordinatorConnection,
+                recoverySeedMessageId,
+                "FIELD",
+                TimeSpan.FromSeconds(90),
+                cancellationToken);
+            var recoverySeed = await WaitForFieldWorkOrderAsync(
+                fieldConnection,
+                recoveryWorkOrderNumber,
+                TimeSpan.FromSeconds(90),
+                cancellationToken);
+            Assert.Equal(recoveryInitialProblem, recoverySeed.ProblemSummary);
+
+            await WaitForSourceQueuesQuiescentAsync(
+                coordinatorConnection,
+                portalConnection,
+                crmConnection,
+                fieldConnection,
+                TimeSpan.FromSeconds(30),
+                cancellationToken);
+
             var isolatedCaseNumber = $"E2E-ISOLATION-{Guid.NewGuid():N}";
             const string isolatedCustomer = "E2E Isolated Source Customer";
             const string isolatedSubject = "Continue after another source fails";
@@ -238,11 +363,9 @@ public sealed class PortalToCrmTests
                     cancellationToken);
                 Assert.Contains("Npgsql", pollingFailure, StringComparison.OrdinalIgnoreCase);
 
-                recoveryMessageId = await InsertCrmWorkOrderAsync(
+                recoveryMessageId = await UpdateCrmWorkOrderProblemAsync(
                     crmConnection,
                     recoveryWorkOrderNumber,
-                    caseNumber,
-                    recoveryCustomer,
                     recoveryProblem,
                     cancellationToken);
                 var isolatedMessageId = await InsertPortalCaseAsync(
@@ -262,10 +385,10 @@ public sealed class PortalToCrmTests
                 failedAttemptCount = failedInbox.AttemptCount;
                 Assert.NotNull(failedInbox.LastError);
                 Assert.Contains("Npgsql", failedInbox.LastError, StringComparison.OrdinalIgnoreCase);
-                Assert.Null(await ReadFieldWorkOrderAsync(
+                Assert.Equal(recoveryInitialProblem, (await ReadFieldWorkOrderAsync(
                     fieldConnection,
                     recoveryWorkOrderNumber,
-                    cancellationToken));
+                    cancellationToken))?.ProblemSummary);
 
                 await WaitForInboxCompletionAsync(
                     coordinatorConnection,
@@ -311,9 +434,10 @@ public sealed class PortalToCrmTests
                 cancellationToken);
             Assert.True(recoveredInbox.AttemptCount > failedAttemptCount);
             Assert.Null(recoveredInbox.LastError);
-            var recoveredWorkOrder = await WaitForFieldWorkOrderAsync(
+            var recoveredWorkOrder = await WaitForFieldWorkOrderProblemAsync(
                 fieldConnection,
                 recoveryWorkOrderNumber,
+                recoveryProblem,
                 TimeSpan.FromSeconds(90),
                 cancellationToken);
             Assert.Equal(recoveryCustomer, recoveredWorkOrder.CustomerDisplayName);
@@ -673,6 +797,61 @@ public sealed class PortalToCrmTests
                 retryEventId,
                 expectedAttemptCount: 2,
                 TimeSpan.FromSeconds(90),
+                cancellationToken);
+
+        }
+        finally
+        {
+            TryDeleteKeyRingDirectory(keyRingPath);
+        }
+    }
+
+    [E2EFact]
+    public async Task MappingAndDatabaseSetupUiSupportsRelatedTableEditing()
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+        var cancellationToken = timeout.Token;
+        var keyRingPath = CreateKeyRingDirectory();
+
+        try
+        {
+            await using var builder = await DistributedApplicationTestingBuilder
+                .CreateAsync<Projects.SyncCoordinator_AppHost>(
+                    ["RunMode=E2E", $"E2E:KeyRingPath={keyRingPath}"],
+                    cancellationToken);
+            await using var app = await builder.BuildAsync(cancellationToken);
+            await app.StartAsync(cancellationToken);
+            await Task.WhenAll(
+                app.ResourceNotifications.WaitForResourceHealthyAsync(
+                    "coordinator-web",
+                    WaitBehavior.StopOnResourceUnavailable,
+                    cancellationToken),
+                app.ResourceNotifications.WaitForResourceHealthyAsync(
+                    "coordinator-worker",
+                    WaitBehavior.StopOnResourceUnavailable,
+                    cancellationToken));
+
+            using var webClient = app.CreateHttpClient("coordinator-web", "http");
+            await WaitForWebReadyAsync(webClient, cancellationToken);
+            var webEndpoint = app.GetEndpoint("coordinator-web", "http");
+            await BrowserAuthenticationSmoke.VerifyAsync(webEndpoint, cancellationToken);
+
+            var coordinatorConnection = RequireConnectionString(
+                await app.GetConnectionStringAsync("coordinator-db", cancellationToken),
+                "coordinator-db");
+            await PrepareDemoRoutesAsync(
+                coordinatorConnection,
+                keyRingPath,
+                ["CRM - Field Service"],
+                cancellationToken);
+            var routeId = await ReadRouteIdAsync(
+                coordinatorConnection,
+                "CRM - Field Service",
+                cancellationToken);
+
+            await BrowserAuthenticationSmoke.VerifyMappingAndDatabaseSetupAsync(
+                webEndpoint,
+                routeId,
                 cancellationToken);
         }
         finally
@@ -1278,6 +1457,150 @@ public sealed class PortalToCrmTests
             reader.IsDBNull(1) ? null : reader.GetString(1));
     }
 
+    private static async Task<Guid> InsertUnassignedCrmWorkOrderAsync(
+        string connectionString,
+        string workOrderNumber,
+        string caseNumber,
+        string problemSummary,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            INSERT dbo.WorkOrder
+                (WorkOrderNumber, CaseRef, ServiceAddress, ProblemSummary, ScheduledAt,
+                 TechnicianName, Status, WorkResult, CompletedAt, EstimatedMinutes, EstimatedCost,
+                 RequiresParts, WorkNote, ExternalTrackingId,
+                 OriginSystem, UpdatedAtUtc)
+            VALUES
+                (@workOrderNumber, @caseNumber, N'E2E Eligibility Address', @problemSummary,
+                 DATEADD(day, 1, SYSUTCDATETIME()), NULL, N'InProgress', NULL, NULL,
+                 60, 8000.0000, 0, N'E2E eligibility synchronization', NEWID(),
+                 N'CRM', SYSUTCDATETIME());
+            """;
+
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@workOrderNumber", workOrderNumber);
+        command.Parameters.AddWithValue("@caseNumber", caseNumber);
+        command.Parameters.AddWithValue("@problemSummary", problemSummary);
+        Assert.Equal(1, await command.ExecuteNonQueryAsync(cancellationToken));
+        return await ReadLatestCrmMessageIdAsync(
+            connection,
+            "WorkOrder",
+            workOrderNumber,
+            "Upsert",
+            cancellationToken);
+    }
+
+    private static async Task<Guid> InsertCrmWorkOrderAssignmentAsync(
+        string connectionString,
+        string workOrderNumber,
+        string? staffNumber,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            INSERT dbo.WorkOrderAssignment
+                (WorkOrderNumber, StaffNo, AssignmentType, AssignedAtUtc, UpdatedAtUtc)
+            VALUES
+                (@workOrderNumber, @staffNumber, N'Primary', SYSUTCDATETIME(), SYSUTCDATETIME());
+            """;
+
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@workOrderNumber", workOrderNumber);
+        command.Parameters.AddWithValue("@staffNumber", (object?)staffNumber ?? DBNull.Value);
+        Assert.Equal(1, await command.ExecuteNonQueryAsync(cancellationToken));
+        return await ReadLatestCrmMessageIdAsync(
+            connection,
+            "WorkOrder",
+            workOrderNumber,
+            "Upsert",
+            cancellationToken);
+    }
+
+    private static async Task<Guid> UpdateCrmWorkOrderAssignmentAsync(
+        string connectionString,
+        string workOrderNumber,
+        string? staffNumber,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE dbo.WorkOrderAssignment
+            SET StaffNo = @staffNumber,
+                UpdatedAtUtc = SYSUTCDATETIME()
+            WHERE WorkOrderNumber = @workOrderNumber;
+            """;
+
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@workOrderNumber", workOrderNumber);
+        command.Parameters.AddWithValue("@staffNumber", (object?)staffNumber ?? DBNull.Value);
+        Assert.Equal(1, await command.ExecuteNonQueryAsync(cancellationToken));
+        return await ReadLatestCrmMessageIdAsync(
+            connection,
+            "WorkOrder",
+            workOrderNumber,
+            "Upsert",
+            cancellationToken);
+    }
+
+    private static async Task<Guid> UpdateCrmWorkOrderProblemAsync(
+        string connectionString,
+        string workOrderNumber,
+        string problemSummary,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE dbo.WorkOrder
+            SET ProblemSummary = @problemSummary,
+                UpdatedAtUtc = SYSUTCDATETIME()
+            WHERE WorkOrderNumber = @workOrderNumber;
+            """;
+
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@workOrderNumber", workOrderNumber);
+        command.Parameters.AddWithValue("@problemSummary", problemSummary);
+        Assert.Equal(1, await command.ExecuteNonQueryAsync(cancellationToken));
+        return await ReadLatestCrmMessageIdAsync(
+            connection,
+            "WorkOrder",
+            workOrderNumber,
+            "Upsert",
+            cancellationToken);
+    }
+
+    private static async Task<Guid> UpdateCrmCaseContactNameAsync(
+        string connectionString,
+        string caseNumber,
+        string workOrderNumber,
+        string customerName,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE dbo.SupportCase
+            SET ContactName = @customerName,
+                ModifiedAtUtc = SYSUTCDATETIME()
+            WHERE CaseRef = @caseNumber;
+            """;
+
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@caseNumber", caseNumber);
+        command.Parameters.AddWithValue("@customerName", customerName);
+        Assert.Equal(1, await command.ExecuteNonQueryAsync(cancellationToken));
+        return await ReadLatestCrmMessageIdAsync(
+            connection,
+            "WorkOrder",
+            workOrderNumber,
+            "Upsert",
+            cancellationToken);
+    }
+
     private static async Task<Guid> InsertCrmWorkOrderAsync(
         string connectionString,
         string workOrderNumber,
@@ -1287,14 +1610,30 @@ public sealed class PortalToCrmTests
         CancellationToken cancellationToken)
     {
         const string sql = """
+            SET XACT_ABORT ON;
+            BEGIN TRANSACTION;
+
+            UPDATE dbo.SupportCase
+            SET ContactName = @customerName, ModifiedAtUtc = SYSUTCDATETIME()
+            WHERE CaseRef = @caseNumber;
+
             INSERT dbo.WorkOrder
-                (WorkOrderNumber, CaseId, CaseNumber, CustomerName, Address, Phone, ProductName,
-                 ProblemSummary, ScheduledAt, TechnicianName, Status, WorkResult, CompletedAt,
+                (WorkOrderNumber, CaseRef, ServiceAddress, ProblemSummary, ScheduledAt,
+                 TechnicianName, Status, WorkResult, CompletedAt, EstimatedMinutes, EstimatedCost,
+                 RequiresParts, WorkNote, ExternalTrackingId,
                  OriginSystem, UpdatedAtUtc)
             VALUES
-                (@workOrderNumber, @caseNumber, @caseNumber, @customerName, N'E2E Address',
-                 N'090-0000-0000', N'E2E Product', @problemSummary, DATEADD(day, 1, SYSUTCDATETIME()),
-                 NULL, N'InProgress', NULL, NULL, N'CRM', SYSUTCDATETIME());
+                (@workOrderNumber, @caseNumber, N'E2E Address', @problemSummary,
+                 DATEADD(day, 1, SYSUTCDATETIME()), NULL, N'InProgress', NULL, NULL,
+                 90, 12500.0000, 0, N'E2E related-table synchronization', NEWID(),
+                 N'CRM', SYSUTCDATETIME());
+
+            INSERT dbo.WorkOrderAssignment
+                (WorkOrderNumber, StaffNo, AssignmentType, AssignedAtUtc, UpdatedAtUtc)
+            VALUES
+                (@workOrderNumber, N'E2E-STAFF-001', N'Primary', SYSUTCDATETIME(), SYSUTCDATETIME());
+
+            COMMIT TRANSACTION;
             """;
 
         await using var connection = new SqlConnection(connectionString);
@@ -1304,7 +1643,7 @@ public sealed class PortalToCrmTests
         command.Parameters.AddWithValue("@caseNumber", caseNumber);
         command.Parameters.AddWithValue("@customerName", customerName);
         command.Parameters.AddWithValue("@problemSummary", problemSummary);
-        Assert.Equal(1, await command.ExecuteNonQueryAsync(cancellationToken));
+        Assert.Equal(3, await command.ExecuteNonQueryAsync(cancellationToken));
         return await ReadLatestCrmMessageIdAsync(
             connection,
             "WorkOrder",
@@ -1337,6 +1676,87 @@ public sealed class PortalToCrmTests
         throw new TimeoutException(
             $"Field Service did not receive work order '{workOrderNumber}' within " +
             $"{waitTimeout.TotalSeconds:N0} seconds.");
+    }
+
+    private static async Task<FieldWorkOrder> WaitForFieldWorkOrderCustomerAsync(
+        string connectionString,
+        string workOrderNumber,
+        string expectedCustomer,
+        TimeSpan waitTimeout,
+        CancellationToken cancellationToken)
+    {
+        var deadline = TimeProvider.System.GetUtcNow() + waitTimeout;
+        FieldWorkOrder? lastSeen = null;
+        while (TimeProvider.System.GetUtcNow() < deadline)
+        {
+            lastSeen = await ReadFieldWorkOrderAsync(
+                connectionString,
+                workOrderNumber,
+                cancellationToken);
+            if (lastSeen?.CustomerDisplayName == expectedCustomer)
+            {
+                return lastSeen;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
+        }
+
+        throw new TimeoutException(
+            $"Field Service did not receive projected customer '{expectedCustomer}' for " +
+            $"'{workOrderNumber}' within {waitTimeout.TotalSeconds:N0} seconds. Last seen: {lastSeen}.");
+    }
+
+    private static async Task<FieldWorkOrder> WaitForFieldWorkOrderProblemAsync(
+        string connectionString,
+        string workOrderNumber,
+        string expectedProblem,
+        TimeSpan waitTimeout,
+        CancellationToken cancellationToken)
+    {
+        var deadline = TimeProvider.System.GetUtcNow() + waitTimeout;
+        FieldWorkOrder? lastSeen = null;
+        while (TimeProvider.System.GetUtcNow() < deadline)
+        {
+            lastSeen = await ReadFieldWorkOrderAsync(
+                connectionString,
+                workOrderNumber,
+                cancellationToken);
+            if (lastSeen?.ProblemSummary == expectedProblem)
+            {
+                return lastSeen;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
+        }
+
+        throw new TimeoutException(
+            $"Field Service did not receive problem '{expectedProblem}' for '{workOrderNumber}' within " +
+            $"{waitTimeout.TotalSeconds:N0} seconds. Last seen: {lastSeen}.");
+    }
+
+    private static async Task WaitForFieldWorkOrderDeletionAsync(
+        string connectionString,
+        string workOrderNumber,
+        TimeSpan waitTimeout,
+        CancellationToken cancellationToken)
+    {
+        var deadline = TimeProvider.System.GetUtcNow() + waitTimeout;
+        while (TimeProvider.System.GetUtcNow() < deadline)
+        {
+            if (await ReadFieldWorkOrderAsync(
+                    connectionString,
+                    workOrderNumber,
+                    cancellationToken) is null)
+            {
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
+        }
+
+        throw new TimeoutException(
+            $"Field Service work order '{workOrderNumber}' was not deleted within " +
+            $"{waitTimeout.TotalSeconds:N0} seconds after it became ineligible.");
     }
 
     private static async Task<FieldWorkOrder?> ReadFieldWorkOrderAsync(
@@ -1799,6 +2219,79 @@ public sealed class PortalToCrmTests
         return value is null or DBNull
             ? 0
             : Convert.ToInt64(value, CultureInfo.InvariantCulture);
+    }
+
+    private static async Task WaitForSourceQueuesQuiescentAsync(
+        string coordinatorConnection,
+        string portalConnection,
+        string crmConnection,
+        string fieldConnection,
+        TimeSpan waitTimeout,
+        CancellationToken cancellationToken)
+    {
+        var deadline = TimeProvider.System.GetUtcNow() + waitTimeout;
+        (long Portal, long Crm, long Field)? previous = null;
+        while (TimeProvider.System.GetUtcNow() < deadline)
+        {
+            var current = (
+                Portal: await ReadPortalMaxQueueIdAsync(portalConnection, cancellationToken),
+                Crm: await ReadCrmMaxQueueIdAsync(crmConnection, cancellationToken),
+                Field: await ReadFieldMaxQueueIdAsync(fieldConnection, cancellationToken));
+            var checkpoints = (
+                Portal: await ReadCheckpointAsync(coordinatorConnection, "PORTAL", cancellationToken),
+                Crm: await ReadCheckpointAsync(coordinatorConnection, "CRM", cancellationToken),
+                Field: await ReadCheckpointAsync(coordinatorConnection, "FIELD", cancellationToken));
+
+            if (previous == current &&
+                checkpoints.Portal >= current.Portal &&
+                checkpoints.Crm >= current.Crm &&
+                checkpoints.Field >= current.Field)
+            {
+                return;
+            }
+
+            previous = current;
+            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+        }
+
+        throw new TimeoutException(
+            $"Source queues did not become quiescent within {waitTimeout.TotalSeconds:N0} seconds.");
+    }
+
+    private static async Task<long> ReadPortalMaxQueueIdAsync(
+        string connectionString,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = new MySqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new MySqlCommand(
+            "SELECT COALESCE(MAX(QueueId), 0) FROM SyncChangeQueue;",
+            connection);
+        return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture);
+    }
+
+    private static async Task<long> ReadCrmMaxQueueIdAsync(
+        string connectionString,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new SqlCommand(
+            "SELECT COALESCE(MAX(QueueId), 0) FROM dbo.SyncChangeQueue;",
+            connection);
+        return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture);
+    }
+
+    private static async Task<long> ReadFieldMaxQueueIdAsync(
+        string connectionString,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new NpgsqlCommand(
+            "SELECT COALESCE(MAX(\"QueueId\"), 0) FROM public.\"SyncChangeQueue\";",
+            connection);
+        return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture);
     }
 
     private static async Task WaitForCheckpointAsync(

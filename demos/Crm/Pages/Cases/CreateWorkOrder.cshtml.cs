@@ -31,7 +31,11 @@ public sealed class CreateWorkOrderModel(CrmRepository repository) : PageModel
                 ProblemSummary = SupportCase.Payload.Description,
                 ScheduledAt = SuggestedVisitTime(SupportCase.Payload.PreferredVisitDate),
                 TechnicianName = null,
-                Status = "Draft"
+                StaffNo = null,
+                Status = "Draft",
+                EstimatedMinutes = 60,
+                EstimatedCost = 10000m,
+                RequiresParts = null
             };
             return Page();
         }

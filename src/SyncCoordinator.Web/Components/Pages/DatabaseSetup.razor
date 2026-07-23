@@ -30,7 +30,7 @@ else if (plan is null)
 }
 else if (plan is not null)
 {
-    <div class="content-stack">
+    <div class="content-stack" data-testid="database-setup-page">
         <div class="info-note deployment-warning deployment-review" role="note">
             <div class="deployment-review-heading">
                 <RadzenIcon Icon="warning_amber" />
@@ -45,10 +45,16 @@ else if (plan is not null)
 
         @foreach (var item in targets)
         {
-            <RadzenCard class="deployment-target" @key="item.Target.SystemCode">
+            <div data-testid="deployment-target" data-system-code="@item.Target.SystemCode" @key="item.Target.SystemCode">
+            <RadzenCard class="deployment-target">
                 <div class="panel-title">
                     <div><h2>@item.Target.SystemName</h2><span>@Display(item.Target.DirectionLabel) ・ @item.Target.Provider ・ @item.Target.DatabaseName</span></div>
-                    <a class="deployment-download" href="@DownloadUrl(item.Target)" download>@L["DatabaseSetup_DownloadSql"]</a>
+                    <div class="deployment-target-actions">
+                        <strong class="deployment-verification-status @TargetStatusClass(item.Target.Status)" role="status" data-testid="deployment-target-status">
+                            @TargetStatusText(item.Target.Status)
+                        </strong>
+                        <a class="deployment-download" href="@DownloadUrl(item.Target)" download>@L["DatabaseSetup_DownloadSql"]</a>
+                    </div>
                 </div>
 
                 <div class="deployment-preview-list">
@@ -76,6 +82,7 @@ else if (plan is not null)
                     <RadzenButton Text="@(applyingSystem == item.Target.SystemCode ? L["DatabaseSetup_Applying"] : L["DatabaseSetup_ApplyDatabase"])" Icon="database" ButtonStyle="ButtonStyle.Danger" Disabled="@(!CanApply(item))" Click="@(() => ApplyAsync(item))" />
                 </div>
             </RadzenCard>
+            </div>
         }
 
         <RadzenCard class="deployment-final-verification">
@@ -143,10 +150,12 @@ else if (plan is not null)
                 CancellationToken.None);
             if (result.Success)
             {
+                item.Target = item.Target with { Status = DatabaseDeploymentTargetStatus.Applied };
                 NotificationService.ShowSuccess(Display(result.Message), L["DatabaseSetup_ApplyComplete"]);
             }
             else
             {
+                item.Target = item.Target with { Status = DatabaseDeploymentTargetStatus.NotApplied };
                 NotificationService.ShowError([Display(result.Message)], L["DatabaseSetup_ApplyFailed"]);
             }
             item.Confirmed = false;
@@ -176,6 +185,10 @@ else if (plan is not null)
             plan = plan! with { State = result.State, Enabled = result.Enabled };
             if (result.Success)
             {
+                foreach (var item in targets)
+                {
+                    item.Target = item.Target with { Status = DatabaseDeploymentTargetStatus.Applied };
+                }
                 NotificationService.ShowSuccess(Display(result.Message), L["DatabaseSetup_VerifyComplete"]);
             }
             else
@@ -211,11 +224,26 @@ else if (plan is not null)
     private string Display(DisplayText text) =>
         L[text.ResourceKey, text.Arguments.Select(value => (object)value).ToArray()];
 
+    private string TargetStatusText(DatabaseDeploymentTargetStatus status) => status switch
+    {
+        DatabaseDeploymentTargetStatus.Applied => L["DatabaseSetup_TargetApplied"],
+        DatabaseDeploymentTargetStatus.NotApplied => L["DatabaseSetup_TargetNotApplied"],
+        DatabaseDeploymentTargetStatus.Unavailable => L["DatabaseSetup_TargetUnavailable"],
+        _ => L["DatabaseSetup_TargetUnknown"]
+    };
+
+    private static string TargetStatusClass(DatabaseDeploymentTargetStatus status) => status switch
+    {
+        DatabaseDeploymentTargetStatus.Applied => "verified",
+        DatabaseDeploymentTargetStatus.NotApplied => "unverified",
+        _ => "unavailable"
+    };
+
     private void BackToList() => Navigation.NavigateTo("/routes");
 
     private sealed class TargetInput(DatabaseDeploymentTarget target)
     {
-        public DatabaseDeploymentTarget Target { get; } = target;
+        public DatabaseDeploymentTarget Target { get; set; } = target;
         public string DatabaseNameConfirmation { get; set; } = string.Empty;
         public bool Confirmed { get; set; }
     }

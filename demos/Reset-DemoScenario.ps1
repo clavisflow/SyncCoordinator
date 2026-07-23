@@ -116,7 +116,7 @@ if ($updatedRows -ne '1') {
 $deleteWorkOrdersSql = @"
 SET NOCOUNT ON;
 DELETE FROM dbo.WorkOrder
-WHERE CaseNumber = N'$caseNumber' OR CaseId = N'$caseNumber';
+WHERE CaseRef = N'$caseNumber';
 SELECT @@ROWCOUNT;
 "@
 $deletedWorkOrders = Invoke-SqlServer -Container $sqlServerContainer -Sql $deleteWorkOrdersSql
@@ -133,7 +133,7 @@ SELECT CONCAT(
     '|',
     CASE WHEN AgentReply IS NULL THEN 'NULL' ELSE 'VALUE' END,
     '|',
-    (SELECT COUNT(*) FROM dbo.WorkOrder WHERE CaseNumber = N'$caseNumber' OR CaseId = N'$caseNumber'))
+    (SELECT COUNT(*) FROM dbo.WorkOrder WHERE CaseRef = N'$caseNumber'))
 FROM dbo.SupportCase
 WHERE CaseRef = N'$caseNumber';
 "@

@@ -1,4 +1,5 @@
 using SyncCoordinator.Contracts;
+using SyncCoordinator.Core;
 using SyncCoordinator.Infrastructure.Persistence;
 
 namespace SyncCoordinator.Tests;
@@ -106,6 +107,50 @@ public sealed class DatabaseDeploymentSqlTests
         Assert.Contains("[DeletedFlag]", sql, StringComparison.Ordinal);
         Assert.Contains("SyncDeleteTombstone", sql, StringComparison.Ordinal);
         Assert.Contains("'Delete'", sql, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SqlServerRelatedTriggerFansOutToBaseEntityKeys()
+    {
+        var related = new RouteRelatedTableEntity
+        {
+            Id = Guid.NewGuid(),
+            TableMappingId = Guid.NewGuid(),
+            Schema = "sales",
+            Table = "Reception",
+            Alias = "reception",
+            JoinExpression = "{source}.ReceptionId = {related}.Id",
+            Usage = RelatedTableUsage.Projection,
+            DetectChanges = true
+        };
+
+        var sql = DatabaseDeploymentService.BuildSqlServerRelatedTrigger(
+            "rule:test", "sales", "WorkRequest", [Column("WorkRequestId")], related, "TR_SC_Related");
+
+        Assert.Contains("ON [sales].[Reception]", sql, StringComparison.Ordinal);
+        Assert.Contains("INNER JOIN inserted AS i", sql, StringComparison.Ordinal);
+        Assert.Contains("INNER JOIN deleted AS d", sql, StringComparison.Ordinal);
+        Assert.Contains("FROM [sales].[WorkRequest] AS b", sql, StringComparison.Ordinal);
+        Assert.Contains("[b].ReceptionId = [i].Id", sql, StringComparison.Ordinal);
+        Assert.Contains("[b].ReceptionId = [d].Id", sql, StringComparison.Ordinal);
+        Assert.Contains("b.[WorkRequestId]", sql, StringComparison.Ordinal);
+        Assert.Contains("dbo.SyncChangeQueue", sql, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SqlServerRelatedTriggerCleanupDropsOnlyTriggersOwnedByRoute()
+    {
+        var routeId = Guid.Parse("11111111-2222-3333-4444-555555555555");
+
+        var retained = "TR_SC_X_11111111222233334444555555555555_0";
+
+        var sql = DatabaseDeploymentService.BuildSqlServerRelatedTriggerCleanup(routeId, [retained]);
+
+        Assert.Contains("TR_SC_X_11111111222233334444555555555555_", sql, StringComparison.Ordinal);
+        Assert.Contains("FROM sys.triggers", sql, StringComparison.Ordinal);
+        Assert.Contains("DROP TRIGGER", sql, StringComparison.Ordinal);
+        Assert.Contains("LEFT(name", sql, StringComparison.Ordinal);
+        Assert.Contains($"name NOT IN (N'{retained}')", sql, StringComparison.Ordinal);
     }
 
     [Fact]

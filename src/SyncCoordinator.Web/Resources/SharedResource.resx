@@ -117,7 +117,7 @@
   <data name="NotFound_Description" xml:space="preserve"><value>指定されたURLを確認してください。</value></data>
   <data name="NotFound_Back" xml:space="preserve"><value>概要へ戻る</value></data>
   <data name="Common_Action"><value>操作</value></data><data name="Common_BackToList"><value>一覧へ戻る</value></data>
-  <data name="Common_Bidirectional"><value>双方向</value></data><data name="Common_Cancel"><value>キャンセル</value></data>
+  <data name="Common_Bidirectional"><value>双方向</value></data><data name="Common_Cancel"><value>キャンセル</value></data><data name="Common_CollapseSection"><value>セクションを折りたたむ</value></data><data name="Common_ExpandSection"><value>セクションを展開する</value></data>
   <data name="Common_ChangedAt"><value>変更日時</value></data><data name="Common_Clear"><value>クリア</value></data>
   <data name="Common_Configured"><value>設定済み</value></data><data name="Common_Count"><value>{0} 件</value></data>
   <data name="Common_DatabaseDeployment"><value>DB反映</value></data><data name="Common_DatabaseStatus"><value>DB状態</value></data><data name="Common_DbPrepared"><value>DB構成検証済み</value></data>
@@ -216,6 +216,7 @@
   <data name="DatabaseSetup_PageTitle"><value>業務DBへ反映 | SyncCoordinator</value></data><data name="DatabaseSetup_Title"><value>業務DBへ反映</value></data><data name="DatabaseSetup_BackToRule"><value>同期ルールへ戻る</value></data>
   <data name="DatabaseSetup_Loading"><value>反映内容を作成しています…</value></data><data name="DatabaseSetup_Empty"><value>反映内容を表示できません。</value></data>
   <data name="DatabaseSetup_DbPreparation"><value>DB構成の検証</value></data><data name="DatabaseSetup_Verified"><value>検証済み</value></data><data name="DatabaseSetup_Unverified"><value>未検証</value></data>
+  <data name="DatabaseSetup_TargetApplied"><value>反映済み</value></data><data name="DatabaseSetup_TargetNotApplied"><value>未反映</value></data><data name="DatabaseSetup_TargetUnavailable"><value>確認できません</value></data><data name="DatabaseSetup_TargetUnknown"><value>未確認</value></data>
   <data name="DatabaseSetup_Verifying"><value>検証中…</value></data><data name="DatabaseSetup_VerifyAll"><value>すべてのDB構成を検証</value></data>
   <data name="DatabaseSetup_VerifyAgain"><value>DB構成を再検証</value></data>
   <data name="DatabaseSetup_VerifyHelp"><value>同期に必要なテーブルとトリガーが、すべての対象DBに反映されているか検証します。</value></data>
@@ -231,18 +232,27 @@
   <data name="DatabaseSetup_RuleEnabled"><value>ルールを有効化しました</value></data><data name="DatabaseSetup_RuleDisabled"><value>ルールを無効化しました</value></data>
   <data name="Mappings_PageTitle"><value>テーブルマッピング | SyncCoordinator</value></data><data name="Mappings_Title"><value>テーブルマッピング</value></data>
   <data name="Mappings_Description"><value>同期ルールごとに業務DBのテーブル・列・キーを対応付け、列別の採用方針、固定値、削除方法を設定します。保存だけでは業務DBの構造を変更しません。</value></data>
-  <data name="Mappings_Registered"><value>登録済みマッピング</value></data><data name="Mappings_Empty"><value>登録済みのマッピングはありません。</value></data>
-  <data name="Mappings_SourceTable"><value>同期元テーブル</value></data><data name="Mappings_DestinationTable"><value>同期先テーブル</value></data><data name="Mappings_ColumnCount"><value>列数</value></data>
   <data name="Mappings_Edit"><value>マッピング編集</value></data><data name="Mappings_EditHelp"><value>データベース接続が設定済みのシステムだけを参照できます。</value></data>
   <data name="Mappings_SelectRule"><value>ルールを選択</value></data><data name="Mappings_LoadingTables"><value>テーブル一覧を読み込んでいます…</value></data>
   <data name="Mappings_SourceTableFor"><value>同期元テーブル（{0}）</value></data><data name="Mappings_DestinationTableFor"><value>同期先テーブル（{0}）</value></data><data name="Mappings_SelectTable"><value>テーブルを選択</value></data>
   <data name="Mappings_LoadingColumns"><value>列一覧を読み込んでいます…</value></data><data name="Mappings_ColumnsAndPolicies"><value>同期対象とコンフリクトポリシー</value></data>
-  <data name="Mappings_ColumnsHelp"><value>チェックした列だけを保存します。列ごとの指定がない場合はルール既定を使用します。</value></data><data name="Mappings_SelectedColumns"><value>{0} / {1} 列</value></data>
+  <data name="Mappings_ColumnsHelp"><value>同期項目を追加し、両システムの列と項目ごとの方向を設定します。同期先だけに必要な列は固定値として追加できます。</value></data><data name="Mappings_SelectedColumns"><value>{0} / {1} 列</value></data>
   <data name="Mappings_FilterColumns"><value>列名で検索</value></data>
   <data name="Mappings_ShowUnmappedOnly"><value>未設定のみ</value></data>
   <data name="Mappings_NoMatchingColumns"><value>条件に一致する列はありません。</value></data>
   <data name="Mappings_SourceColumn"><value>同期元列</value></data><data name="Mappings_DestinationColumn"><value>同期先列</value></data><data name="Mappings_Key"><value>キー</value></data><data name="Mappings_OnConflict"><value>コンフリクト時</value></data>
+  <data name="Mappings_FieldDirection"><value>項目方向</value></data><data name="Mappings_FieldForward"><value>送信元 → 送信先</value></data><data name="Mappings_FieldReverse"><value>送信先 → 送信元</value></data><data name="Mappings_FieldBidirectional"><value>双方向</value></data>
   <data name="Mappings_SelectDestinationColumn"><value>同期先列を選択</value></data><data name="Mappings_FixedValues"><value>書き込み時の固定値（任意）</value></data>
+  <data name="Mappings_SelectSourceColumn"><value>同期元列を選択</value></data><data name="Mappings_AddSyncField"><value>同期項目を追加</value></data>
+  <data name="Mappings_RelatedTables"><value>関連テーブル</value></data><data name="Mappings_RelatedTablesHelp"><value>同期元テーブルへ直接結合するテーブルを設定します。「同期項目として使用」は関連テーブルの列を同期項目に追加し、「同期対象の判定のみ」は条件に一致する行の有無で同期対象を判定します。関連テーブルの変更を同期のきっかけにすると、関連テーブルだけが変更された場合にも同期元レコードを読み直します。</value></data>
+  <data name="Mappings_AddRelatedTable"><value>関連テーブルを追加</value></data><data name="Mappings_RelatedTable"><value>関連テーブル</value></data><data name="Mappings_RelatedAlias"><value>識別名</value></data><data name="Mappings_RelatedUsage"><value>用途</value></data>
+  <data name="Mappings_RelatedUsageProjection"><value>同期項目として使用</value></data><data name="Mappings_RelatedUsageEligibility"><value>同期対象の判定のみ</value></data>
+  <data name="Mappings_JoinExpression"><value>結合式</value></data><data name="Mappings_JoinExpressionPlaceholder"><value>例: {source}.WorkOrderNumber = {related}.WorkOrderNumber</value></data><data name="Mappings_JoinExpressionHelp"><value>{source} と {related} の両方を参照してください。Triggerの性能を保つため、索引のある列同士の等価結合を基本にしてください。</value></data>
+  <data name="Mappings_ConditionExpression"><value>条件式（任意）</value></data><data name="Mappings_ConditionExpressionPlaceholder"><value>例: {related}.StaffNo IS NOT NULL AND {related}.IsDraft = 0</value></data><data name="Mappings_ConditionExpressionHelp"><value>{related} は関連テーブル、{source} は同期元テーブルです。DBで有効な1つの条件式を入力します。</value></data>
+  <data name="Mappings_DetectRelatedChanges"><value>関連テーブルの変更を同期のきっかけにする</value></data>
+  <data name="Mappings_MoveUp"><value>上へ移動</value></data><data name="Mappings_MoveDown"><value>下へ移動</value></data>
+  <data name="Mappings_ConfirmRelatedFieldsTitle"><value>同期項目の削除確認</value></data><data name="Mappings_ConfirmEligibilityRemovesFields"><value>用途を「同期対象の判定のみ」に変更すると、関連テーブル「{0}」の列を使用している同期項目 {1} 件が削除されます。続行しますか？</value></data>
+  <data name="Mappings_ConfirmRelatedTableRemovesFields"><value>関連テーブル「{0}」を削除すると、このテーブルの列を使用している同期項目 {1} 件も削除されます。続行しますか？</value></data><data name="Mappings_ChangeAndRemove"><value>変更して削除</value></data><data name="Mappings_DeleteAndRemove"><value>削除する</value></data>
   <data name="Mappings_AddFixedValue"><value>固定値を追加</value></data>
   <data name="Mappings_ApplyDirection"><value>適用方向</value></data><data name="Mappings_TargetColumn"><value>書き込み先列</value></data><data name="Mappings_FixedValue"><value>固定値</value></data>
   <data name="Mappings_SelectColumn"><value>列を選択</value></data><data name="Mappings_FixedValueExample"><value>例: SYNC_COORDINATOR、0</value></data>

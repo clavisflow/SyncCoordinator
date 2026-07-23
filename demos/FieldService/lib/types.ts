@@ -23,6 +23,11 @@ export type WorkOrderPayload = {
   Status: string | null;
   WorkResult: string | null;
   CompletedAt: string | null;
+  EstimatedMinutes: string | null;
+  EstimatedCost: string | null;
+  RequiresParts: string | null;
+  WorkNote: string | null;
+  ExternalTrackingId: string | null;
 };
 
 export type WorkOrder = {

@@ -1,6 +1,6 @@
 # Field Service (Next.js + PostgreSQL)
 
-訪問担当者向けのデモアプリです。Next.js App RouterのServer Components / Server Actionsから、lower_snake_case列を持つPostgreSQLの`public.work_order`を読み書きします。画面内のモデル名は共通payload名へaliasし、CRMとは異なる小文字の状態コードを使用します。
+訪問担当者向けのデモアプリです。Next.js App RouterのServer Components / Server Actionsから、lower_snake_case列を持つPostgreSQLの`public.work_order`を読み書きします。CRMで正規化された受付・作業指示を1行へ非正規化して受け取り、文字列、整数、小数、真偽値、日時、NULL、UUIDと小文字の状態コードを確認できます。
 
 ## Runtime
 

@@ -32,6 +32,7 @@ internal sealed class RelationalMappingProvider(CoordinatorDbContext dbContext)
             .Include(route => route.DestinationSystem)
             .Include(route => route.TableMapping).ThenInclude(mapping => mapping!.Columns)
             .Include(route => route.TableMapping).ThenInclude(mapping => mapping!.FixedValues)
+            .Include(route => route.TableMapping).ThenInclude(mapping => mapping!.RelatedTables)
             .Where(route =>
                 ((route.Enabled && route.DeploymentState == DatabaseDeploymentState.Prepared) ||
                  includeMappingMaintenance && route.MappingMaintenanceStartedAtUtc != null) &&
@@ -85,10 +86,13 @@ internal sealed class RelationalMappingProvider(CoordinatorDbContext dbContext)
         }
 
         var columns = tableMapping.Columns
-            .OrderBy(column => column.SourceColumn, StringComparer.Ordinal)
+            .OrderBy(CanonicalFieldName, StringComparer.Ordinal)
             .Select(column => new RelationalColumnBinding(
-                column.SourceColumn,
+                CanonicalFieldName(column),
                 isSource ? column.SourceColumn : column.DestinationColumn,
+                isSource && !string.IsNullOrWhiteSpace(column.SourceTableAlias)
+                    ? column.SourceTableAlias
+                    : null,
                 column.IsKey,
                 isSource ? SourceContract(column) : DestinationContract(column)))
             .ToArray();
@@ -113,7 +117,12 @@ internal sealed class RelationalMappingProvider(CoordinatorDbContext dbContext)
             isSource ? tableMapping.SourceSchema : tableMapping.DestinationSchema,
             isSource ? tableMapping.SourceTable : tableMapping.DestinationTable,
             columns,
-            fixedValues);
+            fixedValues,
+            isSource
+                ? tableMapping.RelatedTables.OrderBy(x => x.Alias).Select(x => new RelationalRelatedTable(
+                    x.Schema, x.Table, x.Alias, x.JoinExpression, x.Usage,
+                    x.ConditionExpression)).ToArray()
+                : []);
     }
 
     private static ColumnValueContract SourceContract(RouteColumnMappingEntity column) => new(
@@ -136,11 +145,17 @@ internal sealed class RelationalMappingProvider(CoordinatorDbContext dbContext)
         value.TargetMaxLength,
         value.TargetNumericPrecision,
         value.TargetNumericScale);
+
+    private static string CanonicalFieldName(RouteColumnMappingEntity column) =>
+        string.IsNullOrWhiteSpace(column.SourceTableAlias)
+            ? column.SourceColumn
+            : $"{column.SourceTableAlias}.{column.SourceColumn}";
 }
 
 internal sealed record RelationalColumnBinding(
     string PayloadField,
     string PhysicalColumn,
+    string? TableAlias,
     bool IsKey,
     ColumnValueContract Contract);
 
@@ -149,12 +164,21 @@ internal sealed record RelationalFixedValue(
     string Value,
     ColumnValueContract Contract);
 
+internal sealed record RelationalRelatedTable(
+    string Schema,
+    string Table,
+    string Alias,
+    string JoinExpression,
+    RelatedTableUsage Usage,
+    string? ConditionExpression);
+
 internal sealed record RelationalEntityMapping(
     string EntityType,
     string Schema,
     string Table,
     IReadOnlyList<RelationalColumnBinding> Columns,
-    IReadOnlyList<RelationalFixedValue> FixedValues)
+    IReadOnlyList<RelationalFixedValue> FixedValues,
+    IReadOnlyList<RelationalRelatedTable> RelatedTables)
 {
     public IReadOnlyList<RelationalColumnBinding> Keys => Columns.Where(column => column.IsKey).ToArray();
 
@@ -162,5 +186,6 @@ internal sealed record RelationalEntityMapping(
         string.Equals(Schema, other.Schema, StringComparison.OrdinalIgnoreCase) &&
         string.Equals(Table, other.Table, StringComparison.OrdinalIgnoreCase) &&
         Columns.SequenceEqual(other.Columns) &&
-        FixedValues.SequenceEqual(other.FixedValues);
+        FixedValues.SequenceEqual(other.FixedValues) &&
+        RelatedTables.SequenceEqual(other.RelatedTables);
 }

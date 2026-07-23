@@ -12,6 +12,7 @@ public sealed class CoordinatorDbContext(DbContextOptions<CoordinatorDbContext> 
     public DbSet<RouteTableMappingEntity> RouteTableMappings => Set<RouteTableMappingEntity>();
     public DbSet<RouteColumnMappingEntity> RouteColumnMappings => Set<RouteColumnMappingEntity>();
     public DbSet<RouteFixedValueMappingEntity> RouteFixedValueMappings => Set<RouteFixedValueMappingEntity>();
+    public DbSet<RouteRelatedTableEntity> RouteRelatedTables => Set<RouteRelatedTableEntity>();
     public DbSet<InboxMessageEntity> InboxMessages => Set<InboxMessageEntity>();
     public DbSet<QueueCheckpointEntity> QueueCheckpoints => Set<QueueCheckpointEntity>();
     public DbSet<SyncSnapshotEntity> SyncSnapshots => Set<SyncSnapshotEntity>();
@@ -89,16 +90,32 @@ public sealed class CoordinatorDbContext(DbContextOptions<CoordinatorDbContext> 
         {
             entity.ToTable("RouteColumnMapping");
             entity.HasKey(x => x.Id);
-            entity.HasIndex(x => new { x.TableMappingId, x.SourceColumn }).IsUnique();
+            entity.HasIndex(x => new { x.TableMappingId, x.SourceTableAlias, x.SourceColumn }).IsUnique();
             entity.HasIndex(x => new { x.TableMappingId, x.DestinationColumn }).IsUnique();
             entity.Property(x => x.SourceColumn).HasMaxLength(128);
+            entity.Property(x => x.SourceTableAlias).HasMaxLength(128);
             entity.Property(x => x.DestinationColumn).HasMaxLength(128);
+            entity.Property(x => x.Direction).HasConversion<string>().HasMaxLength(16);
             entity.Property(x => x.ConflictPolicy).HasConversion<string>().HasMaxLength(40);
             entity.Property(x => x.SourceDataType).HasMaxLength(64);
             entity.Property(x => x.DestinationDataType).HasMaxLength(64);
             entity.Property(x => x.ForwardTransformJson).HasColumnType("nvarchar(max)");
             entity.Property(x => x.ReverseTransformJson).HasColumnType("nvarchar(max)");
             entity.HasOne(x => x.TableMapping).WithMany(x => x.Columns).HasForeignKey(x => x.TableMappingId);
+        });
+
+        modelBuilder.Entity<RouteRelatedTableEntity>(entity =>
+        {
+            entity.ToTable("RouteRelatedTable");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => new { x.TableMappingId, x.Alias }).IsUnique();
+            entity.Property(x => x.Schema).HasMaxLength(128);
+            entity.Property(x => x.Table).HasMaxLength(128);
+            entity.Property(x => x.Alias).HasMaxLength(128);
+            entity.Property(x => x.JoinExpression).HasMaxLength(4000);
+            entity.Property(x => x.Usage).HasConversion<string>().HasMaxLength(16);
+            entity.Property(x => x.ConditionExpression).HasMaxLength(4000);
+            entity.HasOne(x => x.TableMapping).WithMany(x => x.RelatedTables).HasForeignKey(x => x.TableMappingId);
         });
 
         modelBuilder.Entity<RouteFixedValueMappingEntity>(entity =>

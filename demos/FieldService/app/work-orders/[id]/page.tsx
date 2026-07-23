@@ -50,6 +50,11 @@ export default async function WorkOrderDetailsPage({ params, searchParams }: {
         <section className="detail-card"><h2>修理内容</h2><dl>
           <div><dt>製品</dt><dd>{order.payload.ProductName ?? "未設定"}</dd></div>
           <div><dt>症状・依頼内容</dt><dd>{order.payload.ProblemSummary ?? "未設定"}</dd></div>
+          <div><dt>見積作業時間</dt><dd>{order.payload.EstimatedMinutes ? `${order.payload.EstimatedMinutes}分` : "未設定"}</dd></div>
+          <div><dt>見積金額</dt><dd>{order.payload.EstimatedCost ?? "未設定"}</dd></div>
+          <div><dt>部品要否</dt><dd>{order.payload.RequiresParts === "true" ? "必要" : order.payload.RequiresParts === "false" ? "不要" : "未判定"}</dd></div>
+          <div><dt>作業メモ</dt><dd className="preserve-lines">{order.payload.WorkNote ?? "未入力"}</dd></div>
+          <div><dt>外部追跡ID</dt><dd>{order.payload.ExternalTrackingId ?? "未設定"}</dd></div>
         </dl></section>
       </div>
       <p className="sync-note">最終更新 {displayDateTime(order.updatedAtUtc)}　連携元 {order.originSystem}</p>

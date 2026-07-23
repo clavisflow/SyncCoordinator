@@ -89,6 +89,157 @@ internal static class BrowserAuthenticationSmoke
             });
     }
 
+    public static async Task VerifyMappingAndDatabaseSetupAsync(
+        Uri webEndpoint,
+        Guid routeId,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        using var playwright = await WaitWithDelayedCleanupAsync(
+            Playwright.CreateAsync(),
+            static value =>
+            {
+                value.Dispose();
+                return ValueTask.CompletedTask;
+            },
+            "Playwright driver creation",
+            cancellationToken);
+        await using var browser = await WaitWithDelayedCleanupAsync(
+            playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
+            {
+                Headless = true,
+                Timeout = 30_000
+            }),
+            static value => value.DisposeAsync(),
+            "Chromium launch",
+            cancellationToken);
+        using var cancellationRegistration = cancellationToken.Register(
+            () => _ = CloseBrowserAfterCancellationAsync(browser));
+
+        await RunWithDiagnosticsAsync(
+            browser,
+            webEndpoint,
+            "mapping-and-database-setup",
+            async page =>
+            {
+                var pageErrors = CapturePageErrors(page);
+                await LoginAndNavigateAsync(page, $"/routes/{routeId:D}/database-setup");
+
+                var databaseSetupPage = page.GetByTestId("database-setup-page");
+                await databaseSetupPage.WaitForAsync();
+                var targets = page.GetByTestId("deployment-target");
+                Assert.Equal(2, await targets.CountAsync());
+                for (var index = 0; index < await targets.CountAsync(); index++)
+                {
+                    Assert.Equal(
+                        "反映済み",
+                        (await targets.Nth(index)
+                            .GetByTestId("deployment-target-status")
+                            .InnerTextAsync()).Trim());
+                }
+
+                await page.GotoAsync($"/routes/{routeId:D}/mappings");
+                var mappingsPage = page.GetByTestId("mappings-page");
+                await mappingsPage.WaitForAsync();
+
+                var relatedToggle = page.GetByTestId("related-tables-toggle");
+                var relatedPanels = page.GetByTestId("related-table-panel");
+                await relatedPanels.First.WaitForAsync(new LocatorWaitForOptions
+                {
+                    State = WaitForSelectorState.Visible,
+                    Timeout = 60_000
+                });
+                await relatedToggle.ClickAsync();
+                await relatedPanels.First.WaitForAsync(new LocatorWaitForOptions
+                {
+                    State = WaitForSelectorState.Detached
+                });
+                await relatedToggle.ClickAsync();
+
+                var projectionPanel = page.Locator(
+                    "[data-testid='related-table-panel'][data-related-alias='case_info']");
+                await projectionPanel.WaitForAsync();
+
+                await projectionPanel.Locator(".related-table-usage .rz-dropdown").ClickAsync();
+                await page.GetByRole(AriaRole.Listbox)
+                    .GetByText("同期対象の判定のみ", new LocatorGetByTextOptions { Exact = true })
+                    .ClickAsync();
+                var usageDialog = page.Locator(".rz-dialog");
+                await usageDialog.WaitForAsync();
+                Assert.Contains("同期項目", await usageDialog.InnerTextAsync(), StringComparison.Ordinal);
+                await usageDialog.GetByRole(
+                    AriaRole.Button,
+                    new LocatorGetByRoleOptions { Name = "キャンセル", Exact = true })
+                    .ClickAsync();
+                Assert.True(await projectionPanel.IsVisibleAsync());
+
+                await projectionPanel.Locator(".related-table-delete").ClickAsync();
+                var deleteDialog = page.Locator(".rz-dialog");
+                await deleteDialog.WaitForAsync();
+                Assert.Contains("削除", await deleteDialog.InnerTextAsync(), StringComparison.Ordinal);
+                await deleteDialog.GetByRole(
+                    AriaRole.Button,
+                    new LocatorGetByRoleOptions { Name = "キャンセル", Exact = true })
+                    .ClickAsync();
+                Assert.True(await projectionPanel.IsVisibleAsync());
+
+                const string renamedAlias = "case_info_e2e";
+                var aliasInput = projectionPanel.Locator(".related-table-alias input");
+                await aliasInput.FillAsync(renamedAlias);
+                await aliasInput.PressAsync("Tab");
+                projectionPanel = page.Locator(
+                    $"[data-testid='related-table-panel'][data-related-alias='{renamedAlias}']");
+                await projectionPanel.WaitForAsync();
+                Assert.True(await page.Locator(
+                    $"[data-testid='column-mapping-item'][data-source-column^='{renamedAlias}.']")
+                    .CountAsync() > 0);
+
+                var columnItems = page.GetByTestId("column-mapping-item");
+                Assert.True(await columnItems.CountAsync() > 1);
+                var originalFirst = await columnItems.Nth(0).GetAttributeAsync("data-source-column");
+                var originalSecond = await columnItems.Nth(1).GetAttributeAsync("data-source-column");
+                Assert.False(string.IsNullOrWhiteSpace(originalFirst));
+                Assert.False(string.IsNullOrWhiteSpace(originalSecond));
+                await columnItems.Nth(0).GetByRole(
+                        AriaRole.Button,
+                        new LocatorGetByRoleOptions { Name = "下へ移動", Exact = true })
+                    .ClickAsync();
+                await Assertions.Expect(page.GetByTestId("column-mapping-item").Nth(0))
+                    .ToHaveAttributeAsync("data-source-column", originalSecond!);
+
+                await page.Locator(".page-actions button").ClickAsync();
+                await page.GetByText(
+                        "マッピングを安全に保存し、同期を停止しました。必要に応じてDB反映・検証を行い、ルールを有効化してください。",
+                        new PageGetByTextOptions { Exact = true })
+                    .WaitForAsync();
+
+                await page.ReloadAsync();
+                await page.GetByTestId("mappings-page").WaitForAsync();
+                await page.Locator(
+                        $"[data-testid='related-table-panel'][data-related-alias='{renamedAlias}']")
+                    .WaitForAsync();
+                await Assertions.Expect(page.GetByTestId("column-mapping-item").Nth(0))
+                    .ToHaveAttributeAsync("data-source-column", originalSecond!);
+                Assert.Empty(pageErrors);
+            });
+    }
+
+    private static async Task LoginAndNavigateAsync(IPage page, string path)
+    {
+        await page.GotoAsync(path);
+        if (!string.Equals(new Uri(page.Url).AbsolutePath, "/login", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        await FillStableAsync(
+            page,
+            (page.Locator("#login-user"), "admin"),
+            (page.Locator("#login-password"), AdminPassword));
+        await page.GetByTestId("login-submit").ClickAsync();
+        await page.WaitForURLAsync($"**{path}");
+    }
+
     private static async Task RunWithDiagnosticsAsync(
         IBrowser browser,
         Uri webEndpoint,

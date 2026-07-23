@@ -14,7 +14,7 @@ namespace SyncCoordinator.Tests;
 public sealed class DemoPayloadContractTests
 {
     [Fact]
-    public void DemoConflictScenariosUseSevenDistinctRecordKeys()
+    public void DemoConflictScenariosUseDistinctRecordKeys()
     {
         string[] recordKeys =
         [
@@ -24,10 +24,17 @@ public sealed class DemoPayloadContractTests
             DemoConflictSeeder.DeleteThenUpdateEntityId,
             DemoConflictSeeder.ResolvedEntityId,
             DemoConflictSeeder.DateConflictEntityId,
-            DemoConflictSeeder.DateTimeConflictEntityId
+            DemoConflictSeeder.DateTimeConflictEntityId,
+            DemoConflictSeeder.TextConflictEntityId,
+            DemoConflictSeeder.IntegerConflictEntityId,
+            DemoConflictSeeder.DecimalConflictEntityId,
+            DemoConflictSeeder.BooleanConflictEntityId,
+            DemoConflictSeeder.NullConflictEntityId,
+            DemoConflictSeeder.StatusConflictEntityId,
+            DemoConflictSeeder.GuidConflictEntityId
         ];
 
-        Assert.Equal(7, recordKeys.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(14, recordKeys.Distinct(StringComparer.Ordinal).Count());
         Assert.Equal("CASE-UPDATE-1001", DemoConflictSeeder.EntityId);
         Assert.Equal("CASE-DELETE-1001", DemoConflictSeeder.DeleteEntityId);
         Assert.Equal("CASE-UPDATE-THEN-DELETE-1001", DemoConflictSeeder.UpdateThenDeleteEntityId);
@@ -66,6 +73,20 @@ public sealed class DemoPayloadContractTests
                 Assert.Equal("work_order", route.TableMapping.DestinationTable);
                 Assert.Contains(route.TableMapping.Columns, column => column.DestinationColumn.Contains('_'));
                 Assert.Contains(route.TableMapping.Columns, column => column.ForwardTransformJson is not null);
+                Assert.Collection(
+                    route.TableMapping.RelatedTables.OrderBy(x => x.Alias),
+                    assignment =>
+                    {
+                        Assert.Equal("assignment", assignment.Alias);
+                        Assert.Equal(RelatedTableUsage.Eligibility, assignment.Usage);
+                        Assert.Equal("{related}.StaffNo IS NOT NULL", assignment.ConditionExpression);
+                    },
+                    supportCase =>
+                    {
+                        Assert.Equal("case_info", supportCase.Alias);
+                        Assert.Equal(RelatedTableUsage.Projection, supportCase.Usage);
+                        Assert.True(supportCase.DetectChanges);
+                    });
             });
     }
 
@@ -137,9 +158,45 @@ public sealed class DemoPayloadContractTests
         var conflict = Assert.Single(resolution.Conflicts);
         Assert.True(resolution.IsHeld);
         Assert.Equal("ScheduledAt", conflict.FieldName);
-        Assert.Equal("2026-07-22T10:00:00+09:00", conflict.BaseValue!.GetValue<string>());
-        Assert.Equal("2026-07-22T14:00:00+09:00", conflict.IncomingValue!.GetValue<string>());
-        Assert.Equal("2026-07-22T11:30:00+09:00", conflict.CurrentValue!.GetValue<string>());
+        Assert.Equal("2026-07-27T12:00:00+09:00", conflict.BaseValue!.GetValue<string>());
+        Assert.Equal("2026-07-27T14:00:00+09:00", conflict.IncomingValue!.GetValue<string>());
+        Assert.Equal("2026-07-27T11:30:00+09:00", conflict.CurrentValue!.GetValue<string>());
+    }
+
+    [Fact]
+    public void DemoWorkOrderScenariosCoverDifferentConflictTypes()
+    {
+        var route = DemoRoute(DemoConflictSeeder.WorkOrderEntityType);
+        var scenarios = new[]
+        {
+            ("ProblemSummary", DemoConflictSeeder.CreateWorkOrderConflictScenario("TEXT", "ProblemSummary",
+                System.Text.Json.Nodes.JsonValue.Create("base"), System.Text.Json.Nodes.JsonValue.Create("crm"), System.Text.Json.Nodes.JsonValue.Create("field"))),
+            ("EstimatedMinutes", DemoConflictSeeder.CreateWorkOrderConflictScenario("INT", "EstimatedMinutes",
+                System.Text.Json.Nodes.JsonValue.Create(60m), System.Text.Json.Nodes.JsonValue.Create(90m), System.Text.Json.Nodes.JsonValue.Create(120m))),
+            ("EstimatedCost", DemoConflictSeeder.CreateWorkOrderConflictScenario("DECIMAL", "EstimatedCost",
+                System.Text.Json.Nodes.JsonValue.Create(100m), System.Text.Json.Nodes.JsonValue.Create(125.25m), System.Text.Json.Nodes.JsonValue.Create(140.75m))),
+            ("RequiresParts", DemoConflictSeeder.CreateWorkOrderConflictScenario("BOOL", "RequiresParts",
+                null, System.Text.Json.Nodes.JsonValue.Create(true), System.Text.Json.Nodes.JsonValue.Create(false))),
+            ("WorkNote", DemoConflictSeeder.CreateWorkOrderConflictScenario("NULL", "WorkNote",
+                System.Text.Json.Nodes.JsonValue.Create("base"), null, System.Text.Json.Nodes.JsonValue.Create("field"))),
+            ("Status", DemoConflictSeeder.CreateWorkOrderConflictScenario("STATUS", "Status",
+                System.Text.Json.Nodes.JsonValue.Create("Scheduled"), System.Text.Json.Nodes.JsonValue.Create("InProgress"), System.Text.Json.Nodes.JsonValue.Create("Completed"))),
+            ("ExternalTrackingId", DemoConflictSeeder.CreateWorkOrderConflictScenario("GUID", "ExternalTrackingId",
+                System.Text.Json.Nodes.JsonValue.Create("11111111-1111-1111-1111-111111111111"),
+                System.Text.Json.Nodes.JsonValue.Create("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
+                System.Text.Json.Nodes.JsonValue.Create("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")))
+        };
+
+        foreach (var (fieldName, scenario) in scenarios)
+        {
+            var baseline = new SyncSnapshot(route.Id, route.DestinationSystem, route.EntityType, "demo",
+                scenario.Baseline, scenario.Baseline);
+            var resolution = new ConflictResolver(new NoOpConflictValueMerger()).Resolve(
+                route.EntityType, baseline, scenario.Incoming, scenario.Current, route);
+
+            Assert.True(resolution.IsHeld);
+            Assert.Equal(fieldName, Assert.Single(resolution.Conflicts).FieldName);
+        }
     }
 
     [Fact]
@@ -201,13 +258,11 @@ public sealed class DemoPayloadContractTests
     }
 
     [Fact]
-    public void CrmAndNextFieldServiceWorkOrderFieldsMatch()
+    public void CrmAndNextFieldServiceExposeTheTypedWorkOrderFields()
     {
-        string[] expected =
+        string[] typedFields =
         [
-            "WorkOrderNumber", "CaseId", "CaseNumber", "CustomerName", "Address", "Phone",
-            "ProductName", "ProblemSummary", "ScheduledAt", "TechnicianName", "Status",
-            "WorkResult", "CompletedAt"
+            "EstimatedMinutes", "EstimatedCost", "RequiresParts", "WorkNote", "ExternalTrackingId"
         ];
 
         var fieldServiceFields = ContractFieldsFromSource(
@@ -215,8 +270,10 @@ public sealed class DemoPayloadContractTests
             "const CONTRACT_FIELDS = [",
             "] as const;");
 
-        Assert.Equal(expected.Order(), PropertyNames<CrmWorkOrder>());
-        Assert.Equal(expected.Order(), fieldServiceFields.Order());
+        Assert.All(typedFields, field => Assert.Contains(field, PropertyNames<CrmWorkOrder>()));
+        Assert.All(typedFields, field => Assert.Contains(field, fieldServiceFields));
+        Assert.Contains("CaseRef", PropertyNames<CrmWorkOrder>());
+        Assert.Contains("CaseNumber", fieldServiceFields);
     }
 
     [Fact]
@@ -267,14 +324,21 @@ public sealed class DemoPayloadContractTests
             new Dictionary<string, ConflictPolicy>())
         {
             ValueMappings = routeEntity.TableMapping!.Columns.ToDictionary(
-                x => x.SourceColumn,
+                x => string.IsNullOrWhiteSpace(x.SourceTableAlias)
+                    ? x.SourceColumn
+                    : $"{x.SourceTableAlias}.{x.SourceColumn}",
                 x => new ColumnValueMappingDefinition(
-                    x.SourceColumn,
+                    string.IsNullOrWhiteSpace(x.SourceTableAlias)
+                        ? x.SourceColumn
+                        : $"{x.SourceTableAlias}.{x.SourceColumn}",
                     x.DestinationColumn,
                     ColumnValueContract.Unknown,
                     ColumnValueContract.Unknown,
                     new ValueTransformInput(),
-                    new ValueTransformInput()),
+                    new ValueTransformInput())
+                {
+                    Direction = x.Direction ?? SyncFieldDirection.Bidirectional
+                },
                 StringComparer.Ordinal)
         };
     }

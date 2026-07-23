@@ -39,6 +39,13 @@ export default async function WorkOrderEditPage({ params, searchParams }: {
           <label><span>完了日時</span><input name="completedAt" type="datetime-local" defaultValue={toDateTimeLocal(order.payload.CompletedAt)} /></label>
           <label className="wide-field"><span>作業結果</span><textarea name="workResult" rows={8} maxLength={1000} defaultValue={order.payload.WorkResult ?? ""} placeholder="診断内容、交換部品、お客様への説明などを入力" /></label>
         </div></section>
+        <section className="form-card"><h2>型別同期項目</h2><div className="field-grid">
+          <label><span>見積作業時間（分）</span><input name="estimatedMinutes" type="number" min="0" max="32767" defaultValue={order.payload.EstimatedMinutes ?? ""} /></label>
+          <label><span>見積金額</span><input name="estimatedCost" type="number" min="0" max="9999999.99" step="0.01" defaultValue={order.payload.EstimatedCost ?? ""} /></label>
+          <label><span>部品要否</span><select name="requiresParts" defaultValue={order.payload.RequiresParts ?? ""}><option value="">未判定</option><option value="true">必要</option><option value="false">不要</option></select></label>
+          <label><span>外部追跡ID</span><input name="externalTrackingId" defaultValue={order.payload.ExternalTrackingId ?? ""} /></label>
+          <label className="wide-field"><span>作業メモ</span><textarea name="workNote" rows={5} maxLength={200} defaultValue={order.payload.WorkNote ?? ""} /></label>
+        </div></section>
         <div className="tablet-actions"><Link href={`/work-orders/${encodeURIComponent(id)}`} className="tablet-button secondary-button">キャンセル</Link><button type="submit" className="tablet-button primary-button">更新を保存</button></div>
       </form>
     </>

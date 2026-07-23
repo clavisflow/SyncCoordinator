@@ -25,8 +25,33 @@ public sealed class DatabaseDeploymentService(
     IOptions<DatabaseDeploymentOptions> options,
     IOperationalEventRecorder operationalEvents) : IDatabaseDeploymentService
 {
-    public async Task<DatabaseDeploymentPlan> GetPlanAsync(Guid routeId, CancellationToken cancellationToken) =>
-        (await BuildPlanAsync(routeId, cancellationToken)).Plan;
+    public async Task<DatabaseDeploymentPlan> GetPlanAsync(Guid routeId, CancellationToken cancellationToken)
+    {
+        var built = await BuildPlanAsync(routeId, cancellationToken);
+        var targets = new List<DatabaseDeploymentTarget>(built.Targets.Count);
+        foreach (var target in built.Targets)
+        {
+            DatabaseDeploymentTargetStatus status;
+            try
+            {
+                status = await VerifyTargetAsync(target, cancellationToken)
+                    ? DatabaseDeploymentTargetStatus.Applied
+                    : DatabaseDeploymentTargetStatus.NotApplied;
+            }
+            catch (Exception exception) when (
+                exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+            {
+                status = DatabaseDeploymentTargetStatus.Unavailable;
+            }
+            targets.Add(target.Public with { Status = status });
+        }
+
+        var displayedState = built.Plan.State == DatabaseDeploymentState.Prepared &&
+                             targets.All(x => x.Status == DatabaseDeploymentTargetStatus.Applied)
+            ? DatabaseDeploymentState.Prepared
+            : DatabaseDeploymentState.Draft;
+        return built.Plan with { State = displayedState, Targets = targets };
+    }
 
     public async Task<DatabaseDeploymentResult> ApplyTargetAsync(
         Guid routeId,
@@ -192,12 +217,14 @@ public sealed class DatabaseDeploymentService(
             .Include(x => x.SourceSystem)
             .Include(x => x.DestinationSystem)
             .Include(x => x.TableMapping).ThenInclude(x => x!.Columns)
+            .Include(x => x.TableMapping).ThenInclude(x => x!.RelatedTables)
             .SingleOrDefaultAsync(x => x.Id == routeId, cancellationToken) ??
                     throw new KeyNotFoundException("指定された同期ルールは存在しません。");
         var mapping = route.TableMapping ??
                       throw new ConfigurationValidationException(["先にテーブル／列マッピングを保存してください。"]);
         var keys = mapping.Columns.Where(x => x.IsKey).OrderBy(x => x.SourceColumn, StringComparer.Ordinal).ToArray();
         var columns = mapping.Columns.OrderBy(x => x.SourceColumn, StringComparer.Ordinal).ToArray();
+        var sourceTableColumns = columns.Where(x => string.IsNullOrWhiteSpace(x.SourceTableAlias)).ToArray();
         if (keys.Length == 0)
         {
             throw new ConfigurationValidationException(["キー列が設定されていません。"]);
@@ -208,6 +235,12 @@ public sealed class DatabaseDeploymentService(
             .ToListAsync(cancellationToken);
         var source = GetConfiguredSystem(systems, route.SourceSystemId, route.SourceSystem.Code);
         var destination = GetConfiguredSystem(systems, route.DestinationSystemId, route.DestinationSystem.Code);
+        if (mapping.RelatedTables.Any(x => x.DetectChanges) && !IsSqlServer(source.Provider))
+        {
+            throw new ConfigurationValidationException([
+                "関連テーブルの変更検知とキー展開は現在SQL Serverでのみ利用できます。"
+            ]);
+        }
         var warnings = new List<DisplayText>
         {
             DisplayText.Create("DatabaseSetup_WarningDdl")
@@ -227,26 +260,28 @@ public sealed class DatabaseDeploymentService(
                 source,
                 mapping.SourceSchema,
                 mapping.SourceTable,
-                keys.Select(x => new DeploymentColumn(x.SourceColumn, x.SourceColumn)).ToArray(),
-                columns.Select(x => new DeploymentColumn(x.SourceColumn, x.SourceColumn)).ToArray(),
+                keys.Select(x => new DeploymentColumn(x.SourceColumn, CanonicalFieldName(x))).ToArray(),
+                sourceTableColumns.Select(x => new DeploymentColumn(x.SourceColumn, CanonicalFieldName(x))).ToArray(),
                 ToDeletionBehavior(mapping.SyncDeletes, mapping.SourceDeletionMode, mapping.SourceLogicalDeleteColumn, mapping.SourceLogicalDeleteValue),
                 MappingWriteDirection.Forward,
                 DisplayText.Create("DatabaseSetup_SourceDirection", source.DisplayName, destination.DisplayName),
-                createTrigger: true)
+                createTrigger: true,
+                relatedTables: mapping.RelatedTables)
         };
         targets.Add(BuildTarget(
             route,
             destination,
             mapping.DestinationSchema,
             mapping.DestinationTable,
-            keys.Select(x => new DeploymentColumn(x.DestinationColumn, x.SourceColumn)).ToArray(),
-            columns.Select(x => new DeploymentColumn(x.DestinationColumn, x.SourceColumn)).ToArray(),
+            keys.Select(x => new DeploymentColumn(x.DestinationColumn, CanonicalFieldName(x))).ToArray(),
+            columns.Select(x => new DeploymentColumn(x.DestinationColumn, CanonicalFieldName(x))).ToArray(),
             ToDeletionBehavior(mapping.SyncDeletes, mapping.DestinationDeletionMode, mapping.DestinationLogicalDeleteColumn, mapping.DestinationLogicalDeleteValue),
             MappingWriteDirection.Reverse,
             route.Direction == SyncDirection.Bidirectional
                 ? DisplayText.Create("DatabaseSetup_DestinationReverseDirection", destination.DisplayName, source.DisplayName)
                 : DisplayText.Create("DatabaseSetup_DestinationDirection", destination.DisplayName),
-            createTrigger: route.Direction == SyncDirection.Bidirectional));
+            createTrigger: route.Direction == SyncDirection.Bidirectional,
+            relatedTables: []));
 
         return new BuiltPlan(
             route,
@@ -271,7 +306,8 @@ public sealed class DatabaseDeploymentService(
         DeletionBehavior? deletionBehavior,
         MappingWriteDirection direction,
         DisplayText directionLabel,
-        bool createTrigger)
+        bool createTrigger,
+        IReadOnlyList<RouteRelatedTableEntity> relatedTables)
     {
         var connectionString = protector.Unprotect(system.ProtectedConnectionString!);
         var connection = ManagedConnectionStringFactory.Parse(system.Id, system.Provider, connectionString);
@@ -283,6 +319,27 @@ public sealed class DatabaseDeploymentService(
             "POSTGRESQL" => BuildPostgreSqlBatches(route.EntityType, schema, table, keys, payloadColumns, system.Code, deletionBehavior, triggerBase, createTrigger),
             _ => throw new InvalidOperationException($"未対応のProviderです: {system.Provider}")
         };
+        var relatedTriggerNames = new List<string>();
+        if (createTrigger && direction == MappingWriteDirection.Forward && IsSqlServer(system.Provider))
+        {
+            var relatedIndex = 0;
+            foreach (var related in relatedTables.Where(x => x.DetectChanges).OrderBy(x => x.Alias, StringComparer.Ordinal))
+            {
+                var relatedTriggerName = $"TR_SC_X_{route.Id:N}_{relatedIndex++}";
+                batches.Add(BuildSqlServerRelatedTrigger(
+                    route.EntityType,
+                    schema,
+                    table,
+                    keys,
+                    related,
+                    relatedTriggerName));
+                relatedTriggerNames.Add(relatedTriggerName);
+            }
+            // Create/alter the current trigger set first. The final cleanup only removes obsolete
+            // names, so a manually executed script cannot lose all working related triggers merely
+            // because creation of a replacement failed before reaching this batch.
+            batches.Add(BuildSqlServerRelatedTriggerCleanup(route.Id, relatedTriggerNames));
+        }
         var deploymentKey = $"{route.Id:N}:{direction}";
         var definitionHash = Convert.ToHexString(SHA256.HashData(
             Encoding.UTF8.GetBytes(string.Join("\n-- SyncCoordinator batch --\n", batches))));
@@ -294,6 +351,7 @@ public sealed class DatabaseDeploymentService(
                     ? new[] { triggerBase + "_I", triggerBase + "_U", triggerBase + "_D" }
                     : new[] { triggerBase + "_I", triggerBase + "_U" }
                 : new[] { triggerBase };
+        triggerNames = triggerNames.Concat(relatedTriggerNames).ToArray();
         var changes = new List<DisplayText>
         {
             DisplayText.Create("DatabaseSetup_ChangeCreateQueue"),
@@ -318,6 +376,10 @@ public sealed class DatabaseDeploymentService(
                     ? DisplayText.Create("DatabaseSetup_ChangePhysicalDelete")
                     : DisplayText.Create("DatabaseSetup_ChangeLogicalDelete", deletionBehavior.LogicalDeleteColumn!));
             }
+        }
+        foreach (var related in relatedTables.Where(x => x.DetectChanges))
+        {
+            changes.Add(DisplayText.Create("DatabaseSetup_ChangeTrigger", related.Schema, related.Table));
         }
 
         var script = system.Provider.ToUpperInvariant() switch
@@ -591,6 +653,68 @@ public sealed class DatabaseDeploymentService(
         }
         return batches;
     }
+
+    internal static string BuildSqlServerRelatedTriggerCleanup(
+        Guid routeId,
+        IReadOnlyList<string> retainedTriggerNames)
+    {
+        var triggerPrefix = SqlLiteral($"TR_SC_X_{routeId:N}_");
+        var retainedPredicate = retainedTriggerNames.Count == 0
+            ? string.Empty
+            : $" AND name NOT IN ({string.Join(", ", retainedTriggerNames.Select(x => $"N'{SqlLiteral(x)}'"))})";
+        return $$"""
+            DECLARE @syncCoordinatorDropSql nvarchar(max) = N'';
+            SELECT @syncCoordinatorDropSql = @syncCoordinatorDropSql
+                + N'DROP TRIGGER ' + QUOTENAME(OBJECT_SCHEMA_NAME(object_id)) + N'.' + QUOTENAME(name) + N';'
+            FROM sys.triggers
+            WHERE LEFT(name, LEN(N'{{triggerPrefix}}')) = N'{{triggerPrefix}}'{{retainedPredicate}};
+
+            IF LEN(@syncCoordinatorDropSql) > 0
+                EXEC sys.sp_executesql @syncCoordinatorDropSql;
+            """;
+    }
+
+    internal static string BuildSqlServerRelatedTrigger(
+        string entityType,
+        string baseSchema,
+        string baseTable,
+        IReadOnlyList<DeploymentColumn> keys,
+        RouteRelatedTableEntity related,
+        string triggerName)
+    {
+        var entityId = SqlServerEntityId("b", keys);
+        var insertedJoin = ExpandSqlServerRelatedExpression(related.JoinExpression, "b", "i");
+        var deletedJoin = ExpandSqlServerRelatedExpression(related.JoinExpression, "b", "d");
+        return $$"""
+            CREATE OR ALTER TRIGGER {{SqlServerIdentifier(related.Schema)}}.{{SqlServerIdentifier(triggerName)}}
+            ON {{SqlServerIdentifier(related.Schema)}}.{{SqlServerIdentifier(related.Table)}}
+            AFTER INSERT, UPDATE, DELETE
+            AS
+            BEGIN
+                SET NOCOUNT ON;
+                ;WITH affected AS
+                (
+                    SELECT {{entityId}} AS EntityId
+                    FROM {{SqlServerIdentifier(baseSchema)}}.{{SqlServerIdentifier(baseTable)}} AS b
+                    INNER JOIN inserted AS i ON ({{insertedJoin}})
+                    UNION
+                    SELECT {{entityId}} AS EntityId
+                    FROM {{SqlServerIdentifier(baseSchema)}}.{{SqlServerIdentifier(baseTable)}} AS b
+                    INNER JOIN deleted AS d ON ({{deletedJoin}})
+                )
+                INSERT dbo.SyncChangeQueue(MessageId, EntityType, EntityId, Operation, OccurredAtUtc)
+                SELECT NEWID(), N'{{SqlLiteral(entityType)}}', EntityId, 'Upsert', SYSUTCDATETIME()
+                FROM affected;
+            END;
+            """;
+    }
+
+    private static string ExpandSqlServerRelatedExpression(
+        string expression,
+        string sourceAlias,
+        string relatedAlias) => expression
+        .Replace("{source}", SqlServerIdentifier(sourceAlias), StringComparison.OrdinalIgnoreCase)
+        .Replace("{related}", SqlServerIdentifier(relatedAlias), StringComparison.OrdinalIgnoreCase);
 
     internal static List<string> BuildPostgreSqlBatches(
         string entityType,
@@ -1151,6 +1275,11 @@ public sealed class DatabaseDeploymentService(
     private static string MySqlIdentifier(string value) => $"`{value.Replace("`", "``", StringComparison.Ordinal)}`";
     private static string PostgreSqlIdentifier(string value) => $"\"{value.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
     private static string SqlLiteral(string value) => value.Replace("'", "''", StringComparison.Ordinal);
+
+    private static string CanonicalFieldName(RouteColumnMappingEntity column) =>
+        string.IsNullOrWhiteSpace(column.SourceTableAlias)
+            ? column.SourceColumn
+            : $"{column.SourceTableAlias}.{column.SourceColumn}";
 
     private sealed record BuiltPlan(
         SyncRouteEntity Route,

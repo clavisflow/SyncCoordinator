@@ -49,7 +49,26 @@ public sealed record SyncMessage(
     string EntityId,
     ChangeOperation Operation,
     DateTimeOffset OccurredAtUtc,
-    EntityPayload Payload);
+    EntityPayload Payload)
+{
+    /// <summary>
+    /// The physical row still exists, but it no longer satisfies a related-table eligibility rule.
+    /// Consumers must not treat an entity that has never been synchronized as a deletion target.
+    /// </summary>
+    public bool IsEligibilityRemoval { get; init; }
+
+    /// <summary>
+    /// A non-transient validation failure found while resolving the latest physical state.
+    /// The coordinator records the delivery as Held instead of blocking the source checkpoint.
+    /// </summary>
+    public SyncValidationFailure? ValidationFailure { get; init; }
+}
+
+public sealed record SyncValidationFailure(
+    string FieldName,
+    string TargetColumn,
+    string ReasonCode,
+    string Message);
 
 public sealed record ApplyRequest(
     Guid DeliveryMessageId,

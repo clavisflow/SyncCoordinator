@@ -24,8 +24,27 @@ public sealed class DemoConflictSeeder(
     internal const string ResolvedEntityId = "CASE-RESOLVED-1001";
     internal const string DateConflictEntityId = "CASE-DATE-CONFLICT-1001";
     internal const string DateTimeConflictEntityId = "WO-DATETIME-CONFLICT-1001";
+    internal const string TextConflictEntityId = "WO-CONFLICT-TEXT";
+    internal const string IntegerConflictEntityId = "WO-CONFLICT-INT";
+    internal const string DecimalConflictEntityId = "WO-CONFLICT-DECIMAL";
+    internal const string BooleanConflictEntityId = "WO-CONFLICT-BOOL";
+    internal const string NullConflictEntityId = "WO-CONFLICT-NULL";
+    internal const string StatusConflictEntityId = "WO-CONFLICT-STATUS";
+    internal const string GuidConflictEntityId = "WO-CONFLICT-GUID";
     internal const string WorkOrderEntityType = "WorkOrder";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly string[] WorkOrderTouchEntityIds =
+    [
+        "WO-FANOUT-1001",
+        "WO-FANOUT-1002",
+        "WO-MULTI-STAFF-1001",
+        "WO-UNASSIGN-1001",
+        "WO-ERROR-STRING",
+        "WO-ERROR-INT",
+        "WO-ERROR-DECIMAL-PRECISION",
+        "WO-ERROR-DECIMAL-SCALE",
+        "WO-ERROR-STATUS"
+    ];
 
     public async Task<int> SeedIfReadyAsync(CancellationToken cancellationToken)
     {
@@ -34,7 +53,7 @@ public sealed class DemoConflictSeeder(
             return 0;
         }
 
-        var seeded = await SeedWorkOrderDateTimeConflictIfReadyAsync(cancellationToken);
+        var seeded = await SeedWorkOrderScenariosIfReadyAsync(cancellationToken);
         var routeInfo = await dbContext.Routes.AsNoTracking()
             .Where(x => x.EntityType == EntityType &&
                         x.SourceSystem.Code == "PORTAL" &&
@@ -225,7 +244,7 @@ public sealed class DemoConflictSeeder(
         return seeded;
     }
 
-    private async Task<int> SeedWorkOrderDateTimeConflictIfReadyAsync(CancellationToken cancellationToken)
+    private async Task<int> SeedWorkOrderScenariosIfReadyAsync(CancellationToken cancellationToken)
     {
         var routeInfo = await dbContext.Routes.AsNoTracking()
             .Where(x => x.EntityType == WorkOrderEntityType &&
@@ -240,18 +259,6 @@ public sealed class DemoConflictSeeder(
             return 0;
         }
 
-        var conflictId = UpdateConflictId(routeInfo.Id, DateTimeConflictEntityId);
-        if (await dbContext.SyncConflicts.AsNoTracking().AnyAsync(x => x.Id == conflictId, cancellationToken))
-        {
-            return 0;
-        }
-
-        var snapshotsToReplace = await dbContext.SyncSnapshots
-            .Where(x => x.RouteId == routeInfo.Id && x.EntityType == WorkOrderEntityType &&
-                        x.EntityId == DateTimeConflictEntityId)
-            .ToListAsync(cancellationToken);
-        dbContext.SyncSnapshots.RemoveRange(snapshotsToReplace);
-
         var route = (await store.GetRoutesAsync("CRM", "CRM", WorkOrderEntityType, cancellationToken))
             .SingleOrDefault(x => x.Id == routeInfo.Id);
         if (route is null || route.OperationallyPaused)
@@ -261,13 +268,76 @@ public sealed class DemoConflictSeeder(
 
         var source = await connectors.GetRequiredAsync(route.SourceSystem, cancellationToken);
         var destination = await connectors.GetRequiredAsync(route.DestinationSystem, cancellationToken);
-        var detectedAt = timeProvider.GetUtcNow().AddMinutes(-8);
-        await SeedUpdateConflictAsync(
-            route, source, destination, WorkOrderEntityType,
-            CreateDateTimeConflictScenario(DateTimeConflictEntityId), DateTimeConflictEntityId, conflictId,
-            detectedAt, null, cancellationToken);
-        await dbContext.SaveChangesAsync(cancellationToken);
-        return 1;
+        var now = timeProvider.GetUtcNow();
+        var definitions = new (string EntityId, DemoConflictScenario Scenario)[]
+        {
+            (TextConflictEntityId, CreateWorkOrderConflictScenario(TextConflictEntityId, "ProblemSummary",
+                JsonValue.Create("文字列競合の基準値"), JsonValue.Create("CRMが変更した作業内容"), JsonValue.Create("FIELDが変更した作業内容"))),
+            (IntegerConflictEntityId, CreateWorkOrderConflictScenario(IntegerConflictEntityId, "EstimatedMinutes",
+                JsonValue.Create(60m), JsonValue.Create(90m), JsonValue.Create(120m))),
+            (DecimalConflictEntityId, CreateWorkOrderConflictScenario(DecimalConflictEntityId, "EstimatedCost",
+                JsonValue.Create(10000.00m), JsonValue.Create(12500.25m), JsonValue.Create(14000.75m))),
+            (BooleanConflictEntityId, CreateWorkOrderConflictScenario(BooleanConflictEntityId, "RequiresParts",
+                null, JsonValue.Create(true), JsonValue.Create(false))),
+            (DateTimeConflictEntityId, CreateDateTimeConflictScenario(DateTimeConflictEntityId)),
+            (NullConflictEntityId, CreateWorkOrderConflictScenario(NullConflictEntityId, "WorkNote",
+                JsonValue.Create("基準メモ"), null, JsonValue.Create("FIELDで追記したメモ"))),
+            (StatusConflictEntityId, CreateWorkOrderConflictScenario(StatusConflictEntityId, "Status",
+                JsonValue.Create("Scheduled"), JsonValue.Create("InProgress"), JsonValue.Create("Completed"))),
+            (GuidConflictEntityId, CreateWorkOrderConflictScenario(GuidConflictEntityId, "ExternalTrackingId",
+                JsonValue.Create("22222222-2222-2222-2222-222222222208"),
+                JsonValue.Create("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
+                JsonValue.Create("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")))
+        };
+
+        var seeded = 0;
+        for (var index = 0; index < definitions.Length; index++)
+        {
+            var definition = definitions[index];
+            var conflictId = UpdateConflictId(routeInfo.Id, definition.EntityId);
+            if (await dbContext.SyncConflicts.AsNoTracking().AnyAsync(x => x.Id == conflictId, cancellationToken))
+            {
+                continue;
+            }
+
+            var snapshotsToReplace = await dbContext.SyncSnapshots
+                .Where(x => x.RouteId == routeInfo.Id && x.EntityType == WorkOrderEntityType &&
+                            x.EntityId == definition.EntityId)
+                .ToListAsync(cancellationToken);
+            dbContext.SyncSnapshots.RemoveRange(snapshotsToReplace);
+            await SeedUpdateConflictAsync(
+                route, source, destination, WorkOrderEntityType, definition.Scenario,
+                definition.EntityId, conflictId, now.AddMinutes(-20 + index), null, cancellationToken);
+            seeded++;
+        }
+
+        if (seeded > 0)
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        foreach (var entityId in WorkOrderTouchEntityIds)
+        {
+            var current = await source.ReadCurrentAsync(WorkOrderEntityType, entityId, cancellationToken);
+            if (current is null)
+            {
+                continue;
+            }
+
+            var messageId = WebhookEventId.Create("demo.work-order.initial-touch.v1", route.Id, entityId);
+            await source.ApplyAsync(new ApplyRequest(
+                messageId,
+                messageId,
+                route.SourceSystem,
+                route.SourceSystem,
+                WorkOrderEntityType,
+                entityId,
+                ChangeOperation.Upsert,
+                null,
+                SyncPayloadTransformer.TransformFromCanonical(current, route, route.SourceSystem)), cancellationToken);
+        }
+
+        return seeded;
     }
 
     private async Task SeedUpdateConflictAsync(
@@ -302,7 +372,7 @@ public sealed class DemoConflictSeeder(
             entityId,
             ChangeOperation.Upsert,
             null,
-            scenario.Incoming), cancellationToken);
+            SyncPayloadTransformer.TransformFromCanonical(scenario.Incoming, route, route.SourceSystem)), cancellationToken);
         await destination.ApplyAsync(new ApplyRequest(
             destinationSeedMessageId,
             destinationSeedMessageId,
@@ -691,33 +761,52 @@ public sealed class DemoConflictSeeder(
     }
 
     internal static DemoConflictScenario CreateDateTimeConflictScenario(string entityId)
+        => CreateWorkOrderConflictScenario(
+            entityId,
+            "ScheduledAt",
+            JsonValue.Create("2026-07-27T12:00:00+09:00"),
+            JsonValue.Create("2026-07-27T14:00:00+09:00"),
+            JsonValue.Create("2026-07-27T11:30:00+09:00"));
+
+    internal static DemoConflictScenario CreateWorkOrderConflictScenario(
+        string entityId,
+        string fieldName,
+        JsonNode? baselineValue,
+        JsonNode? incomingValue,
+        JsonNode? currentValue)
     {
         var baselineFields = new Dictionary<string, JsonNode?>(StringComparer.Ordinal)
         {
             ["WorkOrderNumber"] = JsonValue.Create(entityId),
-            ["CaseId"] = JsonValue.Create("CASE-UPDATE-1001"),
-            ["CaseNumber"] = JsonValue.Create("CASE-UPDATE-1001"),
-            ["CustomerName"] = JsonValue.Create("山田 太郎"),
-            ["Address"] = JsonValue.Create("東京都品川区東品川1-2-3"),
-            ["Phone"] = JsonValue.Create("090-1234-5678"),
-            ["ProductName"] = JsonValue.Create("AirCool X200"),
+            ["CaseRef"] = JsonValue.Create(entityId == DateTimeConflictEntityId ? "CASE-UPDATE-1001" : "CASE-TYPES-1001"),
+            ["case_info.CaseRef"] = JsonValue.Create(entityId == DateTimeConflictEntityId ? "CASE-UPDATE-1001" : "CASE-TYPES-1001"),
+            ["case_info.ContactName"] = JsonValue.Create("型別テスト 顧客"),
+            ["case_info.ContactPhone"] = JsonValue.Create("070-3333-4444"),
+            ["case_info.ProductLabel"] = JsonValue.Create("Demo Device Pro"),
+            ["ServiceAddress"] = JsonValue.Create("東京都品川区東品川1-2-3"),
             ["ProblemSummary"] = JsonValue.Create("冷房不良のため訪問点検を実施します。"),
-            ["ScheduledAt"] = JsonValue.Create("2026-07-22T10:00:00+09:00"),
+            ["ScheduledAt"] = JsonValue.Create("2026-07-27T12:00:00+09:00"),
             ["TechnicianName"] = JsonValue.Create("佐藤 健"),
             ["Status"] = JsonValue.Create("Scheduled"),
             ["WorkResult"] = null,
             ["CompletedAt"] = null,
+            ["EstimatedMinutes"] = JsonValue.Create(60m),
+            ["EstimatedCost"] = JsonValue.Create(10000.00m),
+            ["RequiresParts"] = JsonValue.Create(false),
+            ["WorkNote"] = JsonValue.Create("基準メモ"),
+            ["ExternalTrackingId"] = JsonValue.Create("22222222-2222-2222-2222-222222222208"),
             ["OriginSystem"] = JsonValue.Create("CRM"),
             ["UpdatedAtUtc"] = JsonValue.Create("2026-07-18T03:00:00Z")
         };
+        baselineFields[fieldName] = baselineValue?.DeepClone();
         var baseline = new EntityPayload(baselineFields);
 
         var incomingFields = CloneFields(baseline.Fields);
-        incomingFields["ScheduledAt"] = JsonValue.Create("2026-07-22T14:00:00+09:00");
+        incomingFields[fieldName] = incomingValue?.DeepClone();
         var incoming = new EntityPayload(incomingFields);
 
         var currentFields = CloneFields(baseline.Fields);
-        currentFields["ScheduledAt"] = JsonValue.Create("2026-07-22T11:30:00+09:00");
+        currentFields[fieldName] = currentValue?.DeepClone();
         var current = new EntityPayload(currentFields);
         return new DemoConflictScenario(baseline, incoming, current);
     }

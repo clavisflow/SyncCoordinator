@@ -120,6 +120,8 @@
   <data name="Common_BackToList" xml:space="preserve"><value>Back to list</value></data>
   <data name="Common_Bidirectional" xml:space="preserve"><value>Bidirectional</value></data>
   <data name="Common_Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="Common_CollapseSection" xml:space="preserve"><value>Collapse section</value></data>
+  <data name="Common_ExpandSection" xml:space="preserve"><value>Expand section</value></data>
   <data name="Common_ChangedAt" xml:space="preserve"><value>Changed at</value></data>
   <data name="Common_Clear" xml:space="preserve"><value>Clear</value></data>
   <data name="Common_Configured" xml:space="preserve"><value>Configured</value></data>
@@ -305,6 +307,10 @@
   <data name="DatabaseSetup_DbPreparation" xml:space="preserve"><value>Database configuration verification</value></data>
   <data name="DatabaseSetup_Verified" xml:space="preserve"><value>Verified</value></data>
   <data name="DatabaseSetup_Unverified" xml:space="preserve"><value>Not verified</value></data>
+  <data name="DatabaseSetup_TargetApplied" xml:space="preserve"><value>Applied</value></data>
+  <data name="DatabaseSetup_TargetNotApplied" xml:space="preserve"><value>Not applied</value></data>
+  <data name="DatabaseSetup_TargetUnavailable" xml:space="preserve"><value>Unable to check</value></data>
+  <data name="DatabaseSetup_TargetUnknown" xml:space="preserve"><value>Not checked</value></data>
   <data name="DatabaseSetup_Verifying" xml:space="preserve"><value>Verifying…</value></data>
   <data name="DatabaseSetup_VerifyAll" xml:space="preserve"><value>Verify all database configurations</value></data>
   <data name="DatabaseSetup_VerifyAgain" xml:space="preserve"><value>Verify database configuration again</value></data>
@@ -329,11 +335,6 @@
   <data name="Mappings_PageTitle" xml:space="preserve"><value>Table mappings | SyncCoordinator</value></data>
   <data name="Mappings_Title" xml:space="preserve"><value>Table mappings</value></data>
   <data name="Mappings_Description" xml:space="preserve"><value>Map business database tables, columns, and keys for each sync rule, and configure per-column policies, fixed values, and deletion behavior. Saving mappings does not change the business database schema.</value></data>
-  <data name="Mappings_Registered" xml:space="preserve"><value>Configured mappings</value></data>
-  <data name="Mappings_Empty" xml:space="preserve"><value>No mappings have been configured.</value></data>
-  <data name="Mappings_SourceTable" xml:space="preserve"><value>Source table</value></data>
-  <data name="Mappings_DestinationTable" xml:space="preserve"><value>Destination table</value></data>
-  <data name="Mappings_ColumnCount" xml:space="preserve"><value>Columns</value></data>
   <data name="Mappings_Edit" xml:space="preserve"><value>Edit mapping</value></data>
   <data name="Mappings_EditHelp" xml:space="preserve"><value>Only systems with a configured database connection can be inspected.</value></data>
   <data name="Mappings_SelectRule" xml:space="preserve"><value>Select a rule</value></data>
@@ -343,7 +344,7 @@
   <data name="Mappings_SelectTable" xml:space="preserve"><value>Select a table</value></data>
   <data name="Mappings_LoadingColumns" xml:space="preserve"><value>Loading columns…</value></data>
   <data name="Mappings_ColumnsAndPolicies" xml:space="preserve"><value>Included columns and conflict policies</value></data>
-  <data name="Mappings_ColumnsHelp" xml:space="preserve"><value>Only selected columns are saved. Columns without an override use the rule default.</value></data>
+  <data name="Mappings_ColumnsHelp" xml:space="preserve"><value>Add sync fields and select the columns and direction for each system. Use a fixed value for destination-only columns.</value></data>
   <data name="Mappings_SelectedColumns" xml:space="preserve"><value>{0} / {1} columns</value></data>
   <data name="Mappings_FilterColumns" xml:space="preserve"><value>Search columns</value></data>
   <data name="Mappings_ShowUnmappedOnly" xml:space="preserve"><value>Unmapped only</value></data>
@@ -352,7 +353,35 @@
   <data name="Mappings_DestinationColumn" xml:space="preserve"><value>Destination column</value></data>
   <data name="Mappings_Key" xml:space="preserve"><value>Key</value></data>
   <data name="Mappings_OnConflict" xml:space="preserve"><value>On conflict</value></data>
+  <data name="Mappings_FieldDirection" xml:space="preserve"><value>Field direction</value></data>
+  <data name="Mappings_FieldForward" xml:space="preserve"><value>Source → destination</value></data>
+  <data name="Mappings_FieldReverse" xml:space="preserve"><value>Destination → source</value></data>
+  <data name="Mappings_FieldBidirectional" xml:space="preserve"><value>Bidirectional</value></data>
   <data name="Mappings_SelectDestinationColumn" xml:space="preserve"><value>Select a destination column</value></data>
+  <data name="Mappings_SelectSourceColumn" xml:space="preserve"><value>Select a source column</value></data>
+  <data name="Mappings_AddSyncField" xml:space="preserve"><value>Add sync field</value></data>
+  <data name="Mappings_RelatedTables" xml:space="preserve"><value>Related tables</value></data>
+  <data name="Mappings_RelatedTablesHelp" xml:space="preserve"><value>Configure tables joined directly to the source table. “Use as sync fields” adds related-table columns as sync fields, while “Eligibility only” determines eligibility from the presence of a matching row. When related-table changes are used as a sync trigger, the source record is read again even if only a related row changed.</value></data>
+  <data name="Mappings_AddRelatedTable" xml:space="preserve"><value>Add related table</value></data>
+  <data name="Mappings_RelatedTable" xml:space="preserve"><value>Related table</value></data>
+  <data name="Mappings_RelatedAlias" xml:space="preserve"><value>Identifier</value></data>
+  <data name="Mappings_RelatedUsage" xml:space="preserve"><value>Usage</value></data>
+  <data name="Mappings_RelatedUsageProjection" xml:space="preserve"><value>Use as sync fields</value></data>
+  <data name="Mappings_RelatedUsageEligibility" xml:space="preserve"><value>Eligibility only</value></data>
+  <data name="Mappings_JoinExpression" xml:space="preserve"><value>Join expression</value></data>
+  <data name="Mappings_JoinExpressionPlaceholder" xml:space="preserve"><value>Example: {source}.WorkOrderNumber = {related}.WorkOrderNumber</value></data>
+  <data name="Mappings_JoinExpressionHelp" xml:space="preserve"><value>Reference both {source} and {related}. Prefer equality joins between indexed columns to preserve trigger performance.</value></data>
+  <data name="Mappings_ConditionExpression" xml:space="preserve"><value>Condition expression (optional)</value></data>
+  <data name="Mappings_ConditionExpressionPlaceholder" xml:space="preserve"><value>Example: {related}.StaffNo IS NOT NULL AND {related}.IsDraft = 0</value></data>
+  <data name="Mappings_ConditionExpressionHelp" xml:space="preserve"><value>{related} refers to the related table and {source} to the source table. Enter one valid database predicate.</value></data>
+  <data name="Mappings_DetectRelatedChanges" xml:space="preserve"><value>Use related-table changes as a sync trigger</value></data>
+  <data name="Mappings_MoveUp" xml:space="preserve"><value>Move up</value></data>
+  <data name="Mappings_MoveDown" xml:space="preserve"><value>Move down</value></data>
+  <data name="Mappings_ConfirmRelatedFieldsTitle" xml:space="preserve"><value>Confirm sync field removal</value></data>
+  <data name="Mappings_ConfirmEligibilityRemovesFields" xml:space="preserve"><value>Changing the usage to “Eligibility only” will remove {1} sync field(s) that use columns from related table “{0}”. Continue?</value></data>
+  <data name="Mappings_ConfirmRelatedTableRemovesFields" xml:space="preserve"><value>Deleting related table “{0}” will also remove {1} sync field(s) that use its columns. Continue?</value></data>
+  <data name="Mappings_ChangeAndRemove" xml:space="preserve"><value>Change and remove</value></data>
+  <data name="Mappings_DeleteAndRemove" xml:space="preserve"><value>Delete</value></data>
   <data name="Mappings_FixedValues" xml:space="preserve"><value>Fixed values on write (optional)</value></data>
   <data name="Mappings_AddFixedValue" xml:space="preserve"><value>Add fixed value</value></data>
   <data name="Mappings_ApplyDirection" xml:space="preserve"><value>Apply direction</value></data>

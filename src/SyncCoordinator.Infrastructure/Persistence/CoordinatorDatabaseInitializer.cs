@@ -144,22 +144,69 @@ public sealed class CoordinatorDatabaseInitializer(
             "public",
             "work_order",
             [
-                M("WorkOrderNumber", "work_order_no", true, C("nvarchar", false, 64), C("varchar", false, 64)),
-                M("CaseId", "source_case_id", false, C("nvarchar", true, 64), C("varchar", true, 64)),
-                M("CaseNumber", "case_ref", false, C("nvarchar", true, 64), C("varchar", true, 64)),
-                M("CustomerName", "customer_display_name", false, C("nvarchar", true, 200), C("varchar", true, 120)),
-                M("Address", "service_address", false, C("nvarchar", true, 500), C("varchar", true, 300)),
-                M("Phone", "contact_phone", false, C("nvarchar", true, 40), C("varchar", true, 30)),
-                M("ProductName", "product_label", false, C("nvarchar", true, 200), C("varchar", true, 120)),
+                M("WorkOrderNumber", "work_order_no", true, C("nvarchar", false, 64), C("varchar", false, 64),
+                    direction: SyncFieldDirection.Bidirectional),
+                M("CaseRef", "source_case_id", false, C("nvarchar", false, 64), C("varchar", true, 64),
+                    direction: SyncFieldDirection.Forward),
+                M("CaseRef", "case_ref", false, C("nvarchar", false, 64), C("varchar", true, 64),
+                    sourceAlias: "case_info", direction: SyncFieldDirection.Forward),
+                M("ContactName", "customer_display_name", false, C("nvarchar", true, 100), C("varchar", true, 120),
+                    sourceAlias: "case_info", direction: SyncFieldDirection.Forward),
+                M("ServiceAddress", "service_address", false, C("nvarchar", true, 500), C("varchar", true, 300),
+                    direction: SyncFieldDirection.Bidirectional),
+                M("ContactPhone", "contact_phone", false, C("nvarchar", true, 30), C("varchar", true, 30),
+                    sourceAlias: "case_info", direction: SyncFieldDirection.Forward),
+                M("ProductLabel", "product_label", false, C("nvarchar", true, 150), C("varchar", true, 120),
+                    sourceAlias: "case_info", direction: SyncFieldDirection.Forward),
                 M("ProblemSummary", "problem_summary", false, C("nvarchar", true, 500), C("varchar", true, 120)),
                 M("ScheduledAt", "scheduled_at", false, C("datetimeoffset"), C("timestamptz")),
                 M("TechnicianName", "technician_name", false, C("nvarchar", true, 200), C("varchar", true, 80)),
                 M("Status", "job_status", false, C("nvarchar", false, 40), C("varchar", false, 20), WorkOrderStatusForward(), WorkOrderStatusReverse()),
-                M("WorkResult", "work_result", false, C("nvarchar"), C("varchar", true, 1000)),
-                M("CompletedAt", "completed_at", false, C("datetimeoffset"), C("timestamptz")),
-                M("OriginSystem", "source_code", false, C("nvarchar", false, 64), C("varchar", false, 64)),
-                M("UpdatedAtUtc", "modified_at", false, C("datetimeoffset", false), C("timestamptz", false))
+                M("WorkResult", "work_result", false, C("nvarchar"), C("varchar", true, 1000),
+                    direction: SyncFieldDirection.Reverse),
+                M("CompletedAt", "completed_at", false, C("datetimeoffset"), C("timestamptz"),
+                    direction: SyncFieldDirection.Reverse),
+                M("EstimatedMinutes", "estimated_minutes", false, C("int", true, precision: 10), C("smallint", true, precision: 5),
+                    direction: SyncFieldDirection.Bidirectional),
+                M("EstimatedCost", "estimated_cost", false, C("decimal", true, precision: 12, scale: 4), C("numeric", true, precision: 9, scale: 2),
+                    direction: SyncFieldDirection.Bidirectional),
+                M("RequiresParts", "requires_parts", false, C("bit"), C("boolean"),
+                    direction: SyncFieldDirection.Bidirectional),
+                M("WorkNote", "work_note", false, C("nvarchar", true, 1000), C("varchar", true, 200),
+                    direction: SyncFieldDirection.Bidirectional),
+                M("ExternalTrackingId", "external_tracking_id", false, C("uniqueidentifier"), C("uuid"),
+                    direction: SyncFieldDirection.Bidirectional),
+                M("OriginSystem", "source_code", false, C("nvarchar", false, 64), C("varchar", false, 64),
+                    direction: SyncFieldDirection.Forward),
+                M("UpdatedAtUtc", "modified_at", false, C("datetimeoffset", false), C("timestamptz", false),
+                    direction: SyncFieldDirection.Forward)
             ]);
+
+        workOrder.TableMapping!.RelatedTables.AddRange([
+            new RouteRelatedTableEntity
+            {
+                Id = Guid.NewGuid(),
+                TableMappingId = workOrder.Id,
+                Schema = "dbo",
+                Table = "SupportCase",
+                Alias = "case_info",
+                JoinExpression = "{source}.CaseRef = {related}.CaseRef",
+                Usage = RelatedTableUsage.Projection,
+                DetectChanges = true
+            },
+            new RouteRelatedTableEntity
+            {
+                Id = Guid.NewGuid(),
+                TableMappingId = workOrder.Id,
+                Schema = "dbo",
+                Table = "WorkOrderAssignment",
+                Alias = "assignment",
+                JoinExpression = "{source}.WorkOrderNumber = {related}.WorkOrderNumber",
+                Usage = RelatedTableUsage.Eligibility,
+                DetectChanges = true,
+                ConditionExpression = "{related}.StaffNo IS NOT NULL"
+            }
+        ]);
 
         return ([portal, crm, field], [supportCase, workOrder]);
     }
@@ -198,10 +245,12 @@ public sealed class CoordinatorDatabaseInitializer(
         };
         mapping.Columns.AddRange(columns.Select(column => new RouteColumnMappingEntity
         {
+            SourceTableAlias = column.SourceAlias,
             Id = Guid.NewGuid(),
             TableMappingId = routeId,
             SourceColumn = column.Source,
             DestinationColumn = column.Destination,
+            Direction = column.Direction,
             IsKey = column.IsKey,
             SourceDataType = column.SourceContract.DataType,
             SourceIsNullable = column.SourceContract.IsNullable,
@@ -253,8 +302,10 @@ public sealed class CoordinatorDatabaseInitializer(
         ColumnValueContract sourceContract,
         ColumnValueContract destinationContract,
         ValueTransformInput? forward = null,
-        ValueTransformInput? reverse = null) =>
-        new(source, destination, key, sourceContract, destinationContract, forward ?? new(), reverse ?? new());
+        ValueTransformInput? reverse = null,
+        string sourceAlias = "",
+        SyncFieldDirection? direction = null) =>
+        new(sourceAlias, source, destination, key, direction, sourceContract, destinationContract, forward ?? new(), reverse ?? new());
 
     private static ValueTransformInput WorkOrderStatusForward() => new()
     {
@@ -286,9 +337,11 @@ public sealed class CoordinatorDatabaseInitializer(
         transform.IsIdentity ? null : JsonSerializer.Serialize(transform);
 
     private sealed record DemoColumn(
+        string SourceAlias,
         string Source,
         string Destination,
         bool IsKey,
+        SyncFieldDirection? Direction,
         ColumnValueContract SourceContract,
         ColumnValueContract DestinationContract,
         ValueTransformInput ForwardTransform,

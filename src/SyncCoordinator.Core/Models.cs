@@ -18,10 +18,31 @@ public enum MappingWriteDirection
     Reverse = 1
 }
 
+public enum SyncFieldDirection
+{
+    Forward = 0,
+    Reverse = 1,
+    Bidirectional = 2
+}
+
+public enum RelatedTableUsage
+{
+    Projection = 0,
+    Eligibility = 1
+}
+
 public enum DatabaseDeploymentState
 {
     Draft = 0,
     Prepared = 1
+}
+
+public enum DatabaseDeploymentTargetStatus
+{
+    Unknown = 0,
+    Applied = 1,
+    NotApplied = 2,
+    Unavailable = 3
 }
 
 public enum ConflictPolicy
@@ -341,7 +362,8 @@ public sealed record DatabaseDeploymentTarget(
     string DatabaseName,
     DisplayText DirectionLabel,
     string Script,
-    IReadOnlyList<DisplayText> Changes);
+    IReadOnlyList<DisplayText> Changes,
+    DatabaseDeploymentTargetStatus Status = DatabaseDeploymentTargetStatus.Unknown);
 
 public sealed record DatabaseDeploymentResult(
     bool Success,
@@ -463,7 +485,18 @@ public sealed record ColumnValueMappingDefinition(
     ColumnValueContract SourceContract,
     ColumnValueContract DestinationContract,
     ValueTransformInput ForwardTransform,
-    ValueTransformInput ReverseTransform);
+    ValueTransformInput ReverseTransform)
+{
+    public SyncFieldDirection Direction { get; init; } = SyncFieldDirection.Bidirectional;
+
+    public bool Allows(MappingWriteDirection writeDirection) => Direction switch
+    {
+        SyncFieldDirection.Forward => writeDirection == MappingWriteDirection.Forward,
+        SyncFieldDirection.Reverse => writeDirection == MappingWriteDirection.Reverse,
+        SyncFieldDirection.Bidirectional => true,
+        _ => false
+    };
+}
 
 public sealed record TableMappingListItem(
     Guid RouteId,
@@ -492,18 +525,32 @@ public sealed class TableMappingInput
     public string DestinationLogicalDeleteValue { get; set; } = string.Empty;
     public List<ColumnMappingInput> Columns { get; set; } = [];
     public List<FixedValueMappingInput> FixedValues { get; set; } = [];
+    public List<RelatedTableInput> RelatedTables { get; set; } = [];
 }
 
 public sealed class ColumnMappingInput
 {
+    public string SourceTableAlias { get; set; } = string.Empty;
     public string SourceColumn { get; set; } = string.Empty;
     public string DestinationColumn { get; set; } = string.Empty;
+    public SyncFieldDirection? Direction { get; set; }
     public bool IsKey { get; set; }
     public ConflictPolicy? ConflictPolicy { get; set; }
     public ColumnValueContract SourceContract { get; set; } = ColumnValueContract.Unknown;
     public ColumnValueContract DestinationContract { get; set; } = ColumnValueContract.Unknown;
     public ValueTransformInput ForwardTransform { get; set; } = new();
     public ValueTransformInput ReverseTransform { get; set; } = new();
+}
+
+public sealed class RelatedTableInput
+{
+    public string Schema { get; set; } = string.Empty;
+    public string Table { get; set; } = string.Empty;
+    public string Alias { get; set; } = string.Empty;
+    public string JoinExpression { get; set; } = string.Empty;
+    public RelatedTableUsage Usage { get; set; }
+    public bool DetectChanges { get; set; } = true;
+    public string ConditionExpression { get; set; } = string.Empty;
 }
 
 public sealed class FixedValueMappingInput

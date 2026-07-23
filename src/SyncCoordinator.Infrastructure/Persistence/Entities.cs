@@ -77,14 +77,18 @@ public sealed class RouteTableMappingEntity
     public SyncRouteEntity Route { get; set; } = null!;
     public List<RouteColumnMappingEntity> Columns { get; set; } = [];
     public List<RouteFixedValueMappingEntity> FixedValues { get; set; } = [];
+    public List<RouteRelatedTableEntity> RelatedTables { get; set; } = [];
 }
 
 public sealed class RouteColumnMappingEntity
 {
     public Guid Id { get; set; }
     public Guid TableMappingId { get; set; }
+    public int DisplayOrder { get; set; }
+    public string SourceTableAlias { get; set; } = string.Empty;
     public required string SourceColumn { get; set; }
     public required string DestinationColumn { get; set; }
+    public SyncFieldDirection? Direction { get; set; }
     public bool IsKey { get; set; }
     public ConflictPolicy? ConflictPolicy { get; set; }
     public string SourceDataType { get; set; } = string.Empty;
@@ -99,6 +103,20 @@ public sealed class RouteColumnMappingEntity
     public int? DestinationNumericScale { get; set; }
     public string? ForwardTransformJson { get; set; }
     public string? ReverseTransformJson { get; set; }
+    public RouteTableMappingEntity TableMapping { get; set; } = null!;
+}
+
+public sealed class RouteRelatedTableEntity
+{
+    public Guid Id { get; set; }
+    public Guid TableMappingId { get; set; }
+    public required string Schema { get; set; }
+    public required string Table { get; set; }
+    public required string Alias { get; set; }
+    public required string JoinExpression { get; set; }
+    public RelatedTableUsage Usage { get; set; }
+    public bool DetectChanges { get; set; }
+    public string? ConditionExpression { get; set; }
     public RouteTableMappingEntity TableMapping { get; set; } = null!;
 }
 

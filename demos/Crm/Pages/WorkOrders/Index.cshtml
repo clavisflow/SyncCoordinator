@@ -25,10 +25,10 @@
                 @foreach (var item in Model.WorkOrders)
                 {
                     <tr>
-                        <td><strong>@(item.Payload.WorkOrderNumber ?? "—")</strong><small>Case: @(item.Payload.CaseNumber ?? "—")</small></td>
+                        <td><strong>@(item.Payload.WorkOrderNumber ?? "—")</strong><small>Case: @(item.Payload.CaseRef ?? "—")</small></td>
                         <td>@(item.Payload.CustomerName ?? "—")<small>@(item.Payload.ProductName ?? "製品未設定")</small></td>
                         <td>@(item.Payload.ScheduledAt ?? "未定")</td>
-                        <td>@(item.Payload.TechnicianName ?? "未割当")</td>
+                        <td>@(item.Payload.TechnicianName ?? "未定")<small>Staff: @(item.Payload.AssignedStaffNumbers ?? "未割当（同期対象外）")</small></td>
                         <td><span class="status status-@((item.Payload.Status ?? "unknown").ToLowerInvariant())">@StatusOptions.Label(item.Payload.Status)</span></td>
                         <td class="action-column"><a class="record-link" asp-page="Edit" asp-route-id="@item.EntityId">開く</a></td>
                     </tr>

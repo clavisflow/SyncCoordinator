@@ -90,21 +90,26 @@ public sealed class EfCoordinatorStore(
                 x.Enabled,
                 mapping.Columns
                     .Where(y => y.ConflictPolicy is not null)
-                    .ToDictionary(y => y.SourceColumn, y => y.ConflictPolicy!.Value, StringComparer.Ordinal))
+                    .ToDictionary(CanonicalFieldName, y => y.ConflictPolicy!.Value, StringComparer.Ordinal))
             {
                 OperationallyPaused = x.SourceSystem.PausedAtUtc is not null ||
                                       x.DestinationSystem.PausedAtUtc is not null ||
                                       x.MappingMaintenanceStartedAtUtc is not null,
                 MappingMaintenance = x.MappingMaintenanceStartedAtUtc is not null,
                 ValueMappings = mapping.Columns.ToDictionary(
-                    column => column.SourceColumn,
+                    CanonicalFieldName,
                     column => new ColumnValueMappingDefinition(
-                        column.SourceColumn,
+                        CanonicalFieldName(column),
                         column.DestinationColumn,
                         SourceContract(column),
                         DestinationContract(column),
                         DeserializeTransform(column.ForwardTransformJson),
-                        DeserializeTransform(column.ReverseTransformJson)),
+                        DeserializeTransform(column.ReverseTransformJson))
+                    {
+                        Direction = column.Direction ?? (x.Direction == SyncDirection.Bidirectional
+                            ? SyncFieldDirection.Bidirectional
+                            : SyncFieldDirection.Forward)
+                    },
                     StringComparer.Ordinal)
             };
         }).ToArray();
@@ -116,6 +121,11 @@ public sealed class EfCoordinatorStore(
         string? logicalDeleteColumn,
         string? logicalDeleteValue) =>
         enabled ? new DeletionBehavior(mode, logicalDeleteColumn, logicalDeleteValue) : null;
+
+    private static string CanonicalFieldName(RouteColumnMappingEntity column) =>
+        string.IsNullOrWhiteSpace(column.SourceTableAlias)
+            ? column.SourceColumn
+            : $"{column.SourceTableAlias}.{column.SourceColumn}";
 
     public async Task<InboxAcquireResult> TryBeginInboxAsync(
         Guid sourceMessageId,

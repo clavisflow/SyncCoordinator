@@ -174,21 +174,64 @@ public sealed class SynchronizationCoordinator(
 
         try
         {
+            if (message.ValidationFailure is { } validationFailure)
+            {
+                throw new ValueTransformationException(
+                    validationFailure.FieldName,
+                    validationFailure.TargetColumn,
+                    validationFailure.ReasonCode,
+                    validationFailure.Message);
+            }
             var destination = await connectors.GetRequiredAsync(destinationSystem, cancellationToken);
-            var incoming = SyncPayloadTransformer.NormalizeToCanonical(message.Payload, route, message.SourceSystem);
+            var flowDirection = string.Equals(message.SourceSystem, route.SourceSystem, StringComparison.OrdinalIgnoreCase)
+                ? MappingWriteDirection.Forward
+                : MappingWriteDirection.Reverse;
+            var incoming = SyncPayloadTransformer.NormalizeToCanonical(
+                message.Payload,
+                route,
+                message.SourceSystem,
+                flowDirection);
             var destinationPayload = await destination.ReadCurrentAsync(
                 message.EntityType,
                 message.EntityId,
                 cancellationToken);
             var current = destinationPayload is null
                 ? null
-                : SyncPayloadTransformer.NormalizeToCanonical(destinationPayload, route, destinationSystem);
-            var snapshot = await store.GetSnapshotAsync(
+                : SyncPayloadTransformer.NormalizeToCanonical(
+                    destinationPayload,
+                    route,
+                    destinationSystem,
+                    flowDirection);
+            var storedSnapshot = await store.GetSnapshotAsync(
                 route.Id,
                 destinationSystem,
                 message.EntityType,
                 message.EntityId,
                 cancellationToken);
+            if (message.IsEligibilityRemoval && storedSnapshot?.SourcePayload is null)
+            {
+                // An entity that has never qualified for this route must be ignored. Deleting by
+                // key here could remove an unrelated pre-existing destination row.
+                await store.CompleteInboxAsync(
+                    message.SourceMessageId,
+                    route.Id,
+                    destinationSystem,
+                    InboxState.Completed,
+                    null,
+                    cancellationToken);
+                return true;
+            }
+            var snapshot = storedSnapshot is null
+                ? null
+                : storedSnapshot with
+                {
+                    SourcePayload = storedSnapshot.SourcePayload is null
+                        ? null
+                        : SyncPayloadTransformer.FilterCanonical(storedSnapshot.SourcePayload, route, flowDirection),
+                    DestinationPayload = storedSnapshot.DestinationPayload is null
+                        ? null
+                        : SyncPayloadTransformer.FilterCanonical(storedSnapshot.DestinationPayload, route, flowDirection)
+                };
             var resolution = message.Operation == ChangeOperation.Delete
                 ? ConflictResolver.ResolveDelete(snapshot, incoming, current, route)
                 : conflictResolver.Resolve(
@@ -248,7 +291,11 @@ public sealed class SynchronizationCoordinator(
             {
                 var payloadToWrite = message.Operation == ChangeOperation.Delete
                     ? resolution.AdoptedPayload
-                    : SyncPayloadTransformer.TransformFromCanonical(resolution.AdoptedPayload, route, destinationSystem);
+                    : SyncPayloadTransformer.TransformFromCanonical(
+                        resolution.AdoptedPayload,
+                        route,
+                        destinationSystem,
+                        flowDirection);
                 await destination.ApplyAsync(new ApplyRequest(
                     deliveryMessageId,
                     message.SourceMessageId,

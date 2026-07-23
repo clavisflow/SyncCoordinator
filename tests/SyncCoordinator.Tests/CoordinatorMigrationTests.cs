@@ -23,7 +23,12 @@ public sealed class CoordinatorMigrationTests
             migration => Assert.EndsWith("_AddManualConflictResolution", migration, StringComparison.Ordinal),
             migration => Assert.EndsWith("_SupersedeOverlappingConflicts", migration, StringComparison.Ordinal),
             migration => Assert.EndsWith("_HybridConflictChainResolution", migration, StringComparison.Ordinal),
-            migration => Assert.EndsWith("_ExpandInboxStateLength", migration, StringComparison.Ordinal));
+            migration => Assert.EndsWith("_ExpandInboxStateLength", migration, StringComparison.Ordinal),
+            migration => Assert.EndsWith("_AddRelatedEntityRules", migration, StringComparison.Ordinal),
+            migration => Assert.EndsWith("_AddColumnMappingDisplayOrder", migration, StringComparison.Ordinal),
+            migration => Assert.EndsWith("_ReplaceRelatedConditionWithExpression", migration, StringComparison.Ordinal),
+            migration => Assert.EndsWith("_ReplaceRelatedJoinWithExpression", migration, StringComparison.Ordinal),
+            migration => Assert.EndsWith("_ExpandRelatedIdentifierLength", migration, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -74,9 +79,24 @@ public sealed class CoordinatorMigrationTests
         var entity = context.Model.FindEntityType(typeof(RouteColumnMappingEntity))!;
 
         Assert.NotNull(entity.FindProperty(nameof(RouteColumnMappingEntity.ConflictPolicy)));
+        Assert.NotNull(entity.FindProperty(nameof(RouteColumnMappingEntity.Direction)));
+        Assert.NotNull(entity.FindProperty(nameof(RouteColumnMappingEntity.SourceTableAlias)));
         Assert.DoesNotContain(
             context.Model.GetEntityTypes(),
             x => x.ClrType.Name == "RouteFieldPolicyEntity");
+    }
+
+    [Fact]
+    public void RelatedTablesBelongToOneTableMapping()
+    {
+        using var context = CreateContext();
+        var entity = context.Model.FindEntityType(typeof(RouteRelatedTableEntity))!;
+
+        Assert.Contains(entity.GetIndexes(), index => index.IsUnique &&
+            index.Properties.Select(property => property.Name).SequenceEqual([
+                nameof(RouteRelatedTableEntity.TableMappingId),
+                nameof(RouteRelatedTableEntity.Alias)
+            ]));
     }
 
     [Fact]

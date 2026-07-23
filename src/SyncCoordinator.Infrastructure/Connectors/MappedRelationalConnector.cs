@@ -82,7 +82,34 @@ internal sealed class MappedRelationalConnector(
             return null;
         }
 
-        var current = await ReadEntityAsync(connection, mapping, latest.EntityId, null, cancellationToken);
+        EntityPayload? current;
+        try
+        {
+            current = await ReadEntityAsync(connection, mapping, latest.EntityId, null, cancellationToken);
+        }
+        catch (ValueTransformationException exception)
+        {
+            var keyValues = ParseEntityId(mapping, latest.EntityId);
+            return new SyncMessage(
+                latest.MessageId,
+                SystemCode,
+                SystemCode,
+                latest.EntityType,
+                latest.EntityId,
+                ChangeOperation.Upsert,
+                latest.OccurredAtUtc,
+                new EntityPayload(keyValues.ToDictionary(
+                    pair => pair.Key,
+                    pair => (JsonNode?)JsonValue.Create(pair.Value),
+                    StringComparer.Ordinal)))
+            {
+                ValidationFailure = new SyncValidationFailure(
+                    exception.FieldName,
+                    exception.TargetColumn,
+                    exception.ReasonCode,
+                    exception.Message)
+            };
+        }
         if (current is not null)
         {
             var origin = await connection.QuerySingleOrDefaultAsync<string?>(new CommandDefinition(
@@ -102,6 +129,25 @@ internal sealed class MappedRelationalConnector(
 
         if (!string.Equals(latest.Operation, nameof(ChangeOperation.Delete), StringComparison.OrdinalIgnoreCase))
         {
+            if (mapping.RelatedTables.Any(x => x.Usage == RelatedTableUsage.Eligibility))
+            {
+                var keyValues = ParseEntityId(mapping, latest.EntityId);
+                return new SyncMessage(
+                    latest.MessageId,
+                    SystemCode,
+                    SystemCode,
+                    latest.EntityType,
+                    latest.EntityId,
+                    ChangeOperation.Delete,
+                    latest.OccurredAtUtc,
+                    new EntityPayload(keyValues.ToDictionary(
+                        pair => pair.Key,
+                        pair => (JsonNode?)JsonValue.Create(pair.Value),
+                        StringComparer.Ordinal)))
+                {
+                    IsEligibilityRemoval = true
+                };
+            }
             return null;
         }
 
@@ -222,13 +268,27 @@ internal sealed class MappedRelationalConnector(
         CancellationToken cancellationToken)
     {
         var parameters = CreateKeyParameters(mapping, entityId);
-        var sql = $"SELECT {string.Join(", ", mapping.Columns.Select(column => $"{Quote(column.PhysicalColumn)} AS {Quote(column.PayloadField)}"))} " +
-                  $"FROM {QualifiedTable(mapping)} WHERE {KeyPredicate(mapping)};";
-        var row = await connection.QuerySingleOrDefaultAsync(new CommandDefinition(
+        var sql = BuildReadEntitySql(mapping, parameters);
+        var rows = (await connection.QueryAsync(new CommandDefinition(
             sql,
             parameters,
             transaction,
-            cancellationToken: cancellationToken));
+            cancellationToken: cancellationToken))).Take(2).ToArray();
+        if (rows.Length > 1)
+        {
+            var aliases = string.Join(", ", mapping.RelatedTables
+                .Where(x => x.Usage == RelatedTableUsage.Projection)
+                .Select(x => x.Alias));
+            var hasProjection = aliases.Length > 0;
+            throw new ValueTransformationException(
+                hasProjection ? aliases : string.Join(", ", mapping.Keys.Select(x => x.PayloadField)),
+                mapping.Table,
+                hasProjection ? "related-projection-multiple-rows" : "entity-key-multiple-rows",
+                hasProjection
+                    ? $"関連テーブルの項目取得が同期単位 '{mapping.EntityType}/{entityId}' に対して複数行を返しました。項目取得の結合は最大1行になるよう設定してください。"
+                    : $"同期単位キー '{mapping.EntityType}/{entityId}' が複数行に一致しました。キー列は1行を一意に識別するよう設定してください。");
+        }
+        var row = rows.SingleOrDefault();
         if (row is not IDictionary<string, object> values)
         {
             return null;
@@ -238,6 +298,32 @@ internal sealed class MappedRelationalConnector(
             pair => pair.Key,
             pair => pair.Value is null or DBNull ? null : JsonSerializer.SerializeToNode(pair.Value, JsonOptions),
             StringComparer.Ordinal));
+    }
+
+    internal string BuildReadEntitySql(RelationalEntityMapping mapping, DynamicParameters parameters)
+    {
+        const string baseAlias = "sc_base";
+        var projectionTables = mapping.RelatedTables.Where(x => x.Usage == RelatedTableUsage.Projection).ToArray();
+        var select = string.Join(", ", mapping.Columns.Select(column =>
+            $"{Quote(string.IsNullOrWhiteSpace(column.TableAlias) ? baseAlias : column.TableAlias)}.{Quote(column.PhysicalColumn)} AS {Quote(column.PayloadField)}"));
+        var joins = string.Join(" ", projectionTables.Select(related =>
+            $"LEFT JOIN {QualifiedTable(related.Schema, related.Table)} AS {Quote(related.Alias)} " +
+            $"ON ({RelatedExpressionSql(related.JoinExpression, related.Alias, baseAlias)})" +
+            RelatedConditionSql(related, baseAlias, includeAnd: true)));
+        var eligibility = mapping.RelatedTables.Where(x => x.Usage == RelatedTableUsage.Eligibility)
+            .Select(related =>
+                $"EXISTS (SELECT 1 FROM {QualifiedTable(related.Schema, related.Table)} AS {Quote(related.Alias)} " +
+                $"WHERE ({RelatedExpressionSql(related.JoinExpression, related.Alias, baseAlias)})" +
+                RelatedConditionSql(related, baseAlias, includeAnd: true) + ")")
+            .ToArray();
+        var where = KeyPredicate(mapping, baseAlias);
+        if (eligibility.Length > 0)
+        {
+            where += " AND " + string.Join(" AND ", eligibility);
+        }
+        var selectPrefix = provider == RelationalProvider.SqlServer ? "SELECT TOP (2)" : "SELECT";
+        var rowLimit = provider == RelationalProvider.SqlServer ? string.Empty : " LIMIT 2";
+        return $"{selectPrefix} {select} FROM {QualifiedTable(mapping)} AS {Quote(baseAlias)} {joins} WHERE {where}{rowLimit};";
     }
 
     private async Task UpsertAsync(
@@ -329,7 +415,9 @@ internal sealed class MappedRelationalConnector(
             }
             else
             {
-                candidate = null;
+                // 項目ごとの同期方向で除外された列や、DB既定値を使う列は書き込まない。
+                // null値を明示的に同期する場合はPayloadにキーが存在し、上の分岐に入る。
+                continue;
             }
             values[column.PhysicalColumn] = ValueTransformEngine.Transform(
                 candidate,
@@ -389,9 +477,9 @@ internal sealed class MappedRelationalConnector(
         return result;
     }
 
-    private string KeyPredicate(RelationalEntityMapping mapping) => string.Join(" AND ",
+    private string KeyPredicate(RelationalEntityMapping mapping, string? tableAlias = null) => string.Join(" AND ",
         mapping.Keys.Select((key, index) =>
-            $"CAST({Quote(key.PhysicalColumn)} AS {TextType}) = @Key{index}"));
+            $"CAST({(tableAlias is null ? string.Empty : Quote(tableAlias) + ".")}{Quote(key.PhysicalColumn)} AS {TextType}) = @Key{index}"));
 
     private string BuildSqlServerUpsert(RelationalEntityMapping mapping, IReadOnlyList<string> columns)
     {
@@ -433,6 +521,27 @@ internal sealed class MappedRelationalConnector(
 
     private string QualifiedTable(RelationalEntityMapping mapping) =>
         $"{Quote(mapping.Schema)}.{Quote(mapping.Table)}";
+
+    private string QualifiedTable(string schema, string table) => $"{Quote(schema)}.{Quote(table)}";
+
+    private string RelatedConditionSql(
+        RelationalRelatedTable related,
+        string baseAlias,
+        bool includeAnd)
+    {
+        if (string.IsNullOrWhiteSpace(related.ConditionExpression))
+        {
+            return string.Empty;
+        }
+
+        var prefix = includeAnd ? " AND " : string.Empty;
+        var expression = RelatedExpressionSql(related.ConditionExpression, related.Alias, baseAlias);
+        return $"{prefix}({expression})";
+    }
+
+    private string RelatedExpressionSql(string expression, string relatedAlias, string baseAlias) => expression
+        .Replace("{related}", Quote(relatedAlias), StringComparison.OrdinalIgnoreCase)
+        .Replace("{source}", Quote(baseAlias), StringComparison.OrdinalIgnoreCase);
 
     private string Quote(string identifier) => provider switch
     {
